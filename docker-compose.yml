@@ -79,7 +79,7 @@ services:
       context: ./ota
       dockerfile: Dockerfile
       args:
-        GOLANG_VERSION: 1.24-alpine # Gunakan versi Go yang sama
+        GOLANG_VERSION: 1.25-alpine # Perbarui ke Go 1.25 sesuai go.mod
     ports:
       - "9999:9999"
     networks:
