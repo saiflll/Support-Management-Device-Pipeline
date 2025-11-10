@@ -45,10 +45,14 @@ services:
       - iot-net
 
   backend:
+    # Beri nama image agar Docker bisa melakukan caching dengan lebih baik
+    image: forwarder-app:latest
     build:
       # Arahkan ke direktori backend Go Anda
       context: ./forward
       dockerfile: Dockerfile
+      args:
+        GOLANG_VERSION: 1.24-alpine # Definisikan versi Go di sini
     container_name: forwarder
     ports:
       - "8888:8888"
@@ -68,10 +72,14 @@ services:
       - iot-net
       
   ota:
+    # Beri nama image agar Docker bisa melakukan caching dengan lebih baik
+    image: ota-app:latest
     container_name: ota-app
     build:
       context: ./ota
       dockerfile: Dockerfile
+      args:
+        GOLANG_VERSION: 1.24-alpine # Gunakan versi Go yang sama
     ports:
       - "9999:9999"
     networks:
@@ -84,7 +92,9 @@ services:
       - MQTT_PASS=
     restart: unless-stopped
     depends_on:
-      - emqx
+      emqx:
+        condition: service_healthy
+
   # frontend:
   #   build:
   #     context: ./iot-suhu-fe
