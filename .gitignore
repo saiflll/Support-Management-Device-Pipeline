@@ -11,8 +11,6 @@ venv/
 # === Artefak Build / Binaries ===
 # Abaikan file executable yang dihasilkan dari 'go build'.
 # Biasanya nama file sama dengan nama direktorinya.
-forward
-ota
 *.exe
 *.exe~
 *.dll
