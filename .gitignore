@@ -1,0 +1,34 @@
+# === Ketergantungan (Dependencies) ===
+# Abaikan semua direktori vendor yang dikelola oleh 'go mod vendor'
+# Aturan ini akan berlaku untuk 'forward/vendor/', 'ota/vendor/', dll.
+vendor/
+
+# Abaikan cache dan virtual environment dari Python
+__pycache__/
+venv/
+*.pyc
+
+# === Artefak Build / Binaries ===
+# Abaikan file executable yang dihasilkan dari 'go build'.
+# Biasanya nama file sama dengan nama direktorinya.
+forward
+ota
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# === Berkas Log & Uji Coba ===
+*.log
+*.out
+*.test
+
+# Abaikan koleksi Postman yang digunakan untuk pengujian lokal
+*.postman.json
+
+# === Lingkungan & Konfigurasi ===
+# Abaikan berkas environment yang berisi data sensitif
+.env
+.env.*
+!.env.example
