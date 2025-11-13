@@ -117,9 +117,7 @@
         .card-red:hover {
             border-color: rgba(239, 68, 68, 0.8);
             box-shadow: 0 8px 40px rgba(239, 68, 68, 0.25);
-        }
-        .file-card:hover {
-            transform: translateY(-2px);
+            transform: translateY(-3px);
         }
         .card-orange {
             border: 1px solid rgba(249, 115, 22, 0.4);
@@ -193,8 +191,8 @@
             opacity: 0.5;
         }
         .node-card-running {
-            border: 1px solid rgba(249, 115, 22, 0.5) !important;
-            box-shadow: 0 0 15px rgba(249, 115, 22, 0.15);
+            border: 2px solid rgba(249, 115, 22, 0.7);
+            box-shadow: 0 0 25px rgba(249, 115, 22, 0.3);
         }
         .node-card-running::before {
             --glow-color: #f97316;
@@ -326,7 +324,7 @@
           ✕
         </button>
       </div>
-      <div class="space-y-4">
+      <div class="bg-black/60 p-4 rounded-xl border border-cyan-400/20 space-y-4">
         <div>
           <label class="block text-sm font-medium text-cyan-400 mb-2">Firmware URL</label>
           <input type="text" id="otaUrlInput" 
@@ -357,7 +355,7 @@
           ✕
         </button>
       </div>
-      <div class="space-y-4">
+      <div class="bg-black/60 p-4 rounded-xl border border-purple-400/20 space-y-4">
         <div class="grid grid-cols-2 gap-4">
           <div>
             <label class="block text-sm font-medium text-purple-400 mb-2">Min Temp (°C)</label>

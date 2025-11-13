@@ -18,14 +18,14 @@ async function fetchFiles() {
     files.forEach(f => {
       const el = document.createElement('div');
       el.className = 'file-card cyber-card card-red flex justify-between items-center p-3 rounded-xl transition-all';
-      const uploadTime = f.upload_time ? new Date(f.upload_time).toLocaleString('id-ID', { 
+      const uploadTime = f.upload_time ? new Date(f.upload_time).toLocaleString('en-US', { 
         year: 'numeric', 
         month: '2-digit', 
         day: '2-digit', 
         hour: '2-digit', 
         minute: '2-digit', 
         second: '2-digit',
-        hour12: false 
+        hour12: true 
       }) : '';
       el.innerHTML = `
         <div class="flex-1 truncate pr-3">
@@ -163,14 +163,14 @@ function renderNodes(nodes) {
     const updated = info.updated || '';
     
     // Format waktu ke timezone lokal
-    const formattedTime = updated ? new Date(updated).toLocaleString('id-ID', {
+    const formattedTime = updated ? new Date(updated).toLocaleString('en-US', {
       year: 'numeric',
       month: '2-digit',
       day: '2-digit',
       hour: '2-digit',
       minute: '2-digit',
       second: '2-digit',
-      hour12: false
+      hour12: true
     }) : '-';
 
     const card = document.createElement('div');
