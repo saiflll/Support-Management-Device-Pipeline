@@ -1,10 +1,14 @@
 package main
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -14,6 +18,8 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/session"
+	"github.com/gofiber/storage/memory/v2"
 	"github.com/gofiber/template/html/v2"
 )
 
@@ -40,7 +46,13 @@ var (
 	nodeStatus = make(map[string]*NodeInfo)
 	fileMutex  sync.RWMutex
 	fileInfos  = make(map[string]FileInfo)
+
+	// Auth
+	store            *session.Store
+	telegramBotToken string
+	telegramChatID   string
 )
+
 var macRegex = regexp.MustCompile(`[0-9a-fA-F]{12}`)
 
 // env helper
@@ -57,6 +69,27 @@ func main() {
 		log.Fatalf("failed to create upload directory: %v", err)
 	}
 
+	// --- Auth Config ---
+	telegramBotToken = getEnv("TELEGRAM_BOT_TOKEN", "")
+	telegramChatID = getEnv("TELEGRAM_CHAT_ID", "")
+	if telegramBotToken == "" || telegramChatID == "" {
+		log.Println("Peringatan: TELEGRAM_BOT_TOKEN atau TELEGRAM_CHAT_ID tidak diatur. Fitur login tidak akan berfungsi.")
+	}
+
+	store = session.New(session.Config{
+		Storage:        memory.New(),
+		Expiration:     24 * time.Hour,
+		KeyLookup:      "cookie:session_id",
+		CookieName:     "session_id",
+		CookieHTTPOnly: true,
+		CookieSameSite: "Lax",
+		KeyGenerator: func() string {
+			b := make([]byte, 16)
+			rand.Read(b)
+			return hex.EncodeToString(b)
+		},
+	})
+
 	// Load existing files on startup
 	loadInitialFiles("static/uploads")
 	engine := html.New("./views", ".html")
@@ -68,16 +101,30 @@ func main() {
 	app.Static("/static", "./static")
 	app.Static("/files", "./static/uploads")
 
-	// index
-	app.Get("/", func(c *fiber.Ctx) error {
+	// --- Public Routes ---
+	app.Get("/login", handleShowLogin)
+	app.Post("/login", handleLogin)
+	app.Post("/request-code", handleRequestCode)
+
+	// --- Protected Routes ---
+	// Grup ini memerlukan autentikasi
+	protected := app.Group("/")
+	protected.Use(requireAuth)
+
+	protected.Get("/", func(c *fiber.Ctx) error {
 		brokerHost := getEnv("MQTT_BROKER", "tcp://172.20.100.11:1883")
 		return c.Render("index", fiber.Map{
-			"broker": brokerHost,
+			"broker":     brokerHost,
+			"serverName": "ren_itdt_west",
 		})
 	})
 
+	protected.Post("/logout", handleLogout)
+
+	api := protected.Group("/api")
+
 	// API: nodes snapshot
-	app.Get("/api/nodes", func(c *fiber.Ctx) error {
+	api.Get("/nodes", func(c *fiber.Ctx) error {
 		nodeMutex.RLock()
 		defer nodeMutex.RUnlock()
 
@@ -126,7 +173,7 @@ func main() {
 	})
 
 	// DELETE node endpoint
-	app.Delete("/api/nodes/:id", func(c *fiber.Ctx) error {
+	api.Delete("/nodes/:id", func(c *fiber.Ctx) error {
 		id := c.Params("id")
 		nodeMutex.Lock()
 		defer nodeMutex.Unlock()
@@ -171,7 +218,7 @@ func main() {
 	})
 
 	// API: files list
-	app.Get("/api/files", func(c *fiber.Ctx) error {
+	api.Get("/files", func(c *fiber.Ctx) error {
 		fileMutex.RLock()
 		defer fileMutex.RUnlock()
 		files := make([]FileInfo, 0, len(fileInfos))
@@ -182,7 +229,7 @@ func main() {
 	})
 
 	// DELETE file endpoint
-	app.Delete("/api/files/:name", func(c *fiber.Ctx) error {
+	api.Delete("/files/:name", func(c *fiber.Ctx) error {
 		name := c.Params("name")
 		// security: prevent path traversal
 		clean := filepath.Base(name)
@@ -202,7 +249,7 @@ func main() {
 	})
 
 	// RENAME file endpoint
-	app.Post("/api/files/:name/rename", func(c *fiber.Ctx) error {
+	api.Post("/files/:name/rename", func(c *fiber.Ctx) error {
 		name := c.Params("name")
 		type RenameRequest struct {
 			NewName string `json:"new_name"`
@@ -242,7 +289,7 @@ func main() {
 	})
 
 	// Upload OTA (form multipart)
-	app.Post("/upload", func(c *fiber.Ctx) error {
+	protected.Post("/upload", func(c *fiber.Ctx) error {
 		f, err := c.FormFile("file")
 		if err != nil {
 			return c.Status(http.StatusBadRequest).SendString("file required")
@@ -260,11 +307,11 @@ func main() {
 			UploadTime: time.Now(),
 		}
 
-		return c.Redirect("/")
+		return c.JSON(fiber.Map{"status": "ok", "filename": f.Filename})
 	})
 
 	// Config -> publish to nodes/{id}/command
-	app.Post("/config", func(c *fiber.Ctx) error {
+	protected.Post("/config", func(c *fiber.Ctx) error {
 		type T struct {
 			Node string  `json:"node"`
 			Min  float64 `json:"min"`
@@ -297,7 +344,7 @@ func main() {
 	})
 
 	// OTA trigger
-	app.Post("/ota", func(c *fiber.Ctx) error {
+	protected.Post("/ota", func(c *fiber.Ctx) error {
 		type O struct {
 			Node string `json:"node"`
 			URL  string `json:"url"`
@@ -318,7 +365,7 @@ func main() {
 	})
 
 	// logs endpoint (last 3 lines)
-	app.Get("/logs/:id", func(c *fiber.Ctx) error {
+	protected.Get("/logs/:id", func(c *fiber.Ctx) error {
 		id := c.Params("id")
 		nodeMutex.RLock()
 		defer nodeMutex.RUnlock()
@@ -328,11 +375,165 @@ func main() {
 		return c.Status(404).JSON(fiber.Map{"error": "node not found"})
 	})
 
+	// Forwarder proxy endpoint
+	protected.Get("/forwarder/status", func(c *fiber.Ctx) error {
+		forwarderURL := getEnv("FORWARDER_URL", "http://forwarder:8888/forwarder/status")
+
+		resp, err := http.Get(forwarderURL)
+		if err != nil {
+			return c.Status(http.StatusServiceUnavailable).JSON(fiber.Map{
+				"error": "Forwarder service tidak tersedia",
+			})
+		}
+		defer resp.Body.Close()
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+				"error": "Gagal membaca response dari forwarder",
+			})
+		}
+
+		c.Set("Content-Type", "application/json")
+		return c.Send(body)
+	})
+
 	// Start MQTT connection (non-blocking)
 	go initMQTT()
 
 	// Listen
 	log.Fatal(app.Listen("0.0.0.0:9999"))
+}
+
+func requireAuth(c *fiber.Ctx) error {
+	sess, err := store.Get(c)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).SendString("Session error")
+	}
+
+	if sess.Get("authenticated") != true {
+		return c.Redirect("/login")
+	}
+
+	return c.Next()
+}
+
+func handleShowLogin(c *fiber.Ctx) error {
+	sess, _ := store.Get(c)
+	// Jika sudah login, langsung arahkan ke halaman utama
+	if sess.Get("authenticated") == true {
+		return c.Redirect("/")
+	}
+	return c.Render("login", fiber.Map{})
+}
+
+func handleLogin(c *fiber.Ctx) error {
+	sess, err := store.Get(c)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).SendString("Session error")
+	}
+
+	submittedCode := c.FormValue("code")
+	if submittedCode == "" {
+		return c.Render("login", fiber.Map{"error": "Kode tidak boleh kosong."})
+	}
+
+	// Ambil kode dari sesi
+	authCode := sess.Get("auth_code")
+	authExpires := sess.Get("auth_expires")
+
+	if authCode == nil || authExpires == nil {
+		return c.Render("login", fiber.Map{"error": "Kode verifikasi salah atau sudah kedaluwarsa."})
+	}
+
+	// Convert Unix timestamp back to time.Time
+	expiryUnix, ok := authExpires.(int64)
+	if !ok {
+		return c.Render("login", fiber.Map{"error": "Kode verifikasi salah atau sudah kedaluwarsa."})
+	}
+
+	expiryTime := time.Unix(expiryUnix, 0)
+
+	if authCode.(string) != submittedCode || time.Now().After(expiryTime) {
+		return c.Render("login", fiber.Map{"error": "Kode verifikasi salah atau sudah kedaluwarsa."})
+	}
+
+	// Kode valid, hapus dari sesi dan set status login
+	sess.Delete("auth_code")
+	sess.Delete("auth_expires")
+	sess.Set("authenticated", true)
+	if err := sess.Save(); err != nil {
+		return c.Status(http.StatusInternalServerError).SendString("Gagal menyimpan sesi")
+	}
+
+	return c.Redirect("/")
+}
+
+func handleLogout(c *fiber.Ctx) error {
+	sess, err := store.Get(c)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).SendString("Session error")
+	}
+	sess.Destroy()
+	return c.Redirect("/login")
+}
+
+func handleRequestCode(c *fiber.Ctx) error {
+	if telegramBotToken == "" || telegramChatID == "" {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Layanan Telegram tidak dikonfigurasi di server.",
+		})
+	}
+
+	sess, err := store.Get(c)
+	if err != nil {
+		log.Printf("Error getting session: %v", err)
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"status": "error", "message": "Gagal membuat sesi."})
+	}
+
+	// Buat kode acak 6 digit
+	b := make([]byte, 3)
+	rand.Read(b)
+	code := hex.EncodeToString(b)
+
+	// Simpan kode dan expiry sebagai Unix timestamp (int64)
+	sess.Set("auth_code", code)
+	sess.Set("auth_expires", time.Now().Add(5*time.Minute).Unix())
+
+	if err := sess.Save(); err != nil {
+		log.Printf("Error saving session: %v", err)
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"status": "error", "message": fmt.Sprintf("Gagal menyimpan sesi: %v", err)})
+	}
+
+	log.Printf("Code generated and saved: %s", code)
+
+	// Kirim kode ke Telegram
+	message := fmt.Sprintf("Kode verifikasi Anda untuk IoT OTA adalah: `%s`\nKode ini berlaku selama 5 menit.", code)
+	go sendTelegramMessage(message)
+
+	return c.JSON(fiber.Map{"status": "ok"})
+}
+
+func sendTelegramMessage(message string) {
+	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", telegramBotToken)
+
+	resp, err := http.PostForm(apiURL, url.Values{
+		"chat_id":    {telegramChatID},
+		"text":       {message},
+		"parse_mode": {"Markdown"},
+	})
+
+	if err != nil {
+		log.Printf("Error sending Telegram message: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		log.Printf("Failed to send Telegram message, status: %s, response: %s", resp.Status, string(body))
+	}
 }
 
 func loadInitialFiles(dir string) {

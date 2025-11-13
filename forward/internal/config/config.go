@@ -1,6 +1,10 @@
 package config
 
-import "time"
+import (
+	"log"
+	"os"
+	"time"
+)
 
 var Timezone *time.Location
 
@@ -55,6 +59,7 @@ var (
 	TempThresholds           []ThresholdConfig
 	RhThresholds             []ThresholdConfig
 	OFFLINE_DETECTION_CONFIG OfflineDetectionConfig
+	ContactWA                string
 
 	PbP  = "PERINGATAN BAHAYA"
 	PwP  = "PERINGATAN"
@@ -68,6 +73,11 @@ var (
 )
 
 func init() {
+	ContactWA = os.Getenv("TELEGRAM_CONTACT_WA")
+	if ContactWA == "" {
+		ContactWA = "6282221294931" // Fallback to default if not set
+		log.Println("Peringatan: TELEGRAM_CONTACT_WA tidak diatur. Menggunakan nomor default.")
+	}
 
 	MessageConfigs = []MessageConfig{
 

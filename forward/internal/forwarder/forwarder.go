@@ -17,7 +17,7 @@ import (
 
 // --- Configuration ---
 const (
-	aggregationInterval = 8 * time.Minute
+	aggregationInterval = 5 * time.Minute
 	maxBufferSize       = 50 * 1024 // 50 KB
 )
 
@@ -123,9 +123,9 @@ func forwardData(dataToForward []models.AreaData) {
 		return
 	}
 
-	topic := os.Getenv("MQTT_PUBLIC_TOPIC")
+	topic := os.Getenv("MQTT_TOPIC_PUB")
 	if topic == "" {
-		topic = "iot/ck3/data/aggregated" // Default topic
+		topic = "sensor/data/ingest" // Default topic
 	}
 
 	payload, err := json.Marshal(dataToForward)
@@ -155,9 +155,9 @@ func forwardData(dataToForward []models.AreaData) {
 }
 
 func setupPublicMQTT() {
-	broker := os.Getenv("MQTT_PUBLIC_BROKER_URI")
+	broker := os.Getenv("MQTT_BROKER_PUB")
 	if broker == "" {
-		log.Println("Warning: MQTT_PUBLIC_BROKER_URI not set. Forwarder will not work.")
+		log.Println("Warning: MQTT_BROKER_PUB not set. Forwarder will not work.")
 		return
 	}
 	clientID := fmt.Sprintf("servfi-forwarder-%d", time.Now().UnixNano())
@@ -167,6 +167,15 @@ func setupPublicMQTT() {
 	opts.SetClientID(clientID)
 	opts.OnConnect = func(c mqtt.Client) { log.Println("✅ Forwarder connected to Public MQTT Broker.") }
 	opts.OnConnectionLost = func(c mqtt.Client, err error) { log.Printf("⚠️ Forwarder connection to Public MQTT lost: %v", err) }
+
+	// Tambahkan kredensial jika tersedia di environment
+	username := os.Getenv("MQTT_USERNAME_FOR")
+	password := os.Getenv("MQTT_PASSWORD_FOR")
+	if username != "" {
+		opts.SetUsername(username)
+		opts.SetPassword(password)
+		log.Println("(Forwarder) Menggunakan kredensial MQTT.")
+	}
 
 	publicMqttClient = mqtt.NewClient(opts)
 	if token := publicMqttClient.Connect(); token.Wait() && token.Error() != nil {

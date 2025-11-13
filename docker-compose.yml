@@ -89,7 +89,9 @@ services:
     environment:
       - MQTT_BROKER=tcp://emqx:1883
       - MQTT_USER=cntrl
-      - MQTT_PASS=
+      - MQTT_PASS= 
+      - TELEGRAM_BOT_TOKEN=8562677403:AAEp3bAEBbpqTIIMoxCA5XlIGUwYD3ZUtoc
+      - TELEGRAM_CHAT_ID=7412135090
     restart: unless-stopped
     depends_on:
       emqx:

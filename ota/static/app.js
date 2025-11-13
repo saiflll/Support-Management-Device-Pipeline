@@ -17,16 +17,42 @@ async function fetchFiles() {
     }
     files.forEach(f => {
       const el = document.createElement('div');
-      el.className = 'flex justify-between items-center bg-slate-700 p-2 rounded';
+      el.className = 'flex justify-between items-center bg-slate-900/50 p-3 rounded-xl border border-gray-800 hover:border-[#00d9ff]/50 transition-all';
       const uploadTime = f.upload_time ? new Date(f.upload_time).toLocaleString() : '';
       el.innerHTML = `
-        <div class="truncate pr-2">${escapeHtml(f.name)}</div>
-        <div class="text-xs text-slate-400 mr-3">${uploadTime}</div>
-        <div class="flex items-center gap-2">
-          <button data-action="copy-link" data-url="${location.origin+f.url}" class="text-xs px-2 py-1 bg-slate-600 rounded">Copy</button>
-          <button data-action="rename-file" data-name="${encodeURIComponent(f.name)}" class="text-xs px-2 py-1 bg-blue-600 rounded">Rename</button>
-          <a class="text-indigo-300 hover:underline text-sm" href="${f.url}" target="_blank">Download</a>
-          <button data-action="delete-file" data-name="${encodeURIComponent(f.name)}" class="text-xs px-2 py-1 bg-red-600 rounded">Delete</button>
+        <div class="flex-1 truncate pr-4">
+          <div class="text-sm font-medium text-gray-200">${escapeHtml(f.name)}</div>
+          <div class="text-xs text-gray-500 mt-0.5">${uploadTime}</div>
+        </div>
+        <div class="grid grid-cols-2 gap-2 w-24">
+          <button data-action="copy-link" data-url="${location.origin+f.url}" 
+            class="p-2 rounded-lg border border-cyan-400 text-cyan-400 hover:bg-cyan-400 hover:text-black hover:scale-110 transition-all duration-300"
+            title="Copy Link">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
+            </svg>
+          </button>
+          <button data-action="rename-file" data-name="${encodeURIComponent(f.name)}" 
+            class="p-2 rounded-lg border border-blue-400 text-blue-400 hover:bg-blue-400 hover:text-black hover:scale-110 transition-all duration-300"
+            title="Rename">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
+            </svg>
+          </button>
+          <a href="${f.url}" target="_blank" 
+            class="p-2 rounded-lg border border-teal-400 text-teal-400 hover:bg-teal-400 hover:text-black hover:scale-110 transition-all duration-300 inline-flex items-center justify-center"
+            title="Download">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
+            </svg>
+          </a>
+          <button data-action="delete-file" data-name="${encodeURIComponent(f.name)}" 
+            class="p-2 rounded-lg border border-[#00d9ff] text-[#00d9ff] hover:bg-[#00d9ff] hover:text-black hover:scale-110 transition-all duration-300"
+            title="Delete">
+            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
+            </svg>
+          </button>
         </div>`;
       fileList.appendChild(el);
     });

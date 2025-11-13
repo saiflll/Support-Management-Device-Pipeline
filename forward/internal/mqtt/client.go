@@ -74,9 +74,9 @@ func StartClient() {
 		return
 	}
 
-	SensorDataTopic = os.Getenv("MQTT_TOPIC_INGEST")
+	SensorDataTopic = os.Getenv("MQTT_TOPIC")
 	if SensorDataTopic == "" {
-		log.Println("Peringatan: MQTT_TOPIC_INGEST tidak diatur. Menggunakan topik default 'sensor/data/ingest'.")
+		log.Println("Peringatan: MQTT_TOPIC tidak diatur. Menggunakan topik default 'sensor/data/ingest'.")
 		SensorDataTopic = "sensor/data/ingest"
 	}
 
@@ -93,7 +93,7 @@ func StartClient() {
 	if username != "" {
 		opts.SetUsername(username)
 		opts.SetPassword(password)
-		log.Println("Menggunakan kredensial MQTT.")
+		log.Println("Menggunakan kredensial MQTT untuk koneksi lokal.")
 	}
 
 	client = mqtt.NewClient(opts)

@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - IoT OTA</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+        .gradient-bg {
+            background: linear-gradient(-45deg, #0f172a, #1e293b, #334155, #0f172a);
+            background-size: 400% 400%;
+            animation: gradient 15s ease infinite;
+        }
+        .glass-morph {
+            background: rgba(30, 41, 59, 0.4);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(148, 163, 184, 0.1);
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+        }
+        .input-morph {
+            background: rgba(15, 23, 42, 0.6);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+        }
+        .input-morph:focus {
+            background: rgba(15, 23, 42, 0.8);
+            border-color: rgba(99, 102, 241, 0.5);
+        }
+        .btn-morph {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.8), rgba(79, 70, 229, 0.9));
+            backdrop-filter: blur(8px);
+            box-shadow: 0 4px 15px 0 rgba(99, 102, 241, 0.4);
+        }
+        .btn-morph:hover {
+            box-shadow: 0 6px 20px 0 rgba(99, 102, 241, 0.6);
+            transform: translateY(-2px);
+        }
+        .float-animation {
+            animation: float 6s ease-in-out infinite;
+        }
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+    </style>
+</head>
+<body class="gradient-bg text-slate-100 flex items-center justify-center min-h-screen font-sans p-4">
+    
+    <div class="absolute top-10 left-10 w-72 h-72 bg-indigo-500/20 rounded-full blur-3xl float-animation"></div>
+    <div class="absolute bottom-10 right-10 w-96 h-96 bg-purple-500/20 rounded-full blur-3xl float-animation" style="animation-delay: 3s;"></div>
+
+    <div class="glass-morph rounded-2xl p-8 w-full max-w-md relative z-10 transform transition-all duration-300 hover:scale-[1.02]">
+        <div class="text-center mb-8">
+            <div class="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-indigo-500 to-purple-600 rounded-2xl mb-4 shadow-lg">
+                <svg class="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path>
+                </svg>
+            </div>
+            <h1 class="text-3xl font-bold bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent mb-2">IoT OTA Access</h1>
+            <p class="text-slate-400 text-sm">Masukkan kode verifikasi dari Telegram</p>
+        </div>
+
+        <div id="message-container" class="mb-6"></div>
+
+        {{if .error}}
+        <div id="error-msg" class="bg-red-500/20 border border-red-500/30 text-red-300 text-sm p-3 rounded-xl mb-6 text-center backdrop-blur-sm">
+            {{.error}}
+        </div>
+        {{end}}
+
+        {{if .success}}
+        <div id="success-msg" class="bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-sm p-3 rounded-xl mb-6 text-center backdrop-blur-sm">
+            {{.success}}
+        </div>
+        {{end}}
+
+        <form action="/login" method="POST" class="space-y-5">
+            <div>
+                <label for="code" class="block text-sm font-medium text-slate-300 mb-2">Kode Verifikasi</label>
+                <input type="text" name="code" id="code" required autofocus maxlength="6"
+                       class="input-morph w-full rounded-xl p-4 text-center text-2xl tracking-[0.5em] focus:ring-2 focus:ring-indigo-500/50 outline-none transition-all duration-300 text-white font-mono"
+                       placeholder="• • • • • •">
+            </div>
+            <button type="submit"
+                    class="btn-morph w-full px-6 py-4 rounded-xl font-bold text-white transition-all duration-300 transform active:scale-95">
+                <span class="flex items-center justify-center">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1"></path>
+                    </svg>
+                    Login
+                </span>
+            </button>
+        </form>
+
+        <div class="mt-6 pt-6 border-t border-slate-700/50">
+            <button id="requestCodeBtn"
+                    class="w-full bg-slate-700/50 hover:bg-slate-600/50 backdrop-blur-sm px-6 py-3 rounded-xl font-semibold text-sm text-slate-300 transition-all duration-300 border border-slate-600/30 hover:border-slate-500/50 transform hover:scale-[1.02] active:scale-95">
+                <span class="flex items-center justify-center">
+                    <svg class="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-13h2v6h-2zm0 8h2v2h-2z"/>
+                    </svg>
+                    <span id="btnText">Kirim Kode ke Telegram</span>
+                </span>
+            </button>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('requestCodeBtn').addEventListener('click', function() {
+            const btn = this;
+            const btnText = document.getElementById('btnText');
+            const originalText = btnText.textContent;
+            const msgContainer = document.getElementById('message-container');
+            
+            btn.disabled = true;
+            btnText.textContent = 'Mengirim...';
+            btn.classList.add('opacity-50', 'cursor-not-allowed');
+            
+            msgContainer.innerHTML = '';
+
+            fetch('/request-code', { 
+                method: 'POST',
+                credentials: 'same-origin'
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'ok') {
+                        msgContainer.innerHTML = `
+                            <div class="bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 text-sm p-3 rounded-xl text-center backdrop-blur-sm animate-pulse">
+                                <svg class="w-5 h-5 inline-block mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
+                                </svg>
+                                Kode verifikasi telah dikirim ke Telegram!
+                            </div>
+                        `;
+                    } else {
+                        msgContainer.innerHTML = `
+                            <div class="bg-red-500/20 border border-red-500/30 text-red-300 text-sm p-3 rounded-xl text-center backdrop-blur-sm">
+                                <svg class="w-5 h-5 inline-block mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                                </svg>
+                                ${data.message || 'Gagal mengirim kode'}
+                            </div>
+                        `;
+                    }
+                })
+                .catch(err => {
+                    console.error('Error requesting code:', err);
+                    msgContainer.innerHTML = `
+                        <div class="bg-red-500/20 border border-red-500/30 text-red-300 text-sm p-3 rounded-xl text-center backdrop-blur-sm">
+                            <svg class="w-5 h-5 inline-block mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                            </svg>
+                            Gagal menghubungi server
+                        </div>
+                    `;
+                })
+                .finally(() => {
+                    btn.disabled = false;
+                    btnText.textContent = originalText;
+                    btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                });
+        });
+
+        // Auto-format input dengan spasi
+        document.getElementById('code').addEventListener('input', function(e) {
+            let value = e.target.value.replace(/\s/g, '');
+            if (value.length > 6) value = value.slice(0, 6);
+            e.target.value = value;
+        });
+    </script>
+</body>
+</html>

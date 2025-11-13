@@ -5,6 +5,7 @@ go 1.25
 require (
 	github.com/eclipse/paho.mqtt.golang v1.5.1
 	github.com/gofiber/fiber/v2 v2.52.9
+	github.com/gofiber/storage/memory/v2 v2.1.0
 	github.com/gofiber/template/html/v2 v2.1.3
 )
 
