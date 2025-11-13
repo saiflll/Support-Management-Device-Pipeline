@@ -17,30 +17,38 @@ async function fetchFiles() {
     }
     files.forEach(f => {
       const el = document.createElement('div');
-      el.className = 'cyber-card card-red flex justify-between items-center p-3 rounded-xl transition-all hover:scale-[1.02]';
-      const uploadTime = f.upload_time ? new Date(f.upload_time).toLocaleString() : '';
+      el.className = 'file-card cyber-card card-red flex justify-between items-center p-3 rounded-xl transition-all';
+      const uploadTime = f.upload_time ? new Date(f.upload_time).toLocaleString('id-ID', { 
+        year: 'numeric', 
+        month: '2-digit', 
+        day: '2-digit', 
+        hour: '2-digit', 
+        minute: '2-digit', 
+        second: '2-digit',
+        hour12: false 
+      }) : '';
       el.innerHTML = `
         <div class="flex-1 truncate pr-3">
           <div class="text-sm font-medium text-gray-200">${escapeHtml(f.name)}</div>
           <div class="text-xs text-gray-500 mt-0.5">${uploadTime}</div>
         </div>
-        <div class="flex gap-2">
+        <div class="flex gap-1.5">
           <button data-action="rename-file" data-name="${encodeURIComponent(f.name)}" 
-            class="p-2 rounded-lg border border-cyan-400/50 text-cyan-400 hover:bg-cyan-400 hover:text-black hover:scale-125 transition-all duration-200"
+            class="p-2 rounded-lg border border-cyan-400/50 text-cyan-400 hover:bg-cyan-400 hover:text-black hover:scale-110 transition-all duration-200"
             title="Rename">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
             </svg>
           </button>
           <a href="${f.url}" target="_blank" 
-            class="p-2 rounded-lg border border-purple-400/50 text-purple-400 hover:bg-purple-400 hover:text-black hover:scale-125 transition-all duration-200 inline-flex items-center justify-center"
+            class="p-2 rounded-lg border border-purple-400/50 text-purple-400 hover:bg-purple-400 hover:text-black hover:scale-110 transition-all duration-200 inline-flex items-center justify-center"
             title="Download">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
             </svg>
           </a>
           <button data-action="delete-file" data-name="${encodeURIComponent(f.name)}" 
-            class="p-2 rounded-lg border border-red-400/50 text-red-400 hover:bg-red-400 hover:text-black hover:scale-125 transition-all duration-200"
+            class="p-2 rounded-lg border border-red-400/50 text-red-400 hover:bg-red-400 hover:text-black hover:scale-110 transition-all duration-200"
             title="Delete">
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
@@ -149,14 +157,24 @@ function renderNodes(nodes) {
     const info = nodes[k] || {};
     const status = info.status || '';
     const isOnline = String(status).toLowerCase() !== 'offline';
-    const dot = isOnline ? 'bg-orange-400' : 'bg-gray-500';
+    const dot = isOnline ? 'bg-green-400' : 'bg-red-500';
     const ram = info.ram_free_bytes !== undefined ? formatBytes(info.ram_free_bytes) : '-';
     const sd_ok = info.sd_ok;
     const updated = info.updated || '';
+    
+    // Format waktu ke timezone lokal
+    const formattedTime = updated ? new Date(updated).toLocaleString('id-ID', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false
+    }) : '-';
 
     const card = document.createElement('div');
     card.className = `node-card ${isOnline ? 'node-card-running' : 'node-card-offline'} cyber-card p-4 rounded-xl transition-all hover:scale-[1.02]`;
-    card.style.borderColor = isOnline ? 'rgba(249, 115, 22, 0.4)' : 'rgba(107, 114, 128, 0.4)';
     
     card.innerHTML = `
       <div class="flex justify-between items-start mb-3">
@@ -174,7 +192,7 @@ function renderNodes(nodes) {
 
       <div class="text-sm text-gray-300 space-y-1 mb-3">
         <div>RAM Free: <span class="text-gray-100 font-medium">${ram}</span></div>
-        <div class="text-xs text-gray-500">Last: ${escapeHtml(updated)}</div>
+        <div class="text-xs text-gray-500">Last: ${formattedTime}</div>
       </div>
 
       <div class="flex gap-2">
@@ -240,45 +258,50 @@ function formatNodeId(nodeId) {
   return `${escapeHtml(prefix)} - <span class="text-indigo-300">${escapeHtml(formattedMac)}</span>`;
 }
 
-// === Config flow (used by Set Threshold and Edit) ===
-async function promptConfigFlow(node, existingInfo) {
-  const decodedNode = decodeURIComponent(node);
-  const info = existingInfo || {};
-
-  const minStr = prompt('Set min temperature (°C):', '16');
-  if (minStr === null) return null;
-  const maxStr = prompt('Set max temperature (°C):', '20');
-  if (maxStr === null) return null;
-  const ck = prompt('Set ck (string):', info.ck || '');
-  if (ck === null) return null;
-  const area = prompt('Set area (string):', info.area || '');
-  if (area === null) return null;
-  const no = prompt('Set no (string):', info.no || '');
-  if (no === null) return null;
-
-  return {
-    node: decodedNode,
-    min: parseFloat(minStr),
-    max: parseFloat(maxStr),
-    ck: String(ck),
-    area: String(area),
-    no: String(no)
-  };
-}
+// === Config flow with Modal ===
+let currentConfigNode = '';
 
 async function openConfigModal(nodeEnc, action = 'Config') {
-  // Get current node data to pre-fill the prompts
+  currentConfigNode = nodeEnc;
+  const node = decodeURIComponent(nodeEnc);
+  
+  // Get current node data to pre-fill
   const nodesRes = await fetch('/api/nodes');
   const allNodes = await nodesRes.json();
-  const nodeInfo = allNodes[decodeURIComponent(nodeEnc)];
-  if (!nodeInfo) {
-    return showToast('Node data not found, cannot configure.', 'error');
-  }
-  const payload = await promptConfigFlow(nodeEnc, nodeInfo);
-  if (!payload) return;
+  const nodeInfo = allNodes[node];
+  
+  document.getElementById('configModalNode').textContent = node;
+  document.getElementById('configMinInput').value = nodeInfo?.min || '16';
+  document.getElementById('configMaxInput').value = nodeInfo?.max || '20';
+  document.getElementById('configCkInput').value = nodeInfo?.ck || '';
+  document.getElementById('configAreaInput').value = nodeInfo?.area || '';
+  document.getElementById('configNoInput').value = nodeInfo?.no || '';
+  
+  const modal = document.getElementById('configModal');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
 
+function closeConfigModal() {
+  const modal = document.getElementById('configModal');
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+  currentConfigNode = '';
+}
+
+async function sendConfig() {
+  const node = decodeURIComponent(currentConfigNode);
+  const payload = {
+    node: node,
+    min: parseFloat(document.getElementById('configMinInput').value),
+    max: parseFloat(document.getElementById('configMaxInput').value),
+    ck: document.getElementById('configCkInput').value,
+    area: document.getElementById('configAreaInput').value,
+    no: document.getElementById('configNoInput').value
+  };
+  
   try {
-    showToast(`Sending ${action}...`);
+    showToast('Sending Config...');
     const res = await fetch('/config', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
@@ -286,25 +309,54 @@ async function openConfigModal(nodeEnc, action = 'Config') {
     });
     const j = await res.json();
     if (res.ok) {
-      showToast(`${action} sent successfully!`, 'success');
+      showToast('Config sent successfully!', 'success');
+      closeConfigModal();
       setTimeout(fetchNodes, 800);
     } else {
-      showToast(`Failed to send ${action}: ${j.error || 'Unknown error'}`, 'error');
+      showToast(`Failed to send Config: ${j.error || 'Unknown error'}`, 'error');
     }
   } catch (err) {
     showToast(`Network error: ${err.message}`, 'error');
   }
 }
 
-/* The old openThresholdModal function has been removed as it is redundant. */
+/* The old openThresholdModal and promptConfigFlow functions have been removed. */
 
+
+// OTA modal
+let currentOtaNode = '';
 
 async function openOTAModal(nodeEnc) {
+  currentOtaNode = nodeEnc;
   const node = decodeURIComponent(nodeEnc);
   const urlDefault = location.origin + '/files/';
-  const url = prompt('Enter OTA URL (full URL, e.g. ' + urlDefault + 'firmware.bin )');
-  if (!url) return;
+  
+  document.getElementById('otaModalNode').textContent = node;
+  document.getElementById('otaUrlInput').value = '';
+  document.getElementById('otaUrlInput').placeholder = urlDefault + 'firmware.bin';
+  
+  const modal = document.getElementById('otaModal');
+  modal.classList.remove('hidden');
+  modal.classList.add('flex');
+}
+
+function closeOtaModal() {
+  const modal = document.getElementById('otaModal');
+  modal.classList.add('hidden');
+  modal.classList.remove('flex');
+  currentOtaNode = '';
+}
+
+async function sendOta() {
+  const node = decodeURIComponent(currentOtaNode);
+  const url = document.getElementById('otaUrlInput').value.trim();
+  
+  if (!url) {
+    return showToast('Please enter a valid URL', 'error');
+  }
+  
   try {
+    showToast('Sending OTA command...');
     const res = await fetch('/ota', {
       method: 'POST',
       headers: {'Content-Type':'application/json'},
@@ -313,6 +365,7 @@ async function openOTAModal(nodeEnc) {
     const j = await res.json();
     if (res.ok) {
       showToast('OTA command sent!', 'success');
+      closeOtaModal();
     } else {
       showToast(`OTA failed: ${j.error || 'Unknown error'}`, 'error');
     }
@@ -441,6 +494,18 @@ document.addEventListener('DOMContentLoaded', function() {
         break;
       case 'close-modal':
         closeModal();
+        break;
+      case 'close-ota-modal':
+        closeOtaModal();
+        break;
+      case 'send-ota':
+        sendOta();
+        break;
+      case 'close-config-modal':
+        closeConfigModal();
+        break;
+      case 'send-config':
+        sendConfig();
         break;
     }
   });

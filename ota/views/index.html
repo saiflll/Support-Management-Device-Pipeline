@@ -117,7 +117,9 @@
         .card-red:hover {
             border-color: rgba(239, 68, 68, 0.8);
             box-shadow: 0 8px 40px rgba(239, 68, 68, 0.25);
-            transform: translateY(-3px);
+        }
+        .file-card:hover {
+            transform: translateY(-2px);
         }
         .card-orange {
             border: 1px solid rgba(249, 115, 22, 0.4);
@@ -190,11 +192,30 @@
             background: linear-gradient(90deg, transparent, var(--glow-color), transparent);
             opacity: 0.5;
         }
+        .node-card-running {
+            border: 1px solid rgba(249, 115, 22, 0.5) !important;
+            box-shadow: 0 0 15px rgba(249, 115, 22, 0.15);
+        }
         .node-card-running::before {
             --glow-color: #f97316;
         }
         .node-card-offline::before {
             --glow-color: #6b7280;
+        }
+        .modal-overlay {
+            backdrop-filter: blur(8px);
+            animation: fadeIn 0.2s ease-out;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes slideUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .modal-content {
+            animation: slideUp 0.3s ease-out;
         }
     </style>
 </head>
@@ -275,8 +296,8 @@
   </div>
 
   <!-- Logs Modal -->
-  <div id="logModal" class="fixed inset-0 bg-black/90 hidden items-center justify-center z-50 p-4">
-    <div class="cyber-card card-cyan rounded-2xl w-full max-w-3xl p-6">
+  <div id="logModal" class="modal-overlay fixed inset-0 bg-black/90 hidden items-center justify-center z-50 p-4">
+    <div class="modal-content cyber-card card-cyan rounded-2xl w-full max-w-3xl p-6">
       <div class="flex justify-between items-center mb-5">
         <div class="font-semibold text-xl text-glow-cyan">
           Logs - <span id="modalNode"></span>
@@ -289,6 +310,88 @@
       <div class="mt-5 flex justify-end">
         <button data-action="close-modal" class="px-5 py-2.5 border border-cyan-400 text-cyan-400 hover:bg-cyan-400 hover:text-black rounded-xl text-sm font-semibold transition-all duration-300">
           Tutup
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- OTA Modal -->
+  <div id="otaModal" class="modal-overlay fixed inset-0 bg-black/90 hidden items-center justify-center z-50 p-4">
+    <div class="modal-content cyber-card card-cyan rounded-2xl w-full max-w-2xl p-6">
+      <div class="flex justify-between items-center mb-5">
+        <div class="font-semibold text-xl text-glow-cyan">
+          OTA Update - <span id="otaModalNode"></span>
+        </div>
+        <button data-action="close-ota-modal" class="text-gray-400 hover:text-cyan-400 transition-all duration-300 p-2">
+          ✕
+        </button>
+      </div>
+      <div class="space-y-4">
+        <div>
+          <label class="block text-sm font-medium text-cyan-400 mb-2">Firmware URL</label>
+          <input type="text" id="otaUrlInput" 
+            class="w-full bg-black/60 border border-cyan-400/30 rounded-xl px-4 py-3 text-gray-200 focus:border-cyan-400 focus:outline-none transition-all"
+            placeholder="https://example.com/firmware.bin">
+          <p class="text-xs text-gray-500 mt-1">Masukkan URL lengkap firmware yang akan diupload</p>
+        </div>
+      </div>
+      <div class="mt-6 flex justify-end gap-3">
+        <button data-action="close-ota-modal" class="px-5 py-2.5 border border-gray-600 text-gray-400 hover:bg-gray-700 hover:text-white rounded-xl text-sm font-semibold transition-all duration-300">
+          Batal
+        </button>
+        <button data-action="send-ota" class="px-5 py-2.5 border border-cyan-400 text-cyan-400 hover:bg-cyan-400 hover:text-black rounded-xl text-sm font-semibold transition-all duration-300">
+          Kirim OTA
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Config Modal -->
+  <div id="configModal" class="modal-overlay fixed inset-0 bg-black/90 hidden items-center justify-center z-50 p-4">
+    <div class="modal-content cyber-card card-purple rounded-2xl w-full max-w-2xl p-6">
+      <div class="flex justify-between items-center mb-5">
+        <div class="font-semibold text-xl text-glow-purple">
+          Configure - <span id="configModalNode"></span>
+        </div>
+        <button data-action="close-config-modal" class="text-gray-400 hover:text-purple-400 transition-all duration-300 p-2">
+          ✕
+        </button>
+      </div>
+      <div class="space-y-4">
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <label class="block text-sm font-medium text-purple-400 mb-2">Min Temp (°C)</label>
+            <input type="number" id="configMinInput" step="0.1"
+              class="w-full bg-black/60 border border-purple-400/30 rounded-xl px-4 py-3 text-gray-200 focus:border-purple-400 focus:outline-none transition-all">
+          </div>
+          <div>
+            <label class="block text-sm font-medium text-purple-400 mb-2">Max Temp (°C)</label>
+            <input type="number" id="configMaxInput" step="0.1"
+              class="w-full bg-black/60 border border-purple-400/30 rounded-xl px-4 py-3 text-gray-200 focus:border-purple-400 focus:outline-none transition-all">
+          </div>
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-purple-400 mb-2">CK</label>
+          <input type="text" id="configCkInput"
+            class="w-full bg-black/60 border border-purple-400/30 rounded-xl px-4 py-3 text-gray-200 focus:border-purple-400 focus:outline-none transition-all">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-purple-400 mb-2">Area</label>
+          <input type="text" id="configAreaInput"
+            class="w-full bg-black/60 border border-purple-400/30 rounded-xl px-4 py-3 text-gray-200 focus:border-purple-400 focus:outline-none transition-all">
+        </div>
+        <div>
+          <label class="block text-sm font-medium text-purple-400 mb-2">No</label>
+          <input type="text" id="configNoInput"
+            class="w-full bg-black/60 border border-purple-400/30 rounded-xl px-4 py-3 text-gray-200 focus:border-purple-400 focus:outline-none transition-all">
+        </div>
+      </div>
+      <div class="mt-6 flex justify-end gap-3">
+        <button data-action="close-config-modal" class="px-5 py-2.5 border border-gray-600 text-gray-400 hover:bg-gray-700 hover:text-white rounded-xl text-sm font-semibold transition-all duration-300">
+          Batal
+        </button>
+        <button data-action="send-config" class="px-5 py-2.5 border border-purple-400 text-purple-400 hover:bg-purple-400 hover:text-black rounded-xl text-sm font-semibold transition-all duration-300">
+          Kirim Config
         </button>
       </div>
     </div>
