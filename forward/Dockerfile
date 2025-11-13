@@ -5,18 +5,17 @@ FROM golang:${GOLANG_VERSION} AS builder
 
 WORKDIR /app
 
-# Salin informasi modul dan folder vendor
+# Salin informasi modul
 COPY go.mod go.sum ./
-COPY vendor ./vendor
 
-# Verifikasi bahwa dependensi di folder vendor sudah sesuai
-RUN go mod verify
+# Download dependencies jika vendor tidak ada
+RUN go mod download
 
 # Salin sisa kode aplikasi
 COPY . .
 
-# Build aplikasi Go menggunakan dependensi dari vendor
-RUN CGO_ENABLED=0 GOOS=linux go build -mod=vendor -a -installsuffix cgo -o /servfi ./main.go
+# Build aplikasi Go
+RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /servfi ./main.go
 
 
 # --- Tahap Final ---

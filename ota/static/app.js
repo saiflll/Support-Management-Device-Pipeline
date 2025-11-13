@@ -12,44 +12,37 @@ async function fetchFiles() {
     const fileList = document.getElementById('fileList');
     fileList.innerHTML = '';
     if (!files || files.length === 0) {
-      fileList.innerHTML = '<div class="text-sm text-slate-400">No files</div>';
+      fileList.innerHTML = '<div class="text-sm text-gray-400 text-center py-4">No files</div>';
       return;
     }
     files.forEach(f => {
       const el = document.createElement('div');
-      el.className = 'flex justify-between items-center bg-slate-900/50 p-3 rounded-xl border border-gray-800 hover:border-[#00d9ff]/50 transition-all';
+      el.className = 'cyber-card card-red flex justify-between items-center p-3 rounded-xl transition-all hover:scale-[1.02]';
       const uploadTime = f.upload_time ? new Date(f.upload_time).toLocaleString() : '';
       el.innerHTML = `
-        <div class="flex-1 truncate pr-4">
+        <div class="flex-1 truncate pr-3">
           <div class="text-sm font-medium text-gray-200">${escapeHtml(f.name)}</div>
           <div class="text-xs text-gray-500 mt-0.5">${uploadTime}</div>
         </div>
-        <div class="grid grid-cols-2 gap-2 w-24">
-          <button data-action="copy-link" data-url="${location.origin+f.url}" 
-            class="p-2 rounded-lg border border-cyan-400 text-cyan-400 hover:bg-cyan-400 hover:text-black hover:scale-110 transition-all duration-300"
-            title="Copy Link">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path>
-            </svg>
-          </button>
+        <div class="flex gap-2">
           <button data-action="rename-file" data-name="${encodeURIComponent(f.name)}" 
-            class="p-2 rounded-lg border border-blue-400 text-blue-400 hover:bg-blue-400 hover:text-black hover:scale-110 transition-all duration-300"
+            class="p-2 rounded-lg border border-cyan-400/50 text-cyan-400 hover:bg-cyan-400 hover:text-black hover:scale-125 transition-all duration-200"
             title="Rename">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
             </svg>
           </button>
           <a href="${f.url}" target="_blank" 
-            class="p-2 rounded-lg border border-teal-400 text-teal-400 hover:bg-teal-400 hover:text-black hover:scale-110 transition-all duration-300 inline-flex items-center justify-center"
+            class="p-2 rounded-lg border border-purple-400/50 text-purple-400 hover:bg-purple-400 hover:text-black hover:scale-125 transition-all duration-200 inline-flex items-center justify-center"
             title="Download">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
             </svg>
           </a>
           <button data-action="delete-file" data-name="${encodeURIComponent(f.name)}" 
-            class="p-2 rounded-lg border border-[#00d9ff] text-[#00d9ff] hover:bg-[#00d9ff] hover:text-black hover:scale-110 transition-all duration-300"
+            class="p-2 rounded-lg border border-red-400/50 text-red-400 hover:bg-red-400 hover:text-black hover:scale-125 transition-all duration-200"
             title="Delete">
-            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
             </svg>
           </button>
@@ -145,7 +138,7 @@ function renderNodes(nodes) {
   let offlineCount = 0;
 
   if (keys.length === 0) {
-    runningArea.innerHTML = '<div class="text-sm text-slate-400 md:col-span-2">No nodes yet (waiting for MQTT messages)</div>';
+    runningArea.innerHTML = '<div class="text-sm text-gray-400 md:col-span-2 text-center py-8">No nodes yet (waiting for MQTT messages)</div>';
     document.getElementById('count-running').textContent = '0';
     document.getElementById('count-offline').textContent = '0';
     return;
@@ -155,18 +148,19 @@ function renderNodes(nodes) {
     const formattedNodeId = formatNodeId(k);
     const info = nodes[k] || {};
     const status = info.status || '';
-    // Status 'offline' is now explicitly set by the backend based on time
     const isOnline = String(status).toLowerCase() !== 'offline';
-    const dot = isOnline ? 'bg-emerald-400' : 'bg-red-500';
+    const dot = isOnline ? 'bg-orange-400' : 'bg-gray-500';
     const ram = info.ram_free_bytes !== undefined ? formatBytes(info.ram_free_bytes) : '-';
-    const sd_ok = info.sd_ok; // Will be true, false, or null/undefined
+    const sd_ok = info.sd_ok;
     const updated = info.updated || '';
 
     const card = document.createElement('div');
-    card.className = 'bg-slate-700 p-4 rounded shadow';
+    card.className = `node-card ${isOnline ? 'node-card-running' : 'node-card-offline'} cyber-card p-4 rounded-xl transition-all hover:scale-[1.02]`;
+    card.style.borderColor = isOnline ? 'rgba(249, 115, 22, 0.4)' : 'rgba(107, 114, 128, 0.4)';
+    
     card.innerHTML = `
-      <div class="flex justify-between items-start">
-        <div class="font-semibold text-lg truncate" title="${escapeHtml(k)}">${formattedNodeId}</div>
+      <div class="flex justify-between items-start mb-3">
+        <div class="font-semibold text-lg truncate flex-1" title="${escapeHtml(k)}">${formattedNodeId}</div>
         <div class="flex items-center gap-2">
           ${sd_ok !== undefined && sd_ok !== null ? `
             <div class="flex items-center gap-1.5" title="SD Card Status">
@@ -174,20 +168,32 @@ function renderNodes(nodes) {
             </div>
           ` : ''}
           <div class="w-3 h-3 rounded-full ${dot}"></div>
-          <div class="text-sm text-slate-300">${escapeHtml(String(status))}</div>
+          <div class="text-sm ${isOnline ? 'text-orange-400' : 'text-gray-500'}">${escapeHtml(String(status))}</div>
         </div>
       </div>
 
-      <div class="mt-3 text-sm text-slate-300 space-y-1">
-        <div>RAM Free: <span class="text-slate-100 font-medium">${ram}</span></div>
-        <div class="text-xs text-slate-400 mt-2">Last: ${escapeHtml(updated)}</div>
+      <div class="text-sm text-gray-300 space-y-1 mb-3">
+        <div>RAM Free: <span class="text-gray-100 font-medium">${ram}</span></div>
+        <div class="text-xs text-gray-500">Last: ${escapeHtml(updated)}</div>
       </div>
 
-      <div class="mt-3 flex gap-2 flex-wrap">
-        <button data-action="ota" data-node="${encodeURIComponent(k)}" class="px-3 py-1 bg-indigo-500 rounded text-sm">OTA</button>
-        <button data-action="configure" data-node="${encodeURIComponent(k)}" class="px-3 py-1 bg-yellow-500 rounded text-sm">Configure</button>
-        <button data-action="logs" data-node="${encodeURIComponent(k)}" class="px-3 py-1 bg-gray-600 rounded text-sm">Lihat Log</button>
-        <button data-action="delete-node" data-node="${encodeURIComponent(k)}" class="px-3 py-1 bg-red-600 rounded text-sm">Delete</button>
+      <div class="flex gap-2">
+        <button data-action="ota" data-node="${encodeURIComponent(k)}" 
+          class="flex-1 px-3 py-2 rounded-lg border border-cyan-400/50 text-cyan-400 hover:bg-cyan-400 hover:text-black text-sm font-medium transition-all hover:scale-105">
+          OTA
+        </button>
+        <button data-action="configure" data-node="${encodeURIComponent(k)}" 
+          class="flex-1 px-3 py-2 rounded-lg border border-purple-400/50 text-purple-400 hover:bg-purple-400 hover:text-black text-sm font-medium transition-all hover:scale-105">
+          Config
+        </button>
+        <button data-action="logs" data-node="${encodeURIComponent(k)}" 
+          class="flex-1 px-3 py-2 rounded-lg border border-orange-400/50 text-orange-400 hover:bg-orange-400 hover:text-black text-sm font-medium transition-all hover:scale-105">
+          Logs
+        </button>
+        <button data-action="delete-node" data-node="${encodeURIComponent(k)}" 
+          class="px-3 py-2 rounded-lg border border-red-400/50 text-red-400 hover:bg-red-400 hover:text-black text-sm font-medium transition-all hover:scale-105">
+          ✕
+        </button>
       </div>
     `;
 
@@ -202,8 +208,8 @@ function renderNodes(nodes) {
 
   document.getElementById('count-running').textContent = runningCount;
   document.getElementById('count-offline').textContent = offlineCount;
-  if (runningCount === 0) runningArea.innerHTML = '<div class="text-sm text-slate-400 md:col-span-2">No running nodes.</div>';
-  if (offlineCount === 0) offlineArea.innerHTML = '<div class="text-sm text-slate-400 md:col-span-2">No offline nodes.</div>';
+  if (runningCount === 0) runningArea.innerHTML = '<div class="text-sm text-gray-400 md:col-span-2 text-center py-8">No running nodes.</div>';
+  if (offlineCount === 0) offlineArea.innerHTML = '<div class="text-sm text-gray-400 md:col-span-2 text-center py-8">No offline nodes.</div>';
 }
 
 function formatBytes(bytes) {
