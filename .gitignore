@@ -30,3 +30,6 @@ venv/
 *.env
 *.env.*
 *!.env.example
+JSON_UNIVERSAL_SCHEMA_M1_M11.md
+MQTT_TOPICS_AND_PAYLOADS.md
+OTA_DOCUMENTATION.md
