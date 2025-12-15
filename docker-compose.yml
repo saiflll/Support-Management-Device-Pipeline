@@ -1,4 +1,5 @@
 services:
+  # === Database Service ===
   postgres:
     image: postgres:13
     container_name: postgres_db
@@ -6,12 +7,8 @@ services:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
-      # Atur zona waktu di dalam kontainer postgres agar konsisten
       TZ: "Asia/Jakarta"
       PGTZ: "Asia/Jakarta"
-    # Tidak perlu expose port database ke host jika hanya diakses oleh service lain
-    # ports:
-    #   - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -19,9 +16,11 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    restart: unless-stopped
     networks:
       - iot-net
 
+  # === MQTT Broker ===
   emqx:
     image: emqx:5.5
     container_name: emqx
@@ -41,71 +40,97 @@ services:
       interval: 5s
       timeout: 10s
       retries: 5
+    restart: unless-stopped
     networks:
       - iot-net
 
+  # === Backend Forwarder Service ===
   backend:
-    # Beri nama image agar Docker bisa melakukan caching dengan lebih baik
     image: forwarder-app:latest
+    container_name: forwarder
     build:
-      # Arahkan ke direktori backend Go Anda
       context: ./forward
       dockerfile: Dockerfile
       args:
-        GOLANG_VERSION: 1.24-alpine # Definisikan versi Go di sini
-    container_name: forwarder
+        GOLANG_VERSION: 1.24-alpine
     ports:
       - "8888:8888"
     environment:
-      # Arahkan backend untuk terhubung ke service emqx dan postgres di dalam Docker
       - MQTT_BROKER_URI=tcp://emqx:1883
       - DB_HOST=postgres_db
       - TZ=Asia/Jakarta
     env_file:
       - .env
+    restart: unless-stopped
     depends_on:
-      emqx:
-        condition: service_healthy
       postgres:
+        condition: service_healthy
+      emqx:
         condition: service_healthy
     networks:
       - iot-net
       
+  # === OTA Update Service ===
   ota:
-    # Beri nama image agar Docker bisa melakukan caching dengan lebih baik
     image: ota-app:latest
     container_name: ota-app
     build:
       context: ./ota
       dockerfile: Dockerfile
       args:
-        GOLANG_VERSION: 1.25-alpine # Perbarui ke Go 1.25 sesuai go.mod
+        GOLANG_VERSION: 1.25-alpine
     ports:
       - "9999:9999"
-    networks:
-      - iot-net
     volumes:
       - ./ota/static/uploads:/app/static/uploads
     environment:
       - MQTT_BROKER=tcp://emqx:1883
       - MQTT_USER=cntrl
-      - MQTT_PASS= 
+      - MQTT_PASS=
       - TELEGRAM_BOT_TOKEN=8562677403:AAEp3bAEBbpqTIIMoxCA5XlIGUwYD3ZUtoc
       - TELEGRAM_CHAT_ID=7412135090
     restart: unless-stopped
     depends_on:
       emqx:
         condition: service_healthy
+    networks:
+      - iot-net
 
-  # frontend:
-  #   build:
-  #     context: ./iot-suhu-fe
-  #     args:
-  #       - API_URL=http://172.20.100.11:8000/api
-  #     dockerfile: DockerFile
-  #   container_name: frontend
-  #   ports:
-  #     - "8080:80"
+  # === Forming/Production Monitoring Service ===
+  forming:
+    image: forming-app:latest
+    container_name: forming-app
+    build:
+      context: ./forming
+      dockerfile: Dockerfile
+    ports:
+      - "3000:3000"
+    environment:
+      # Database Configuration
+      - DB_HOST=postgres_db
+      - DB_PORT=5432
+      - DB_USER=${DB_USER}
+      - DB_PASSWORD=${DB_PASSWORD}
+      - DB_NAME=${DB_NAME}
+      # MQTT Configuration
+      - MQTT_HOST=emqx
+      - MQTT_PORT=1883
+      - MQTT_USER=servfi_app
+      - MQTT_PASSWORD=S3cr3tP@ssw0rd!
+      # Google Sheets (Optional)
+      - GOOGLE_SHEETS_CREDENTIALS=${GOOGLE_SHEETS_CREDENTIALS:-}
+      - GOOGLE_SPREADSHEET_ID=${GOOGLE_SPREADSHEET_ID:-}
+      - GOOGLE_SHEET_NAME=Production Data
+      # Application Configuration
+      - TZ=Asia/Jakarta
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      emqx:
+        condition: service_healthy
+    networks:
+      - iot-net
 
 volumes:
   postgres_data:
