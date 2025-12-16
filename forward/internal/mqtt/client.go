@@ -89,7 +89,14 @@ func StartClient() {
 
 	// Tambahkan kredensial jika tersedia di environment
 	username := os.Getenv("MQTT_USERNAME")
+	if username == "" {
+		username = "apps"
+	}
 	password := os.Getenv("MQTT_PASSWORD")
+	if password == "" {
+		password = "apps"
+	}
+
 	if username != "" {
 		opts.SetUsername(username)
 		opts.SetPassword(password)

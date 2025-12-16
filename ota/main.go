@@ -339,7 +339,7 @@ func main() {
 		var payload map[string]interface{}
 		if model == "MDCW" {
 			payload = map[string]interface{}{"cmd": "set_config", "prefix": t.Prefix}
-			
+
 			nodeMutex.Lock()
 			if info, ok := nodeStatus[t.Node]; ok {
 				info.Prefix = t.Prefix
@@ -347,7 +347,7 @@ func main() {
 			nodeMutex.Unlock()
 		} else {
 			payload = map[string]interface{}{"cmd": "set_threshold", "min": t.Min, "max": t.Max, "ck": t.Ck, "area": t.Area, "no": t.No}
-			
+
 			nodeMutex.Lock()
 			if info, ok := nodeStatus[t.Node]; ok {
 				info.Ck, info.Area, info.No = t.Ck, t.Area, t.No
@@ -583,8 +583,8 @@ func loadInitialFiles(dir string) {
 func initMQTT() {
 	// broker and creds
 	brokerHost := getEnv("MQTT_BROKER", "tcp://172.20.100.11:1883")
-	mqttUser := getEnv("MQTT_USER", "cntrl")
-	mqttPass := getEnv("MQTT_PASS", "")
+	mqttUser := getEnv("MQTT_USER", "apps")
+	mqttPass := getEnv("MQTT_PASS", "apps")
 
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(brokerHost)

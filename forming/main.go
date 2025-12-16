@@ -82,8 +82,8 @@ func main() {
 	// --- MQTT Connection ---
 	mqttHost := getEnv("MQTT_HOST", "172.20.100.11")
 	mqttPort := getEnv("MQTT_PORT", "1883")
-	mqttUser := getEnv("MQTT_USER", "")
-	mqttPass := getEnv("MQTT_PASSWORD", "")
+	mqttUser := getEnv("MQTT_USER", "apps")
+	mqttPass := getEnv("MQTT_PASSWORD", "apps")
 	brokerUrl := fmt.Sprintf("tcp://%s:%s", mqttHost, mqttPort)
 
 	opts := mqtt.NewClientOptions()

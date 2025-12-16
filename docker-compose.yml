@@ -33,8 +33,8 @@ services:
       - emqx_log:/opt/emqx/log
     environment:
       - EMQX_ALLOW_ANONYMOUS=false
-      - EMQX_AUTH__USER__1__USERNAME=servfi_app
-      - EMQX_AUTH__USER__1__PASSWORD=S3cr3tP@ssw0rd!
+      - EMQX_AUTH__USER__1__USERNAME=apps
+      - EMQX_AUTH__USER__1__PASSWORD=apps
     healthcheck:
       test: ["CMD", "emqx", "ping"]
       interval: 5s
@@ -57,6 +57,8 @@ services:
       - "8888:8888"
     environment:
       - MQTT_BROKER_URI=tcp://emqx:1883
+      - MQTT_USERNAME=apps
+      - MQTT_PASSWORD=apps
       - DB_HOST=postgres_db
       - TZ=Asia/Jakarta
     env_file:
@@ -85,8 +87,8 @@ services:
       - ./ota/static/uploads:/app/static/uploads
     environment:
       - MQTT_BROKER=tcp://emqx:1883
-      - MQTT_USER=cntrl
-      - MQTT_PASS=
+      - MQTT_USER=apps
+      - MQTT_PASS=apps
       - TELEGRAM_BOT_TOKEN=8562677403:AAEp3bAEBbpqTIIMoxCA5XlIGUwYD3ZUtoc
       - TELEGRAM_CHAT_ID=7412135090
     restart: unless-stopped
@@ -115,8 +117,8 @@ services:
       # MQTT Configuration
       - MQTT_HOST=emqx
       - MQTT_PORT=1883
-      - MQTT_USER=servfi_app
-      - MQTT_PASSWORD=S3cr3tP@ssw0rd!
+      - MQTT_USER=apps
+      - MQTT_PASSWORD=apps
       # Google Sheets (Optional)
       - GOOGLE_SHEETS_CREDENTIALS=${GOOGLE_SHEETS_CREDENTIALS:-}
       - GOOGLE_SPREADSHEET_ID=${GOOGLE_SPREADSHEET_ID:-}
