@@ -31,6 +31,8 @@ type NodeInfo struct {
 	Area         string   `json:"area,omitempty"`
 	No           string   `json:"no,omitempty"`
 	Updated      string   `json:"updated,omitempty"`
+	Model        string   `json:"model,omitempty"`
+	Prefix       string   `json:"prefix,omitempty"`
 	Logs         []string `json:"logs,omitempty"` // last 3 log lines
 }
 
@@ -313,29 +315,50 @@ func main() {
 	// Config -> publish to nodes/{id}/command
 	protected.Post("/config", func(c *fiber.Ctx) error {
 		type T struct {
-			Node string  `json:"node"`
-			Min  float64 `json:"min"`
-			Max  float64 `json:"max"`
-			Ck   string  `json:"ck"`
-			Area string  `json:"area"`
-			No   string  `json:"no"`
+			Node   string  `json:"node"`
+			Min    float64 `json:"min"`
+			Max    float64 `json:"max"`
+			Ck     string  `json:"ck"`
+			Area   string  `json:"area"`
+			No     string  `json:"no"`
+			Prefix string  `json:"prefix"`
 		}
 		var t T
 		if err := c.BodyParser(&t); err != nil {
 			return c.Status(400).JSON(fiber.Map{"error": "invalid body"})
 		}
-		payload := map[string]interface{}{"cmd": "set_threshold", "min": t.Min, "max": t.Max, "ck": t.Ck, "area": t.Area, "no": t.No}
+
+		// Check model from nodeStatus
+		nodeMutex.RLock()
+		model := ""
+		if info, ok := nodeStatus[t.Node]; ok {
+			model = info.Model
+		}
+		nodeMutex.RUnlock()
+
+		var payload map[string]interface{}
+		if model == "MDCW" {
+			payload = map[string]interface{}{"cmd": "set_config", "prefix": t.Prefix}
+			
+			nodeMutex.Lock()
+			if info, ok := nodeStatus[t.Node]; ok {
+				info.Prefix = t.Prefix
+			}
+			nodeMutex.Unlock()
+		} else {
+			payload = map[string]interface{}{"cmd": "set_threshold", "min": t.Min, "max": t.Max, "ck": t.Ck, "area": t.Area, "no": t.No}
+			
+			nodeMutex.Lock()
+			if info, ok := nodeStatus[t.Node]; ok {
+				info.Ck, info.Area, info.No = t.Ck, t.Area, t.No
+			}
+			nodeMutex.Unlock()
+		}
+
 		b, err := json.Marshal(payload)
 		if err != nil {
 			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create payload"})
 		}
-
-		// Save the config values to the node's state
-		nodeMutex.Lock()
-		if info, ok := nodeStatus[t.Node]; ok {
-			info.Ck, info.Area, info.No = t.Ck, t.Area, t.No
-		}
-		nodeMutex.Unlock()
 
 		topic := fmt.Sprintf("nodes/%s/command", t.Node)
 		token := mqttClient.Publish(topic, 0, false, b)
@@ -646,7 +669,7 @@ func mqttHandler(client mqtt.Client, msg mqtt.Message) {
 				if len(oldMacMatches) > 0 && oldMacMatches[len(oldMacMatches)-1] == newMac {
 					// Found an old node for this MAC. Migrate data and delete it.
 					log.Printf("Migrating config from old node '%s' to new node '%s'", oldID, nodeID)
-					newNodeInfo := &NodeInfo{Ck: oldInfo.Ck, Area: oldInfo.Area, No: oldInfo.No}
+					newNodeInfo := &NodeInfo{Ck: oldInfo.Ck, Area: oldInfo.Area, No: oldInfo.No, Prefix: oldInfo.Prefix}
 					nodeStatus[nodeID] = newNodeInfo
 					delete(nodeStatus, oldID)
 					break // Assume only one old node per MAC
@@ -670,6 +693,12 @@ func mqttHandler(client mqtt.Client, msg mqtt.Message) {
 				} else {
 					info.Status = fmt.Sprintf("%v", tmp)
 				}
+				if mod, ex := m["model"]; ex {
+					info.Model = fmt.Sprintf("%v", mod)
+				}
+				if p, ex := m["prefix"]; ex {
+					info.Prefix = fmt.Sprintf("%v", p)
+				}
 			} else {
 				info.Status = fmt.Sprintf("%v", tmp)
 			}
@@ -690,6 +719,12 @@ func mqttHandler(client mqtt.Client, msg mqtt.Message) {
 				if b, ok := v.(bool); ok {
 					info.SD_OK = &b
 				}
+			}
+			if v, ok := m["model"]; ok {
+				info.Model = fmt.Sprintf("%v", v)
+			}
+			if v, ok := m["prefix"]; ok {
+				info.Prefix = fmt.Sprintf("%v", v)
 			}
 			// optionally parse other fields if present
 		}
