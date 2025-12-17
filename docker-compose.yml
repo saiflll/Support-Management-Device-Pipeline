@@ -33,8 +33,8 @@ services:
       - emqx_log:/opt/emqx/log
     environment:
       - EMQX_ALLOW_ANONYMOUS=false
-      - EMQX_AUTH__USER__1__USERNAME=apps
-      - EMQX_AUTH__USER__1__PASSWORD=apps
+      - EMQX_AUTH__USER__1__USERNAME=${MQTT_USERNAME}
+      - EMQX_AUTH__USER__1__PASSWORD=${MQTT_PASSWORD}
     healthcheck:
       test: ["CMD", "emqx", "ping"]
       interval: 5s
@@ -46,7 +46,7 @@ services:
 
   # === Backend Forwarder Service ===
   backend:
-    image: forwarder-app:latest
+    image: rennn/forwarder-app:latest
     container_name: forwarder
     build:
       context: ./forward
@@ -54,12 +54,18 @@ services:
       args:
         GOLANG_VERSION: 1.24-alpine
     ports:
-      - "8888:8888"
+      - "8888:8000"
     environment:
-      - MQTT_BROKER_URI=tcp://emqx:1883
-      - MQTT_USERNAME=apps
-      - MQTT_PASSWORD=apps
       - DB_HOST=postgres_db
+      - MQTT_BROKER_URI=tcp://emqx:1883
+      - MQTT_USERNAME=${MQTT_USERNAME}
+      - MQTT_PASSWORD=${MQTT_PASSWORD}
+      - MQTT_BROKER_PUB=${MQTT_BROKER_PUB}
+      - MQTT_TOPIC_PUB=${MQTT_TOPIC_PUB}
+      - MQTT_USERNAME_FOR=${MQTT_USERNAME_FOR}
+      - MQTT_PASSWORD_FOR=${MQTT_PASSWORD_FOR}
+      - TELE_BOT_ALRT=${TELE_BOT_ALRT}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
       - TZ=Asia/Jakarta
     env_file:
       - .env
@@ -74,7 +80,7 @@ services:
       
   # === OTA Update Service ===
   ota:
-    image: ota-app:latest
+    image: rennn/ota-app:latest
     container_name: ota-app
     build:
       context: ./ota
@@ -87,20 +93,23 @@ services:
       - ./ota/static/uploads:/app/static/uploads
     environment:
       - MQTT_BROKER=tcp://emqx:1883
-      - MQTT_USER=apps
-      - MQTT_PASS=apps
-      - TELEGRAM_BOT_TOKEN=8562677403:AAEp3bAEBbpqTIIMoxCA5XlIGUwYD3ZUtoc
-      - TELEGRAM_CHAT_ID=7412135090
+      # OTA service script calls for MQTT_USER (not USERNAME)
+      - MQTT_USER=${MQTT_USER}
+      - MQTT_PASS=${MQTT_PASS}
+      - TELE_BOT_OTA=${TELE_BOT_OTA}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
     restart: unless-stopped
     depends_on:
       emqx:
         condition: service_healthy
+      pgweb:
+        condition: service_started
     networks:
       - iot-net
 
   # === Forming/Production Monitoring Service ===
   forming:
-    image: forming-app:latest
+    image: rennn/forming-app:latest
     container_name: forming-app
     build:
       context: ./forming
@@ -110,19 +119,19 @@ services:
     environment:
       # Database Configuration
       - DB_HOST=postgres_db
-      - DB_PORT=5432
+      - DB_PORT=${DB_PORT}
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_NAME=${DB_NAME}
       # MQTT Configuration
       - MQTT_HOST=emqx
-      - MQTT_PORT=1883
-      - MQTT_USER=apps
-      - MQTT_PASSWORD=apps
-      # Google Sheets (Optional)
+      - MQTT_PORT=${MQTT_PORT}
+      - MQTT_USER=${MQTT_USER}
+      - MQTT_PASSWORD=${MQTT_PASSWORD}
+      # Google Sheets
       - GOOGLE_SHEETS_CREDENTIALS=${GOOGLE_SHEETS_CREDENTIALS:-}
       - GOOGLE_SPREADSHEET_ID=${GOOGLE_SPREADSHEET_ID:-}
-      - GOOGLE_SHEET_NAME=Production Data
+      - GOOGLE_SHEET_NAME=${GOOGLE_SHEET_NAME:-}
       # Application Configuration
       - TZ=Asia/Jakarta
     restart: unless-stopped
@@ -130,6 +139,22 @@ services:
       postgres:
         condition: service_healthy
       emqx:
+        condition: service_healthy
+    networks:
+      - iot-net
+
+  # === pgweb Database Management ===
+  pgweb:
+    image: sosedoff/pgweb
+    container_name: pgweb
+    restart: always
+    ports:
+      - "8080:8081"  # Expose pgweb directly
+    environment:
+      - DATABASE_URL=postgres://postgres:pPa3PLan@postgres_db:5432/servfi?sslmode=disable
+      - PGWEB_SESSIONS=1
+    depends_on:
+      postgres:
         condition: service_healthy
     networks:
       - iot-net
@@ -142,3 +167,6 @@ volumes:
 networks:
   iot-net:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 192.168.200.0/24

@@ -16,15 +16,9 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/template/html/v2"
-	"github.com/joho/godotenv"
 )
 
 func main() {
-
-	if err := godotenv.Load(); err != nil {
-		log.Println("Peringatan: Gagal memuat file .env. Menggunakan environment variable sistem.")
-	}
-
 	// Inisialisasi zona waktu aplikasi ke Asia/Jakarta (UTC+7)
 	config.InitTimezone()
 

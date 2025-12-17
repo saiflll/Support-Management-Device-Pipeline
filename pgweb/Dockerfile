@@ -1,7 +1,7 @@
 # ============================================
 # Stage 1: Build
 # ============================================
-FROM golang:1.25-alpine AS builder
+FROM golang:1.24-alpine AS builder
 
 WORKDIR /build
 
@@ -12,14 +12,15 @@ RUN apk add --no-cache git ca-certificates tzdata
 COPY go.mod go.sum ./
 RUN go mod download
 
-# Copy source code
-COPY . .
+# Copy source code and views
+COPY main.go ./
+COPY views ./views
 
 # Build binary
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -ldflags='-w -s -extldflags "-static"' \
     -a -installsuffix cgo \
-    -o forming-server .
+    -o pgweb-proxy main.go
 
 # ============================================
 # Stage 2: Runtime
@@ -34,19 +35,16 @@ ENV TZ=Asia/Jakarta
 
 WORKDIR /app
 
-# Copy binary from builder
-COPY --from=builder /build/forming-server .
-
-# Copy required directories
+# Copy binary and views from builder
+COPY --from=builder /build/pgweb-proxy .
 COPY --from=builder /build/views ./views
-COPY --from=builder /build/public ./public
 
 # Expose port
-EXPOSE 3000
+EXPOSE 8080
 
 # Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=10s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:3000/ || exit 1
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8080/health || exit 1
 
 # Run as non-root user
 RUN addgroup -g 1000 appuser && \
@@ -56,4 +54,4 @@ RUN addgroup -g 1000 appuser && \
 USER appuser
 
 # Run the application
-CMD ["/app/forming-server"]
+CMD ["/app/pgweb-proxy"]

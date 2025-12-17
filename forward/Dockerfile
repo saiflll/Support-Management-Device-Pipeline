@@ -1,33 +1,59 @@
-
-# Gunakan ARG untuk menerima versi dari docker-compose
+# ============================================
+# Stage 1: Build
+# ============================================
 ARG GOLANG_VERSION=1.24-alpine
 FROM golang:${GOLANG_VERSION} AS builder
 
-WORKDIR /app
+WORKDIR /build
 
-# Salin informasi modul
+# Install dependencies
+RUN apk add --no-cache git ca-certificates tzdata
+
+# Copy go mod files
 COPY go.mod go.sum ./
-
-# Download dependencies jika vendor tidak ada
 RUN go mod download
 
-# Salin sisa kode aplikasi
+# Copy source code
 COPY . .
 
-# Build aplikasi Go
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /servfi ./main.go
+# Build binary
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+    -ldflags='-w -s -extldflags "-static"' \
+    -a -installsuffix cgo \
+    -o forwarder-server main.go
 
+# ============================================
+# Stage 2: Runtime
+# ============================================
+FROM alpine:3.18
 
-# --- Tahap Final ---
-FROM alpine:latest
+# Install runtime dependencies
+RUN apk add --no-cache ca-certificates tzdata
+
+# Set timezone
+ENV TZ=Asia/Jakarta
 
 WORKDIR /app
 
-# Salin file binary yang sudah di-build dari tahap sebelumnya
-COPY --from=builder /servfi .
+# Copy binary from builder
+COPY --from=builder /build/forwarder-server .
 
-# Salin SELURUH direktori template yang diperlukan oleh aplikasi
-COPY --from=builder /app/internal/forwarder ./internal/forwarder
+# Copy required directories (templates for forwarder UI)
+COPY --from=builder /build/internal/forwarder/*.html ./internal/forwarder/
 
-# Perintah untuk menjalankan aplikasi
-CMD ["./servfi"]
+# Expose port
+EXPOSE 8888
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8888/login || exit 1
+
+# Run as non-root user
+RUN addgroup -g 1000 appuser && \
+    adduser -D -u 1000 -G appuser appuser && \
+    chown -R appuser:appuser /app
+
+USER appuser
+
+# Run the application
+CMD ["/app/forwarder-server"]

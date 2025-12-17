@@ -42,6 +42,65 @@ type FileInfo struct {
 	UploadTime time.Time `json:"upload_time"`
 }
 
+// ModelConfig defines configuration fields for each model type
+type ModelConfig struct {
+	Name        string  `json:"name"`
+	DisplayName string  `json:"display_name"`
+	Fields      []Field `json:"fields"`
+	Command     string  `json:"command"` // MQTT command name
+}
+
+type Field struct {
+	Name        string   `json:"name"`  // field name in JSON
+	Label       string   `json:"label"` // display label
+	Type        string   `json:"type"`  // "number", "text", "select"
+	Required    bool     `json:"required"`
+	Placeholder string   `json:"placeholder,omitempty"`
+	Min         *float64 `json:"min,omitempty"`
+	Max         *float64 `json:"max,omitempty"`
+	Step        *float64 `json:"step,omitempty"`
+	Options     []string `json:"options,omitempty"` // for select type
+}
+
+// Model registry - easy to add new models
+var modelRegistry = map[string]ModelConfig{
+	"TEMP": {
+		Name:        "TEMP",
+		DisplayName: "Temperature Sensor",
+		Command:     "set_threshold",
+		Fields: []Field{
+			{Name: "min", Label: "Min Temp (°C)", Type: "number", Required: true, Step: floatPtr(0.1)},
+			{Name: "max", Label: "Max Temp (°C)", Type: "number", Required: true, Step: floatPtr(0.1)},
+			{Name: "ck", Label: "CK", Type: "text", Required: true},
+			{Name: "area", Label: "Area", Type: "text", Required: true},
+			{Name: "no", Label: "No", Type: "text", Required: true},
+		},
+	},
+	"MDCW": {
+		Name:        "MDCW",
+		DisplayName: "MDCW Device",
+		Command:     "set_config",
+		Fields: []Field{
+			{Name: "prefix", Label: "Prefix (Node Name)", Type: "text", Required: true, Placeholder: "e.g., NODE_A"},
+		},
+	},
+	// Easy to add more models here!
+	// "DOOR": {
+	//     Name:        "DOOR",
+	//     DisplayName: "Door Sensor",
+	//     Command:     "set_door_config",
+	//     Fields: []Field{
+	//         {Name: "zone", Label: "Zone", Type: "text", Required: true},
+	//         {Name: "alert_delay", Label: "Alert Delay (seconds)", Type: "number", Required: true},
+	//     },
+	// },
+}
+
+// Helper function for float pointer
+func floatPtr(f float64) *float64 {
+	return &f
+}
+
 var (
 	mqttClient mqtt.Client
 	nodeMutex  sync.RWMutex
@@ -72,17 +131,16 @@ func main() {
 	}
 
 	// --- Auth Config ---
-	telegramBotToken = getEnv("TELEGRAM_BOT_TOKEN", "")
+	telegramBotToken = getEnv("TELE_BOT_OTA", "")
 	telegramChatID = getEnv("TELEGRAM_CHAT_ID", "")
 	if telegramBotToken == "" || telegramChatID == "" {
-		log.Println("Peringatan: TELEGRAM_BOT_TOKEN atau TELEGRAM_CHAT_ID tidak diatur. Fitur login tidak akan berfungsi.")
+		log.Println("Peringatan: TELE_BOT_OTA atau TELEGRAM_CHAT_ID tidak diatur. Fitur login tidak akan berfungsi.")
 	}
 
 	store = session.New(session.Config{
 		Storage:        memory.New(),
 		Expiration:     24 * time.Hour,
 		KeyLookup:      "cookie:session_id",
-		CookieName:     "session_id",
 		CookieHTTPOnly: true,
 		CookieSameSite: "Lax",
 		KeyGenerator: func() string {
@@ -114,13 +172,14 @@ func main() {
 	protected.Use(requireAuth)
 
 	protected.Get("/", func(c *fiber.Ctx) error {
-		brokerHost := getEnv("MQTT_BROKER", "tcp://172.20.100.11:1883")
+		brokerHost := getEnv("MQTT_BROKER", "")
 		return c.Render("index", fiber.Map{
 			"broker":     brokerHost,
 			"serverName": "ren_itdt_west",
 		})
 	})
 
+	protected.Get("/database", handleDatabaseRedirect)
 	protected.Post("/logout", handleLogout)
 
 	api := protected.Group("/api")
@@ -172,6 +231,20 @@ func main() {
 		}
 
 		return c.JSON(latestNodes)
+	})
+
+	// API: get model configurations
+	api.Get("/models", func(c *fiber.Ctx) error {
+		return c.JSON(modelRegistry)
+	})
+
+	// API: get specific model config
+	api.Get("/models/:name", func(c *fiber.Ctx) error {
+		modelName := c.Params("name")
+		if config, exists := modelRegistry[modelName]; exists {
+			return c.JSON(config)
+		}
+		return c.Status(404).JSON(fiber.Map{"error": "model not found"})
 	})
 
 	// DELETE node endpoint
@@ -312,58 +385,87 @@ func main() {
 		return c.JSON(fiber.Map{"status": "ok", "filename": f.Filename})
 	})
 
-	// Config -> publish to nodes/{id}/command
+	// Config -> publish to nodes/{id}/command (Dynamic model-based)
 	protected.Post("/config", func(c *fiber.Ctx) error {
-		type T struct {
-			Node   string  `json:"node"`
-			Min    float64 `json:"min"`
-			Max    float64 `json:"max"`
-			Ck     string  `json:"ck"`
-			Area   string  `json:"area"`
-			No     string  `json:"no"`
-			Prefix string  `json:"prefix"`
-		}
-		var t T
-		if err := c.BodyParser(&t); err != nil {
+		var req map[string]interface{}
+		if err := c.BodyParser(&req); err != nil {
 			return c.Status(400).JSON(fiber.Map{"error": "invalid body"})
 		}
 
-		// Check model from nodeStatus
+		nodeID, ok := req["node"].(string)
+		if !ok || nodeID == "" {
+			return c.Status(400).JSON(fiber.Map{"error": "node ID required"})
+		}
+
+		// Get model from nodeStatus
 		nodeMutex.RLock()
 		model := ""
-		if info, ok := nodeStatus[t.Node]; ok {
+		if info, ok := nodeStatus[nodeID]; ok {
 			model = info.Model
 		}
 		nodeMutex.RUnlock()
 
-		var payload map[string]interface{}
-		if model == "MDCW" {
-			payload = map[string]interface{}{"cmd": "set_config", "prefix": t.Prefix}
-
-			nodeMutex.Lock()
-			if info, ok := nodeStatus[t.Node]; ok {
-				info.Prefix = t.Prefix
-			}
-			nodeMutex.Unlock()
-		} else {
-			payload = map[string]interface{}{"cmd": "set_threshold", "min": t.Min, "max": t.Max, "ck": t.Ck, "area": t.Area, "no": t.No}
-
-			nodeMutex.Lock()
-			if info, ok := nodeStatus[t.Node]; ok {
-				info.Ck, info.Area, info.No = t.Ck, t.Area, t.No
-			}
-			nodeMutex.Unlock()
+		// Default to TEMP if no model specified
+		if model == "" {
+			model = "TEMP"
 		}
 
+		// Get model config from registry
+		modelConfig, exists := modelRegistry[model]
+		if !exists {
+			return c.Status(400).JSON(fiber.Map{
+				"error": fmt.Sprintf("unknown model: %s", model),
+			})
+		}
+
+		// Build payload dynamically based on model fields
+		payload := map[string]interface{}{
+			"cmd": modelConfig.Command,
+		}
+
+		// Extract field values from request
+		for _, field := range modelConfig.Fields {
+			if value, ok := req[field.Name]; ok {
+				payload[field.Name] = value
+
+				// Update nodeStatus with new values
+				nodeMutex.Lock()
+				if info, ok := nodeStatus[nodeID]; ok {
+					switch field.Name {
+					case "ck":
+						info.Ck = fmt.Sprint(value)
+					case "area":
+						info.Area = fmt.Sprint(value)
+					case "no":
+						info.No = fmt.Sprint(value)
+					case "prefix":
+						info.Prefix = fmt.Sprint(value)
+					}
+				}
+				nodeMutex.Unlock()
+			} else if field.Required {
+				return c.Status(400).JSON(fiber.Map{
+					"error": fmt.Sprintf("required field missing: %s", field.Name),
+				})
+			}
+		}
+
+		// Marshal and publish
 		b, err := json.Marshal(payload)
 		if err != nil {
 			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create payload"})
 		}
 
-		topic := fmt.Sprintf("nodes/%s/command", t.Node)
+		topic := fmt.Sprintf("nodes/%s/command", nodeID)
 		token := mqttClient.Publish(topic, 0, false, b)
 		token.Wait()
-		return c.JSON(fiber.Map{"status": "ok", "topic": topic})
+
+		return c.JSON(fiber.Map{
+			"status": "ok",
+			"topic":  topic,
+			"model":  model,
+			"cmd":    modelConfig.Command,
+		})
 	})
 
 	// OTA trigger
@@ -501,6 +603,11 @@ func handleLogout(c *fiber.Ctx) error {
 	return c.Redirect("/login")
 }
 
+func handleDatabaseRedirect(c *fiber.Ctx) error {
+	// Redirect to pgweb on localhost
+	return c.Redirect("http://localhost:8080", http.StatusFound)
+}
+
 func handleRequestCode(c *fiber.Ctx) error {
 	if telegramBotToken == "" || telegramChatID == "" {
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
@@ -582,7 +689,10 @@ func loadInitialFiles(dir string) {
 
 func initMQTT() {
 	// broker and creds
-	brokerHost := getEnv("MQTT_BROKER", "tcp://172.20.100.11:1883")
+	brokerHost := getEnv("MQTT_BROKER", "")
+	if brokerHost == "" {
+		log.Fatal("MQTT_BROKER environment variable is required")
+	}
 	mqttUser := getEnv("MQTT_USER", "apps")
 	mqttPass := getEnv("MQTT_PASS", "apps")
 

@@ -2,6 +2,8 @@ package telegram
 
 import (
 	"log"
+	"os"
+	"strconv"
 )
 
 var (
@@ -10,13 +12,20 @@ var (
 )
 
 func LoadConfig() {
-	BotToken = "8017784237:AAE7SQI1nyNAdiUCmAP86ERUJTIiXAOs3Os" // Ganti dengan token bot Anda
-	ChatID = 7412135090                                         // Ganti dengan chat ID Anda
+	BotToken = os.Getenv("TELE_BOT_ALRT")
+	chatIDStr := os.Getenv("TELEGRAM_CHAT_ID")
 
-	if BotToken == "YOUR_TELEGRAM_BOT_TOKEN" {
-		log.Println("Peringatan: Harap ganti 'YOUR_TELEGRAM_BOT_TOKEN' dengan token bot Telegram Anda yang sebenarnya di internal/telegram/config.go")
+	if BotToken == "" {
+		log.Println("Peringatan: TELE_BOT_ALRT tidak diatur. Fitur notifikasi telegram tidak akan berfungsi.")
 	}
-	if ChatID == 123456789 {
-		log.Println("Peringatan: Harap ganti '123456789' dengan chat ID Telegram Anda yang sebenarnya di internal/telegram/config.go")
+
+	if chatIDStr == "" {
+		log.Println("Peringatan: TELEGRAM_CHAT_ID tidak diatur. Fitur notifikasi telegram tidak akan berfungsi.")
+	} else {
+		var err error
+		ChatID, err = strconv.ParseInt(chatIDStr, 10, 64)
+		if err != nil {
+			log.Fatalf("Error parsing TELEGRAM_CHAT_ID: %v", err)
+		}
 	}
 }

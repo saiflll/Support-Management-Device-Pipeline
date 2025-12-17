@@ -55,7 +55,7 @@ func main() {
 	}
 
 	// --- Database Connection ---
-	dbHost := getEnv("DB_HOST", "172.20.100.11")
+	dbHost := getEnv("DB_HOST", "postgres_db")
 	dbPort := getEnv("DB_PORT", "5432")
 	dbUser := getEnv("DB_USER", "postgres")
 	dbPass := getEnv("DB_PASSWORD", "password_rahasia_anda")
@@ -80,7 +80,7 @@ func main() {
 	}
 
 	// --- MQTT Connection ---
-	mqttHost := getEnv("MQTT_HOST", "172.20.100.11")
+	mqttHost := getEnv("MQTT_HOST", "emqx")
 	mqttPort := getEnv("MQTT_PORT", "1883")
 	mqttUser := getEnv("MQTT_USER", "apps")
 	mqttPass := getEnv("MQTT_PASSWORD", "apps")

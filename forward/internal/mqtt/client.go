@@ -76,7 +76,6 @@ func StartClient() {
 
 	SensorDataTopic = os.Getenv("MQTT_TOPIC")
 	if SensorDataTopic == "" {
-		log.Println("Peringatan: MQTT_TOPIC tidak diatur. Menggunakan topik default 'sensor/data/ingest'.")
 		SensorDataTopic = "sensor/data/ingest"
 	}
 

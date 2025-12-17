@@ -1,10 +1,14 @@
 package forwarder
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"sync"
 	"time"
@@ -13,6 +17,8 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/session"
+	"github.com/gofiber/storage/memory/v2"
 )
 
 // --- Configuration ---
@@ -41,10 +47,36 @@ var (
 	}
 	statusMutex = &sync.Mutex{}
 	ticker      *time.Ticker
+
+	// Session store for authentication
+	store            *session.Store
+	telegramBotToken string
+	telegramChatID   string
 )
 
 // Start initializes the forwarder component.
 func Start() {
+	// Initialize session store for authentication
+	store = session.New(session.Config{
+		Storage:        memory.New(),
+		Expiration:     24 * time.Hour,
+		KeyLookup:      "cookie:session_id",
+		CookieHTTPOnly: true,
+		CookieSameSite: "Lax",
+		KeyGenerator: func() string {
+			b := make([]byte, 16)
+			rand.Read(b)
+			return hex.EncodeToString(b)
+		},
+	})
+
+	// Load Telegram config from environment
+	telegramBotToken = os.Getenv("TELE_BOT_ALRT")
+	telegramChatID = os.Getenv("TELEGRAM_CHAT_ID")
+	if telegramBotToken == "" || telegramChatID == "" {
+		log.Println("⚠️ Warning: TELE_BOT_ALRT or TELEGRAM_CHAT_ID not set. Login feature may not work.")
+	}
+
 	setupPublicMQTT()
 	ticker = time.NewTicker(aggregationInterval)
 
@@ -185,17 +217,164 @@ func setupPublicMQTT() {
 
 // RegisterForwarderHandlers mendaftarkan rute HTTP untuk dashboard.
 func RegisterForwarderHandlers(app *fiber.App) {
-	// Rute untuk halaman utama dashboard
-	app.Get("/forwarder", func(c *fiber.Ctx) error {
+	// Public routes - Login
+	app.Get("/login", handleShowLogin)
+	app.Post("/login", handleLogin)
+	app.Post("/request-code", handleRequestCode)
+
+	// Protected routes
+	app.Get("/forwarder", requireAuth, func(c *fiber.Ctx) error {
 		return c.Render("index", fiber.Map{
 			"Title": "Forwarder Status",
 		})
 	})
 
-	// Rute untuk API status
-	app.Get("/forwarder/status", func(c *fiber.Ctx) error {
+	// Rute untuk API status (protected)
+	app.Get("/forwarder/status", requireAuth, func(c *fiber.Ctx) error {
 		statusMutex.Lock()
 		defer statusMutex.Unlock()
 		return c.Status(http.StatusOK).JSON(status)
 	})
+
+	// Rute untuk redirect ke Database (protected)
+	app.Get("/database", requireAuth, func(c *fiber.Ctx) error {
+		// Redirect to pgweb on localhost
+		return c.Redirect("http://localhost:8080", http.StatusFound)
+	})
+
+	// Logout endpoint
+	app.Post("/logout", handleLogout)
+}
+
+// --- Authentication Handlers ---
+
+func requireAuth(c *fiber.Ctx) error {
+	sess, err := store.Get(c)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).SendString("Session error")
+	}
+
+	if sess.Get("authenticated") != true {
+		return c.Redirect("/login")
+	}
+
+	return c.Next()
+}
+
+func handleShowLogin(c *fiber.Ctx) error {
+	sess, _ := store.Get(c)
+	// If already logged in, redirect to forwarder dashboard
+	if sess.Get("authenticated") == true {
+		return c.Redirect("/forwarder")
+	}
+	return c.Render("login", fiber.Map{})
+}
+
+func handleLogin(c *fiber.Ctx) error {
+	sess, err := store.Get(c)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).SendString("Session error")
+	}
+
+	submittedCode := c.FormValue("code")
+	if submittedCode == "" {
+		return c.Render("login", fiber.Map{"error": "Kode tidak boleh kosong."})
+	}
+
+	// Get code from session
+	authCode := sess.Get("auth_code")
+	authExpires := sess.Get("auth_expires")
+
+	if authCode == nil || authExpires == nil {
+		return c.Render("login", fiber.Map{"error": "Kode verifikasi salah atau sudah kedaluwarsa."})
+	}
+
+	// Convert Unix timestamp back to time.Time
+	expiryUnix, ok := authExpires.(int64)
+	if !ok {
+		return c.Render("login", fiber.Map{"error": "Kode verifikasi salah atau sudah kedaluwarsa."})
+	}
+
+	expiryTime := time.Unix(expiryUnix, 0)
+
+	if authCode.(string) != submittedCode || time.Now().After(expiryTime) {
+		return c.Render("login", fiber.Map{"error": "Kode verifikasi salah atau sudah kedaluwarsa."})
+	}
+
+	// Code is valid, clear from session and set login status
+	sess.Delete("auth_code")
+	sess.Delete("auth_expires")
+	sess.Set("authenticated", true)
+	if err := sess.Save(); err != nil {
+		return c.Status(http.StatusInternalServerError).SendString("Gagal menyimpan sesi")
+	}
+
+	return c.Redirect("/forwarder")
+}
+
+func handleRequestCode(c *fiber.Ctx) error {
+	if telegramBotToken == "" || telegramChatID == "" {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
+			"status":  "error",
+			"message": "Layanan Telegram tidak dikonfigurasi di server.",
+		})
+	}
+
+	sess, err := store.Get(c)
+	if err != nil {
+		log.Printf("Error getting session: %v", err)
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"status": "error", "message": "Gagal membuat sesi."})
+	}
+
+	// Generate random 6 digit code
+	b := make([]byte, 3)
+	rand.Read(b)
+	code := hex.EncodeToString(b)
+
+	// Save code and expiry as Unix timestamp (int64)
+	sess.Set("auth_code", code)
+	sess.Set("auth_expires", time.Now().Add(5*time.Minute).Unix())
+
+	if err := sess.Save(); err != nil {
+		log.Printf("Error saving session: %v", err)
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"status": "error", "message": fmt.Sprintf("Gagal menyimpan sesi: %v", err)})
+	}
+
+	log.Printf("Code generated and saved: %s", code)
+
+	// Send code to Telegram
+	message := fmt.Sprintf("Kode verifikasi Anda untuk Forwarder Dashboard adalah: `%s`\nKode ini berlaku selama 5 menit.", code)
+	go sendTelegramMessage(message)
+
+	return c.JSON(fiber.Map{"status": "ok"})
+}
+
+func handleLogout(c *fiber.Ctx) error {
+	sess, err := store.Get(c)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).SendString("Session error")
+	}
+	sess.Destroy()
+	return c.Redirect("/login")
+}
+
+func sendTelegramMessage(message string) {
+	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", telegramBotToken)
+
+	resp, err := http.PostForm(apiURL, url.Values{
+		"chat_id":    {telegramChatID},
+		"text":       {message},
+		"parse_mode": {"Markdown"},
+	})
+
+	if err != nil {
+		log.Printf("Error sending Telegram message: %v", err)
+		return
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		log.Printf("Failed to send Telegram message, status: %s, response: %s", resp.Status, string(body))
+	}
 }
