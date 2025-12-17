@@ -86,7 +86,9 @@ async function renameFile(nameEnc) {
   const newName = prompt('Enter new name for ' + name);
   if (!newName || newName === name) return;
 
-  const res = await fetch('/api/files/' + encodeURIComponent(name) + '/rename', {
+  // Use proper URL encoding for filename
+  const encodedName = encodeURIComponent(name);
+  const res = await fetch(`/api/files/${encodedName}/rename`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ new_name: newName })
@@ -115,7 +117,9 @@ async function deleteNode(node) {
 async function deleteFile(nameEnc) {
   if (!confirm('Delete file?')) return;
   const name = decodeURIComponent(nameEnc);
-  const res = await fetch('/api/files/' + encodeURIComponent(name), { method: 'DELETE' });
+  // Use proper URL encoding for filename
+  const encodedName = encodeURIComponent(name);
+  const res = await fetch(`/api/files/${encodedName}`, { method: 'DELETE' });
   const j = await res.json();
   if (res.ok) {
     showToast(`Deleted file: ${name}`, 'success');
@@ -269,15 +273,24 @@ async function openConfigModal(nodeEnc, action = 'Config') {
   const nodesRes = await fetch('/api/nodes');
   const allNodes = await nodesRes.json();
   const nodeInfo = allNodes[node];
+
+  // Debug: Log node info
+  console.log('Node:', node);
+  console.log('Node Info:', nodeInfo);
+  console.log('Model:', nodeInfo?.model);
+
   const isMDCW = nodeInfo?.model === 'MDCW';
+  console.log('Is MDCW?', isMDCW);
 
   document.getElementById('configModalNode').textContent = node + (isMDCW ? ' (MDCW)' : '');
 
   if (isMDCW) {
+    console.log('Showing MDCW fields');
     document.getElementById('configDefaultFields').classList.add('hidden');
     document.getElementById('configMDCWFields').classList.remove('hidden');
     document.getElementById('configPrefixInput').value = nodeInfo?.prefix || '';
   } else {
+    console.log('Showing TEMP fields');
     document.getElementById('configDefaultFields').classList.remove('hidden');
     document.getElementById('configMDCWFields').classList.add('hidden');
     document.getElementById('configMinInput').value = nodeInfo?.min || '16';
@@ -405,6 +418,7 @@ function openLogModal(nodeEnc) {
       if (logs.length === 0) {
         body.innerHTML = '<div class="text-sm text-slate-400">No logs</div>';
       } else {
+        // Show all logs (no filter) for debugging
         body.innerHTML = logs.map(l => `<div class="mb-1 text-xs text-slate-200">▶ ${escapeHtml(l)}</div>`).join('');
       }
     }).catch(err => {

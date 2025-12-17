@@ -46,13 +46,8 @@ services:
 
   # === Backend Forwarder Service ===
   backend:
-    image: rennn/forwarder-app:latest
+    image: rennnagge/forwarder-app:latest
     container_name: forwarder
-    build:
-      context: ./forward
-      dockerfile: Dockerfile
-      args:
-        GOLANG_VERSION: 1.24-alpine
     ports:
       - "8888:8000"
     environment:
@@ -80,20 +75,14 @@ services:
       
   # === OTA Update Service ===
   ota:
-    image: rennn/ota-app:latest
+    image: rennnagge/ota-app:latest
     container_name: ota-app
-    build:
-      context: ./ota
-      dockerfile: Dockerfile
-      args:
-        GOLANG_VERSION: 1.25-alpine
     ports:
       - "9999:9999"
     volumes:
       - ./ota/static/uploads:/app/static/uploads
     environment:
       - MQTT_BROKER=tcp://emqx:1883
-      # OTA service script calls for MQTT_USER (not USERNAME)
       - MQTT_USER=${MQTT_USER}
       - MQTT_PASS=${MQTT_PASS}
       - TELE_BOT_OTA=${TELE_BOT_OTA}
@@ -107,11 +96,8 @@ services:
 
   # === Forming/Production Monitoring Service ===
   forming:
-    image: rennn/forming-app:latest
+    image: rennnagge/forming-app:latest
     container_name: forming-app
-    build:
-      context: ./forming
-      dockerfile: Dockerfile
     ports:
       - "3000:3000"
     environment:
@@ -140,6 +126,7 @@ services:
         condition: service_healthy
     networks:
       - iot-net
+
 
 volumes:
   postgres_data:

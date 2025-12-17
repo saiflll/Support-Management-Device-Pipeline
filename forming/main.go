@@ -432,12 +432,12 @@ func getRecords(prefixFilter string, statusFilter string, sortBy string) ([]Reco
 		}
 		if reg114.Valid {
 			r.Reg114 = int(reg114.Int64)
-			// Format weight: divide by 100 and add comma separator
-			intPart := r.Reg114 / 100
-			decPart := r.Reg114 % 100
-			r.WeightFormatted = fmt.Sprintf("%d,%02d g", intPart, decPart)
+			// Format weight: divide by 10 for 1 decimal place (shift decimal left)
+			intPart := r.Reg114 / 10
+			decPart := r.Reg114 % 10
+			r.WeightFormatted = fmt.Sprintf("%d,%d g", intPart, decPart)
 		} else {
-			r.WeightFormatted = "0,00 g"
+			r.WeightFormatted = "0,0 g"
 		}
 
 		records = append(records, r)
