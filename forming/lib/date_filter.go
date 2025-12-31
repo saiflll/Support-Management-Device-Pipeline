@@ -61,13 +61,14 @@ func GetRecordsByDateRange(db *sql.DB, startDate, endDate, prefixFilter, statusF
 	defer rows.Close()
 
 	type Record struct {
-		ID        int       `json:"id"`
-		Ts        string    `json:"ts"`
-		Reg2      int       `json:"reg2"`
-		Reg5      int       `json:"reg5"`
-		Reg114    int       `json:"reg114"`
-		Prefix    string    `json:"prefix"`
-		CreatedAt time.Time `json:"created_at"`
+		ID              int       `json:"id"`
+		Ts              string    `json:"ts"`
+		Reg2            int       `json:"reg2"`
+		Reg5            int       `json:"reg5"`
+		Reg114          int       `json:"reg114"`
+		WeightFormatted string    `json:"weight_formatted"` // Added formatted weight
+		Prefix          string    `json:"prefix"`
+		CreatedAt       time.Time `json:"created_at"`
 	}
 
 	var records []interface{}
@@ -94,6 +95,12 @@ func GetRecordsByDateRange(db *sql.DB, startDate, endDate, prefixFilter, statusF
 		}
 		if reg114.Valid {
 			r.Reg114 = int(reg114.Int64)
+			// Format weight: divide by 10 for 1 decimal place (shift decimal left)
+			intPart := r.Reg114 / 10
+			decPart := r.Reg114 % 10
+			r.WeightFormatted = fmt.Sprintf("%d,%d g", intPart, decPart)
+		} else {
+			r.WeightFormatted = "0,0 g"
 		}
 
 		records = append(records, r)

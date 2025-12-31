@@ -80,13 +80,15 @@ services:
     ports:
       - "9999:9999"
     volumes:
-      - ./ota/static/uploads:/app/static/uploads
+      - ota_uploads:/app/static/uploads
     environment:
       - MQTT_BROKER=tcp://emqx:1883
       - MQTT_USER=${MQTT_USER}
       - MQTT_PASS=${MQTT_PASS}
       - TELE_BOT_OTA=${TELE_BOT_OTA}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - SERVER_NAME=${SERVER_NAME:-ren_itdt_west}
+      - WEBHOOK_TOKEN=${WEBHOOK_TOKEN:-}
     restart: unless-stopped
     depends_on:
       emqx:
@@ -132,6 +134,7 @@ volumes:
   postgres_data:
   emqx_data:
   emqx_log:
+  ota_uploads:
 
 networks:
   iot-net:

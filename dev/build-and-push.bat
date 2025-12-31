@@ -74,8 +74,8 @@ set IMAGE_NAME=%~3
 
 echo %INFO%Building %SERVICE_NAME%...%RESET%
 
-REM Build image
-docker build --platform linux/amd64 -t "%DOCKER_USERNAME%/%IMAGE_NAME%:%VERSION%" -t "%DOCKER_USERNAME%/%IMAGE_NAME%:latest" %CONTEXT%
+REM Build image (Force no-cache to ensure UI updates are picked up)
+docker build --no-cache --platform linux/amd64 -t "%DOCKER_USERNAME%/%IMAGE_NAME%:%VERSION%" -t "%DOCKER_USERNAME%/%IMAGE_NAME%:latest" %CONTEXT%
 if errorlevel 1 (
     echo %ERROR%Failed to build %SERVICE_NAME%%RESET%
     exit /b 1

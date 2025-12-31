@@ -23,7 +23,7 @@ import (
 
 // --- Configuration ---
 const (
-	aggregationInterval = 5 * time.Minute
+	aggregationInterval = 8 * time.Minute
 	maxBufferSize       = 50 * 1024 // 50 KB
 )
 
@@ -97,7 +97,12 @@ func Start() {
 
 func AddToBufferAndAggregate(data []models.AreaData) {
 	bufferMutex.Lock()
-	buffer = append(buffer, data...)
+	// Limit buffer to 2000 items (approx 2 MB) to prevent OOM
+	if len(buffer) < 2000 {
+		buffer = append(buffer, data...)
+	} else {
+		log.Println("⚠️ Warning: Forwarder local buffer full (2000 items). Dropping new data to prevent OOM.")
+	}
 	bufferMutex.Unlock()
 
 	// Update status for dashboard display
@@ -129,8 +134,9 @@ func flushBufferIfNecessary(force bool) {
 
 		statusMutex.Lock()
 		status.NextForwardTime = time.Now().Add(aggregationInterval)
-		status.ReceivedDataBuffer = []models.AreaData{} // Clear display buffer after forward
-		ticker.Reset(aggregationInterval)               // Reset timer
+		// Don't clear status.ReceivedDataBuffer here if we want to see it on the web
+		// status.ReceivedDataBuffer = []models.AreaData{}
+		ticker.Reset(aggregationInterval) // Reset timer
 		statusMutex.Unlock()
 	}
 
@@ -222,15 +228,15 @@ func RegisterForwarderHandlers(app *fiber.App) {
 	app.Post("/login", handleLogin)
 	app.Post("/request-code", handleRequestCode)
 
-	// Protected routes
-	app.Get("/forwarder", requireAuth, func(c *fiber.Ctx) error {
+	// Protected routes (AUTH DISABLED)
+	app.Get("/forwarder", func(c *fiber.Ctx) error {
 		return c.Render("index", fiber.Map{
 			"Title": "Forwarder Status",
 		})
 	})
 
-	// Rute untuk API status (protected)
-	app.Get("/forwarder/status", requireAuth, func(c *fiber.Ctx) error {
+	// Rute untuk API status (AUTH DISABLED)
+	app.Get("/forwarder/status", func(c *fiber.Ctx) error {
 		statusMutex.Lock()
 		defer statusMutex.Unlock()
 		return c.Status(http.StatusOK).JSON(status)
@@ -249,6 +255,10 @@ func RegisterForwarderHandlers(app *fiber.App) {
 // --- Authentication Handlers ---
 
 func requireAuth(c *fiber.Ctx) error {
+	// TEMPORARY: Bypass authentication for debugging/setup
+	return c.Next()
+
+	/* -- Original Authentication Logic --
 	sess, err := store.Get(c)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).SendString("Session error")
@@ -259,15 +269,12 @@ func requireAuth(c *fiber.Ctx) error {
 	}
 
 	return c.Next()
+	*/
 }
 
 func handleShowLogin(c *fiber.Ctx) error {
-	sess, _ := store.Get(c)
-	// If already logged in, redirect to forwarder dashboard
-	if sess.Get("authenticated") == true {
-		return c.Redirect("/forwarder")
-	}
-	return c.Render("login", fiber.Map{})
+	// Bypass forwarder login
+	return c.Redirect("/forwarder")
 }
 
 func handleLogin(c *fiber.Ctx) error {

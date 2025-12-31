@@ -1,9 +1,5 @@
-// static/app.js
-// Frontend for IoT OTA & Monitor
-// - Sends JSON to /set-threshold in this format:
-//   { node, min, max, ck, area, no }
-// - Uses prompt flow for inputs (min -> max -> ck -> area -> no)
-// - Node IDs are shown as-is (server provides them)
+﻿// static/app.js
+// Megdev IoT Core - Runtime Logic
 
 async function fetchFiles() {
   try {
@@ -12,555 +8,428 @@ async function fetchFiles() {
     const fileList = document.getElementById('fileList');
     fileList.innerHTML = '';
     if (!files || files.length === 0) {
-      fileList.innerHTML = '<div class="text-sm text-gray-400 text-center py-4">No files</div>';
+      fileList.innerHTML = '<div class="text-[10px] text-slate-300 text-center py-12 italic uppercase tracking-[.25em] font-black opacity-60">Inventory Empty</div>';
       return;
     }
     files.forEach(f => {
       const el = document.createElement('div');
-      el.className = 'file-card cyber-card card-red flex justify-between items-center p-3 rounded-xl transition-all';
-      const uploadTime = f.upload_time ? new Date(f.upload_time).toLocaleString('en-US', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: true
-      }) : '';
+      el.className = 'flex items-center gap-1 animate-fade-in group';
+      const fileUrl = `${location.origin}/files/${f.name}`;
       el.innerHTML = `
-        <div class="flex-1 truncate pr-3">
-          <div class="text-sm font-medium text-gray-200">${escapeHtml(f.name)}</div>
-          <div class="text-xs text-gray-500 mt-0.5">${uploadTime}</div>
+        <div class="btn-minimal text-[10px] flex items-center gap-2 cursor-pointer select-none" 
+             title="Double click to copy link"
+             ondblclick="copyToClipboard('${fileUrl}', this)">
+          <span class="text-gray-500">FILE:</span>
+          <span>${escapeHtml(f.name)}</span>
         </div>
-        <div class="flex gap-1.5">
-          <button data-action="rename-file" data-name="${encodeURIComponent(f.name)}" 
-            class="p-2 rounded-lg border border-cyan-400/50 text-cyan-400 hover:bg-cyan-400 hover:text-black hover:scale-110 transition-all duration-200"
-            title="Rename">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path>
-            </svg>
-          </button>
-          <a href="${f.url}" target="_blank" 
-            class="p-2 rounded-lg border border-purple-400/50 text-purple-400 hover:bg-purple-400 hover:text-black hover:scale-110 transition-all duration-200 inline-flex items-center justify-center"
-            title="Download">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"></path>
-            </svg>
-          </a>
-          <button data-action="delete-file" data-name="${encodeURIComponent(f.name)}" 
-            class="p-2 rounded-lg border border-red-400/50 text-red-400 hover:bg-red-400 hover:text-black hover:scale-110 transition-all duration-200"
-            title="Delete">
-            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path>
-            </svg>
-          </button>
-        </div>`;
+        <button data-action="delete-file" data-name="${escapeHtml(f.name)}" 
+                class="btn-minimal text-red-500 hover:bg-red-500/20 font-bold transition-all">
+          [X]
+        </button>
+      `;
       fileList.appendChild(el);
     });
-  } catch (err) {
-    console.error(err);
-  }
+  } catch (err) { console.error(err); }
 }
-
-function copyLink(url) {
-  navigator.clipboard?.writeText(url).then(() => {
-    showToast('Link copied!', 'success');
-  }).catch(() => {
-    // fallback
-    const textarea = document.createElement('textarea');
-    textarea.value = url;
-    document.body.appendChild(textarea);
-    textarea.select();
-    try {
-      document.execCommand('copy');
-      showToast('Link copied!', 'success');
-    } catch (err) {
-      showToast('Failed to copy link.', 'error');
-    }
-    document.body.removeChild(textarea);
-  });
-}
-
-async function renameFile(nameEnc) {
-  const name = decodeURIComponent(nameEnc);
-  const newName = prompt('Enter new name for ' + name);
-  if (!newName || newName === name) return;
-
-  // Use proper URL encoding for filename
-  const encodedName = encodeURIComponent(name);
-  const res = await fetch(`/api/files/${encodedName}/rename`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ new_name: newName })
-  });
-  const j = await res.json();
-  if (res.ok) {
-    showToast(`Renamed to: ${newName}`, 'success');
-    fetchFiles();
-  } else {
-    showToast(`Rename failed: ${j.error || 'unknown'}`, 'error');
-  }
-}
-
-async function deleteNode(node) {
-  if (!confirm(`Delete node ${decodeURIComponent(node)}?`)) return;
-  const res = await fetch('/api/nodes/' + node, { method: 'DELETE' });
-  const j = await res.json();
-  if (res.ok) {
-    showToast(`Deleted node: ${decodeURIComponent(node)}`, 'success');
-    fetchNodes();
-  } else {
-    showToast(`Delete failed: ${j.error || 'unknown'}`, 'error');
-  }
-}
-
-async function deleteFile(nameEnc) {
-  if (!confirm('Delete file?')) return;
-  const name = decodeURIComponent(nameEnc);
-  // Use proper URL encoding for filename
-  const encodedName = encodeURIComponent(name);
-  const res = await fetch(`/api/files/${encodedName}`, { method: 'DELETE' });
-  const j = await res.json();
-  if (res.ok) {
-    showToast(`Deleted file: ${name}`, 'success');
-    fetchFiles();
-  } else {
-    showToast(`Delete failed: ${j.error || 'unknown'}`, 'error');
-  }
-}
+window.fetchFiles = fetchFiles;
 
 async function fetchNodes() {
   try {
     const res = await fetch('/api/nodes');
     const nodes = await res.json();
     renderNodes(nodes);
-  } catch (err) {
-    console.error(err);
-  }
+  } catch (err) { console.error(err); }
 }
+window.fetchNodes = fetchNodes;
 
 function renderNodes(nodes) {
   const runningArea = document.getElementById('runningNodes');
   const offlineArea = document.getElementById('offlineNodes');
-  runningArea.innerHTML = '';
-  offlineArea.innerHTML = '';
 
-  const keys = Object.keys(nodes).sort();
+  const processedIds = new Set();
+  const sortedKeys = Object.keys(nodes).sort();
+
   let runningCount = 0;
   let offlineCount = 0;
 
-  if (keys.length === 0) {
-    runningArea.innerHTML = '<div class="text-sm text-gray-400 md:col-span-2 text-center py-8">No nodes yet (waiting for MQTT messages)</div>';
-    document.getElementById('count-running').textContent = '0';
-    document.getElementById('count-offline').textContent = '0';
-    return;
-  }
-
-  keys.forEach(k => {
-    const formattedNodeId = formatNodeId(k);
+  sortedKeys.forEach(k => {
     const info = nodes[k] || {};
-    const status = info.status || '';
-    const isOnline = String(status).toLowerCase() !== 'offline';
-    const dot = isOnline ? 'bg-green-400' : 'bg-red-500';
-    const ram = info.ram_free_bytes !== undefined ? formatBytes(info.ram_free_bytes) : '-';
-    const sd_ok = info.sd_ok;
-    const updated = info.updated || '';
+    if (!info.model && !info.status) return;
 
-    // Format waktu ke timezone lokal
-    const formattedTime = updated ? new Date(updated).toLocaleString('en-US', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit',
-      hour12: true
-    }) : '-';
+    processedIds.add(k);
+    const isOnline = info.status && info.status !== 'offline';
+    if (isOnline) runningCount++; else offlineCount++;
 
-    const card = document.createElement('div');
-    card.className = `node-card ${isOnline ? 'node-card-running' : 'node-card-offline'} cyber-card p-4 rounded-xl transition-all hover:scale-[1.02]`;
+    const cardId = `node-card-${encodeURIComponent(k)}`;
+    let card = document.getElementById(cardId);
+    const targetArea = isOnline ? runningArea : offlineArea;
 
-    card.innerHTML = `
-      <div class="flex justify-between items-start mb-3">
-        <div class="font-semibold text-lg truncate flex-1" title="${escapeHtml(k)}">${formattedNodeId}</div>
-        <div class="flex items-center gap-2">
-          ${sd_ok !== undefined && sd_ok !== null ? `
-            <div class="flex items-center gap-1.5" title="SD Card Status">
-              <div class="w-3 h-3 rounded-full ${sd_ok ? 'bg-green-400' : 'bg-red-500'}"></div>
-            </div>
-          ` : ''}
-          <div class="w-3 h-3 rounded-full ${dot}"></div>
-          <div class="text-sm ${isOnline ? 'text-orange-400' : 'text-gray-500'}">${escapeHtml(String(status))}</div>
-        </div>
+    const metricsStr = info.metrics ? JSON.stringify(info.metrics) : '{}';
+    const ram = info.metrics?.ram_free || 'N/A';
+    const formattedTime = info.last_seen ? new Date(info.last_seen).toLocaleString() : 'Never';
+
+    const cardHtml = `
+      <div class="flex justify-between items-start mb-2">
+        <span class="${isOnline ? 'text-emerald-500' : 'text-gray-600'} font-bold">${isOnline ? '●' : '○'} ${info.model || 'UNKNOWN'} ${info.version ? `<span class="text-[8px] opacity-70">v${info.version}</span>` : ''}</span>
+        ${!isOnline ? `
+        <button data-action="delete-node" data-node="${k}" class="text-red-500 hover:bg-red-900/30 px-1 rounded transition-colors" title="Purge Node">
+          [DELETE]
+        </button>` : ''}
       </div>
-
-      <div class="text-sm text-gray-300 space-y-1 mb-3">
-        <div>RAM Free: <span class="text-gray-100 font-medium">${ram}</span></div>
-        <div class="text-xs text-gray-500">Last: ${formattedTime}</div>
+      <div class="space-y-0.5 font-mono text-[10px] leading-tight text-gray-400">
+        <div><span class="json-key">"id"</span>: <span class="json-val-str">"${escapeHtml(k)}"</span>,</div>
+        <div><span class="json-key">"ip"</span>: <span class="json-val-str">"${info.ip || '0.0.0.0'}"</span>,</div>
+        <div><span class="json-key">"status"</span>: <span class="${isOnline ? 'json-val-str' : 'text-gray-600'}">"${info.status || 'unknown'}"</span>,</div>
+        <div><span class="json-key">"metrics"</span>: { <span class="json-key">"ram"</span>: <span class="json-val-num">${formatBytes(info.ram_free_bytes || 0)}</span> },</div>
+        <div><span class="json-key">"config"</span>: { ${info.model?.startsWith('MDCW') ? `"${info.prefix || '-'}"` : `"${info.ck || '-'}"`} }</div>
       </div>
-
-      <div class="flex gap-2">
-        <button data-action="ota" data-node="${encodeURIComponent(k)}" 
-          class="flex-1 px-3 py-2 rounded-lg border border-cyan-400/50 text-cyan-400 hover:bg-cyan-400 hover:text-black text-sm font-medium transition-all hover:scale-105">
-          OTA
-        </button>
-        <button data-action="configure" data-node="${encodeURIComponent(k)}" 
-          class="flex-1 px-3 py-2 rounded-lg border border-purple-400/50 text-purple-400 hover:bg-purple-400 hover:text-black text-sm font-medium transition-all hover:scale-105">
-          Config
-        </button>
-        <button data-action="logs" data-node="${encodeURIComponent(k)}" 
-          class="flex-1 px-3 py-2 rounded-lg border border-orange-400/50 text-orange-400 hover:bg-orange-400 hover:text-black text-sm font-medium transition-all hover:scale-105">
-          Logs
-        </button>
-        <button data-action="delete-node" data-node="${encodeURIComponent(k)}" 
-          class="px-3 py-2 rounded-lg border border-red-400/50 text-red-400 hover:bg-red-400 hover:text-black text-sm font-medium transition-all hover:scale-105">
-          ✕
-        </button>
+      <div class="flex justify-center gap-3 mt-4 border-t border-gray-800 pt-3">
+        <button data-action="ota" data-node="${k}" class="btn-minimal">[ ota ]</button>
+        <button data-action="configure" data-node="${k}" class="btn-minimal">[ config ]</button>
+        <button data-action="reboot" data-node="${k}" class="btn-minimal">[ reboot ]</button>
+        <button data-action="logs" data-node="${k}" class="btn-minimal">[ log ]</button>
       </div>
     `;
 
-    if (isOnline) {
-      runningArea.appendChild(card);
-      runningCount++;
+    if (!card) {
+      card = document.createElement('div');
+      card.id = cardId;
+      card.className = `node-card animate-fade-in`;
+      card.innerHTML = cardHtml;
+      targetArea.appendChild(card);
     } else {
-      offlineArea.appendChild(card);
-      offlineCount++;
+      if (card.parentElement !== targetArea) {
+        card.remove();
+        targetArea.appendChild(card);
+      }
+      card.innerHTML = cardHtml;
     }
   });
 
+  const allCards = document.querySelectorAll('.node-card');
+  allCards.forEach(c => {
+    const id = c.id.replace('node-card-', '');
+    const found = processedIds.has(decodeURIComponent(id));
+    if (!found) c.remove();
+  });
+
+  const prevRunningCount = parseInt(document.getElementById('count-running').textContent || '0');
   document.getElementById('count-running').textContent = runningCount;
   document.getElementById('count-offline').textContent = offlineCount;
-  if (runningCount === 0) runningArea.innerHTML = '<div class="text-sm text-gray-400 md:col-span-2 text-center py-8">No running nodes.</div>';
-  if (offlineCount === 0) offlineArea.innerHTML = '<div class="text-sm text-gray-400 md:col-span-2 text-center py-8">No offline nodes.</div>';
-}
 
-function formatBytes(bytes) {
-  if (!bytes || bytes == 0) return '0 B';
-  const kb = 1024;
-  if (bytes < kb) return bytes + ' B';
-  if (bytes < kb * kb) return Math.round(bytes / kb) + ' KB';
-  return Math.round(bytes / (kb * kb)) + ' MB';
-}
-
-function formatNodeId(nodeId) {
-  if (!nodeId) return '';
-
-  // The MAC address is always the last 12 characters.
-  if (nodeId.length < 12) {
-    return escapeHtml(nodeId);
+  if (prevRunningCount > 0 && runningCount === 0 && document.getElementById('tab-running').classList.contains('active')) {
+    document.getElementById('tab-offline').click();
   }
 
-  const mac = nodeId.slice(-12);
-  let prefix = nodeId.slice(0, -12);
-
-  // Format the prefix: replace hyphens and remove any trailing slash
-  prefix = prefix.replace(/-/g, '/').replace(/\/$/, '');
-
-  // Format MAC with colons
-  const formattedMac = mac.match(/.{1,2}/g)?.join(':') || mac;
-
-  return `${escapeHtml(prefix)} - <span class="text-indigo-300">${escapeHtml(formattedMac)}</span>`;
-}
-
-// === Config flow with Modal ===
-let currentConfigNode = '';
-
-async function openConfigModal(nodeEnc, action = 'Config') {
-  currentConfigNode = nodeEnc;
-  const node = decodeURIComponent(nodeEnc);
-
-  // Get current node data to pre-fill
-  const nodesRes = await fetch('/api/nodes');
-  const allNodes = await nodesRes.json();
-  const nodeInfo = allNodes[node];
-
-  // Debug: Log node info
-  console.log('Node:', node);
-  console.log('Node Info:', nodeInfo);
-  console.log('Model:', nodeInfo?.model);
-
-  const isMDCW = nodeInfo?.model === 'MDCW';
-  console.log('Is MDCW?', isMDCW);
-
-  document.getElementById('configModalNode').textContent = node + (isMDCW ? ' (MDCW)' : '');
-
-  if (isMDCW) {
-    console.log('Showing MDCW fields');
-    document.getElementById('configDefaultFields').classList.add('hidden');
-    document.getElementById('configMDCWFields').classList.remove('hidden');
-    document.getElementById('configPrefixInput').value = nodeInfo?.prefix || '';
-  } else {
-    console.log('Showing TEMP fields');
-    document.getElementById('configDefaultFields').classList.remove('hidden');
-    document.getElementById('configMDCWFields').classList.add('hidden');
-    document.getElementById('configMinInput').value = nodeInfo?.min || '16';
-    document.getElementById('configMaxInput').value = nodeInfo?.max || '20';
-    document.getElementById('configCkInput').value = nodeInfo?.ck || '';
-    document.getElementById('configAreaInput').value = nodeInfo?.area || '';
-    document.getElementById('configNoInput').value = nodeInfo?.no || '';
+  if (runningCount === 0 && !runningArea.querySelector('.empty-msg')) {
+    runningArea.innerHTML = '<div class="empty-msg col-span-full py-10 text-gray-700 italic text-[10px]">[NO_NODES_ACTIVE]</div>';
+  } else if (runningCount > 0) {
+    const msg = runningArea.querySelector('.empty-msg');
+    if (msg) msg.remove();
   }
 
-  const modal = document.getElementById('configModal');
+  if (offlineCount === 0 && !offlineArea.querySelector('.empty-msg')) {
+    offlineArea.innerHTML = '<div class="empty-msg col-span-full py-10 text-gray-700 italic text-[10px]">[OFFLINE_REGISTRY_EMPTY]</div>';
+  } else if (offlineCount > 0) {
+    const msg = offlineArea.querySelector('.empty-msg');
+    if (msg) msg.remove();
+  }
+}
+
+function formatNodeId(id) {
+  return escapeHtml(id);
+}
+
+function formatBytes(b) {
+  if (b === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(b) / Math.log(k));
+  return parseFloat((b / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+}
+
+// === Interaction Logic ===
+document.addEventListener('DOMContentLoaded', () => {
+  fetchFiles();
+  fetchNodes();
+  setInterval(fetchFiles, 4000);
+  setInterval(fetchNodes, 4000);
+
+  const uploadForm = document.getElementById('uploadForm');
+  const fileInput = document.getElementById('fileInput');
+  const fileNameLabel = document.getElementById('fileNameLabel');
+
+  uploadForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const file = fileInput.files[0];
+    if (!file) return;
+    const fd = new FormData();
+    fd.append('file', file);
+    document.getElementById('uploadMsg').textContent = 'TRANSMITTING ASSET...';
+    try {
+      const res = await fetch('/upload', { method: 'POST', body: fd });
+      if (res.ok) {
+        document.getElementById('uploadMsg').textContent = 'PACKET SAVED.';
+        uploadForm.reset();
+        fileNameLabel.textContent = "NONE";
+        setTimeout(() => {
+          document.getElementById('uploadMsg').textContent = '';
+          document.getElementById('uploadFormContainer').classList.add('hidden');
+          fetchFiles();
+        }, 1500);
+      } else {
+        document.getElementById('uploadMsg').textContent = 'ERROR IN TRANSMISSION.';
+      }
+    } catch (err) { document.getElementById('uploadMsg').textContent = 'NETWORK FAILURE.'; }
+  });
+
+  document.body.addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+
+    const action = btn.dataset.action;
+    const node = btn.dataset.node || '';
+    const name = btn.dataset.name || '';
+
+    if (action === 'ota') openOta(node);
+    if (action === 'configure') openConfig(node);
+    if (action === 'reboot') requestReboot(node);
+    if (action === 'logs') openLogs(node);
+    if (action === 'send-ota') sendOta();
+    if (action === 'send-config') sendConfig();
+    if (action === 'delete-file') confirmDeleteFile(name);
+    if (action === 'delete-node') confirmDeleteNode(node);
+    if (action === 'close-modal') document.getElementById('logModal').classList.add('hidden');
+    if (action === 'close-config-modal') document.getElementById('configModal').classList.add('hidden');
+    if (action === 'close-ota-modal') document.getElementById('otaModal').classList.add('hidden');
+  });
+});
+
+async function openLogs(node) {
+  const modal = document.getElementById('logModal');
+  const body = document.getElementById('modalBody');
+  body.innerHTML = 'AWAITING_STREAM...';
   modal.classList.remove('hidden');
   modal.classList.add('flex');
-}
-
-function closeConfigModal() {
-  const modal = document.getElementById('configModal');
-  modal.classList.add('hidden');
-  modal.classList.remove('flex');
-  currentConfigNode = '';
-}
-
-async function sendConfig() {
-  const node = decodeURIComponent(currentConfigNode);
-  const payload = {
-    node: node,
-    min: parseFloat(document.getElementById('configMinInput').value),
-    max: parseFloat(document.getElementById('configMaxInput').value),
-    ck: document.getElementById('configCkInput').value,
-    area: document.getElementById('configAreaInput').value,
-    no: document.getElementById('configNoInput').value,
-    prefix: document.getElementById('configPrefixInput').value
-  };
-
   try {
-    showToast('Sending Config...');
-    const res = await fetch('/config', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
-    const j = await res.json();
-    if (res.ok) {
-      showToast('Config sent successfully!', 'success');
-      closeConfigModal();
-      setTimeout(fetchNodes, 800);
-    } else {
-      showToast(`Failed to send Config: ${j.error || 'Unknown error'}`, 'error');
-    }
-  } catch (err) {
-    showToast(`Network error: ${err.message}`, 'error');
-  }
+    const res = await fetch(`/logs/${encodeURIComponent(node)}`);
+    const data = await res.json();
+    body.innerHTML = (data.logs || []).map(l => {
+      let color = 'text-emerald-500';
+      if (l.startsWith('[MON]')) color = 'text-blue-400';
+      if (l.startsWith('[LOG]')) color = 'text-emerald-500';
+      return `<div class="${color} break-all">> ${escapeHtml(l)}</div>`;
+    }).join('') || '[NO_LOGS_AVAILABLE]';
+    // Auto scroll to bottom
+    body.scrollTop = body.scrollHeight;
+  } catch (err) { body.innerHTML = 'LOG_FETCH_ERROR'; }
 }
 
-/* The old openThresholdModal and promptConfigFlow functions have been removed. */
-
-
-// OTA modal
-let currentOtaNode = '';
-
-async function openOTAModal(nodeEnc) {
-  currentOtaNode = nodeEnc;
-  const node = decodeURIComponent(nodeEnc);
-  const urlDefault = location.origin + '/files/';
-
-  document.getElementById('otaModalNode').textContent = node;
-  document.getElementById('otaUrlInput').value = '';
-  document.getElementById('otaUrlInput').placeholder = urlDefault + 'firmware.bin';
-
-  const modal = document.getElementById('otaModal');
-  modal.classList.remove('hidden');
-  modal.classList.add('flex');
-}
-
-function closeOtaModal() {
-  const modal = document.getElementById('otaModal');
-  modal.classList.add('hidden');
-  modal.classList.remove('flex');
-  currentOtaNode = '';
+function openOta(node) {
+  window.currentOtaNode = node;
+  document.getElementById('otaModal').classList.remove('hidden');
+  document.getElementById('otaModal').classList.add('flex');
 }
 
 async function sendOta() {
-  const node = decodeURIComponent(currentOtaNode);
-  const url = document.getElementById('otaUrlInput').value.trim();
+  let url = document.getElementById('otaUrlInput').value;
+  if (!url) return;
 
-  if (!url) {
-    return showToast('Please enter a valid URL', 'error');
+  // Deteksi localhost/127.0.0.1 - Masalah umum yang Anda alami
+  if (url.includes('localhost') || url.includes('127.0.0.1')) {
+    const serverIp = location.hostname === 'localhost' || location.hostname === '127.0.0.1' ?
+      'MASUKKAN_IP_KOMPUTER_ANDA' : location.hostname;
+
+    if (!confirm(`PERINGATAN: URL mengandung 'localhost'. ESP32 TIDAK BISA mendownload dari localhost.\n\nGanti dengan IP: ${serverIp}?\n\nKlik OK untuk melanjutkan apa adanya (mungkin gagal), atau Cancel untuk memperbaiki.`)) {
+      return;
+    }
   }
 
-  try {
-    showToast('Sending OTA command...');
-    const res = await fetch('/ota', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ node, url })
-    });
-    const j = await res.json();
-    if (res.ok) {
-      showToast('OTA command sent!', 'success');
-      closeOtaModal();
-    } else {
-      showToast(`OTA failed: ${j.error || 'Unknown error'}`, 'error');
-    }
-  } catch (err) {
-    showToast(`Network error: ${err.message}`, 'error');
+  const res = await fetch('/ota', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ node: window.currentOtaNode, url })
+  });
+  if (res.ok) {
+    alert('OTA_COMMAND_DISPATCHED');
+    document.getElementById('otaModal').classList.add('hidden');
   }
 }
 
-// LOG modal
-function openLogModal(nodeEnc) {
-  const node = decodeURIComponent(nodeEnc);
-  document.getElementById('modalNode').textContent = node;
-  const modal = document.getElementById('logModal');
-  const body = document.getElementById('modalBody');
-  body.textContent = 'Loading...';
+async function openConfig(node) {
+  window.currentConfigNode = node;
+  const modal = document.getElementById('configModal');
+  const fieldsContainer = document.getElementById('dynamicConfigFields');
+  fieldsContainer.innerHTML = '<div class="text-center py-4">[LOADING_MODEL_DEF]</div>';
   modal.classList.remove('hidden');
   modal.classList.add('flex');
 
-  fetch('/logs/' + encodeURIComponent(node))
-    .then(r => {
-      if (!r.ok) throw new Error('No logs');
-      return r.json();
-    })
-    .then(j => {
-      const logs = j.logs || [];
-      if (logs.length === 0) {
-        body.innerHTML = '<div class="text-sm text-slate-400">No logs</div>';
-      } else {
-        // Show all logs (no filter) for debugging
-        body.innerHTML = logs.map(l => `<div class="mb-1 text-xs text-slate-200">▶ ${escapeHtml(l)}</div>`).join('');
-      }
-    }).catch(err => {
-      body.innerHTML = '<div class="text-sm text-slate-400">No logs / node not found</div>';
-    });
-}
+  try {
+    const nodesRes = await fetch('/api/nodes');
+    const nodes = await nodesRes.json();
+    const info = nodes[node] || {};
 
-function closeModal() {
-  const modal = document.getElementById('logModal');
-  modal.classList.add('hidden');
-  modal.classList.remove('flex');
-}
+    // Extract variant from version (e.g., "1.0.0-M4" -> "M4")
+    let specificModel = info.model || 'TEMP';
+    if (info.version && info.version.includes('-')) {
+      const parts = info.version.split('-');
+      const variant = parts[parts.length - 1];
+      if (variant) specificModel = variant;
+    }
 
-// simple escape to avoid HTML injection
-function escapeHtml(unsafe) {
-  if (!unsafe) return '';
-  return String(unsafe)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;');
-}
-
-// Toast notification function
-function showToast(message, type = 'info') {
-  const toast = document.createElement('div');
-  const colors = {
-    info: 'bg-blue-500',
-    success: 'bg-emerald-500',
-    error: 'bg-red-500',
-  };
-  toast.className = `fixed bottom-5 right-5 px-4 py-2 rounded-md text-white shadow-lg transition-opacity duration-300 ${colors[type] || colors.info}`;
-  toast.textContent = message;
-  document.body.appendChild(toast);
-
-  setTimeout(() => {
-    toast.style.opacity = '0';
-    setTimeout(() => toast.remove(), 300);
-  }, 3000);
-}
-
-// upload form
-document.addEventListener('DOMContentLoaded', function () {
-  const form = document.getElementById('uploadForm');
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const file = document.getElementById('fileInput').files[0];
-    if (!file) return alert('Pilih file terlebih dahulu');
-    const fd = new FormData();
-    fd.append('file', file);
-    document.getElementById('uploadMsg').textContent = 'Uploading...';
+    let modelDef;
     try {
-      const res = await fetch('/upload', { method: 'POST', body: fd });
-      if (res.redirected) {
-        document.getElementById('uploadMsg').textContent = 'Upload OK';
-      } else {
-        document.getElementById('uploadMsg').textContent = 'Upload finished';
+      const modelRes = await fetch(`/api/models/${specificModel}`);
+      if (!modelRes.ok) throw new Error('Specific model not found');
+      modelDef = await modelRes.json();
+    } catch (e) {
+      // Fallback to base model
+      const baseModel = info.model || 'TEMP';
+      const modelRes = await fetch(`/api/models/${baseModel}`);
+      if (!modelRes.ok) throw new Error('Model definition not found');
+      modelDef = await modelRes.json();
+    }
+
+    window.currentModelDef = modelDef;
+
+    fieldsContainer.innerHTML = '';
+    modelDef.fields.forEach(f => {
+      const fieldDiv = document.createElement('div');
+      fieldDiv.className = 'grid grid-cols-2 items-center gap-2 py-1 border-b border-gray-800/50';
+
+      const label = document.createElement('label');
+      label.className = 'text-[10px] text-gray-400 font-mono uppercase truncate';
+      label.textContent = f.label;
+
+      const input = document.createElement('input');
+      input.id = `input-${f.name}`;
+      input.name = f.name;
+      input.type = f.type || 'text';
+      input.placeholder = f.placeholder || f.label;
+      input.className = 'w-full text-[11px] h-7 px-2';
+      if (f.step) input.step = f.step;
+
+      // Fill current value
+      if (info[f.name] !== undefined) {
+        input.value = info[f.name];
+      } else if (f.name === 'prefix' && info.prefix) {
+        input.value = info.prefix;
       }
-      setTimeout(() => fetchFiles(), 800);
-    } catch (err) {
-      document.getElementById('uploadMsg').textContent = 'Upload error';
-      console.error(err);
-    }
-  });
 
-  // Centralized event listener for all actions
-  document.body.addEventListener('click', (e) => {
-    const button = e.target.closest('[data-action]');
-    if (!button) return;
-
-    const action = button.dataset.action;
-    const node = button.dataset.node;
-    const name = button.dataset.name;
-    const url = button.dataset.url;
-
-    switch (action) {
-      case 'ota':
-        openOTAModal(node);
-        break;
-      case 'configure':
-        openConfigModal(node, 'Configure');
-        break;
-      case 'logs':
-        openLogModal(node);
-        break;
-      case 'delete-node':
-        deleteNode(node);
-        break;
-      case 'copy-link':
-        copyLink(url);
-        break;
-      case 'rename-file':
-        renameFile(name);
-        break;
-      case 'delete-file':
-        deleteFile(name);
-        break;
-      case 'close-modal':
-        closeModal();
-        break;
-      case 'close-ota-modal':
-        closeOtaModal();
-        break;
-      case 'send-ota':
-        sendOta();
-        break;
-      case 'close-config-modal':
-        closeConfigModal();
-        break;
-      case 'send-config':
-        sendConfig();
-        break;
-    }
-  });
-
-  // Tab switching logic
-  const tabs = document.querySelectorAll('.tab-button');
-  const tabContents = document.querySelectorAll('.tab-content');
-  tabs.forEach(tab => {
-    tab.addEventListener('click', () => {
-      // Deactivate all tabs
-      tabs.forEach(t => {
-        t.classList.remove('border-indigo-500', 'text-indigo-400');
-        t.classList.add('border-transparent', 'text-slate-400', 'hover:text-slate-200', 'hover:border-slate-400');
-      });
-      // Deactivate all content
-      tabContents.forEach(c => c.classList.add('hidden'));
-
-      // Activate clicked tab
-      tab.classList.add('border-indigo-500', 'text-indigo-400');
-      tab.classList.remove('border-transparent', 'text-slate-400', 'hover:text-slate-200', 'hover:border-slate-400');
-
-      // Activate corresponding content
-      const targetContentId = tab.id.replace('tab-', '') + 'Nodes';
-      document.getElementById(targetContentId).classList.remove('hidden');
+      fieldDiv.appendChild(label);
+      fieldDiv.appendChild(input);
+      fieldsContainer.appendChild(fieldDiv);
     });
+  } catch (err) {
+    fieldsContainer.innerHTML = `<div class="text-red-500 text-center py-4">[ERROR: ${err.message}]</div>`;
+  }
+}
+
+async function sendConfig() {
+  if (!window.currentModelDef) return;
+
+  const payload = { node: window.currentConfigNode };
+  window.currentModelDef.fields.forEach(f => {
+    const input = document.getElementById(`input-${f.name}`);
+    if (input) {
+      let val = input.value;
+      if (f.type === 'number') val = parseFloat(val);
+      payload[f.name] = val;
+    }
   });
 
-  // initial load + interval
-  fetchFiles();
-  fetchNodes();
-  setInterval(fetchFiles, 5000);
-  setInterval(fetchNodes, 5000);
-});
+  const res = await fetch('/config', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (res.ok) {
+    alert('CONFIG_DISPATCHED');
+    document.getElementById('configModal').classList.add('hidden');
+    fetchNodes();
+  } else {
+    const err = await res.json();
+    alert('CONFIG_FAILED: ' + (err.error || 'Unknown'));
+  }
+}
+
+async function confirmDeleteFile(name) {
+  if (!name) return;
+  if (confirm(`DELETE ${name}?`)) {
+    try {
+      const res = await fetch(`/api/files/${encodeURIComponent(name)}`, { method: 'DELETE' });
+      if (res.ok) {
+        fetchFiles();
+      } else {
+        const err = await res.json();
+        alert('DELETE_FAILED: ' + (err.error || 'Unknown error'));
+      }
+    } catch (e) {
+      alert('NETWORK_ERROR: ' + e.message);
+    }
+  }
+}
+
+async function confirmDeleteNode(node) {
+  if (confirm('DISCARD DEVICE REGISTRY?')) {
+    await fetch(`/api/nodes/${encodeURIComponent(node)}`, { method: 'DELETE' });
+    fetchNodes();
+  }
+}
+
+async function requestReboot(node) {
+  if (!confirm(`REBOOT ${node}?`)) return;
+  try {
+    const res = await fetch('/reboot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ node })
+    });
+    if (res.ok) {
+      alert('REBOOT_COMMAND_SENT');
+    } else {
+      alert('REBOOT_FAILED');
+    }
+  } catch (e) { alert('NETWORK_ERROR'); }
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/[&<>"']/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[m]));
+}
+
+function copyToClipboard(text, el) {
+  const original = el.innerHTML;
+
+  const onSuccess = () => {
+    el.innerHTML = '<span class="text-emerald-500">[COPIED_LINK]</span>';
+    setTimeout(() => { el.innerHTML = original; }, 1000);
+  };
+
+  const onError = (err) => {
+    console.error('Copy failed:', err);
+    el.innerHTML = '<span class="text-red-500">[ERROR_COPY]</span>';
+    setTimeout(() => { el.innerHTML = original; }, 1000);
+  };
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text).then(onSuccess).catch(onError);
+  } else {
+    try {
+      const textArea = document.createElement("textarea");
+      textArea.value = text;
+      textArea.style.position = "fixed";
+      textArea.style.left = "-9999px";
+      textArea.style.top = "0";
+      document.body.appendChild(textArea);
+      textArea.focus();
+      textArea.select();
+      const successful = document.execCommand('copy');
+      document.body.removeChild(textArea);
+      if (successful) onSuccess(); else onError('Fallback failed');
+    } catch (err) {
+      onError(err);
+    }
+  }
+}
+

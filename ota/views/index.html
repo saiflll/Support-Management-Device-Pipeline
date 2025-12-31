@@ -3,849 +3,362 @@
 
 <head>
     <meta charset="utf-8" />
-    <title>IoT Management Dashboard</title>
+    <title>Ment IoT</title>
     <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Outfit:wght@400;600;700&display=swap"
+        rel="stylesheet">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* === CYBERPUNK GRID BACKGROUND === */
-        @keyframes gridMove {
-            0% {
-                background-position: 0 0;
-            }
-
-            100% {
-                background-position: 50px 50px;
-            }
+        :root {
+            --bg-main: #0a0a0c;
+            --accent: #6366f1;
+            --text-main: #d1d5db;
+            --text-muted: #6b7280;
+            --border: #1f2937;
         }
 
-        @keyframes glitch {
-
-            0%,
-            100% {
-                transform: translate(0);
-            }
-
-            20% {
-                transform: translate(-2px, 2px);
-            }
-
-            40% {
-                transform: translate(-2px, -2px);
-            }
-
-            60% {
-                transform: translate(2px, 2px);
-            }
-
-            80% {
-                transform: translate(2px, -2px);
-            }
-        }
-
-        @keyframes neonPulse {
-
-            0%,
-            100% {
-                opacity: 1;
-                filter: brightness(1);
-            }
-
-            50% {
-                opacity: 0.8;
-                filter: brightness(1.2);
-            }
-        }
-
-        @keyframes scanline {
-            0% {
-                transform: translateY(-100%);
-            }
-
-            100% {
-                transform: translateY(100vh);
-            }
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: #374151 #0a0a0c;
         }
 
         body {
-            background: #0A0A0F;
+            font-family: 'monospace';
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            margin: 0;
+            font-size: 13px;
+        }
+
+        .glass-panel {
+            background: #111113;
+            border: 1px solid var(--border);
+        }
+
+        .main-tab {
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+
+        .main-tab.active {
+            color: #34d399;
+        }
+
+        .tab-button {
+            transition: all 0.2s;
             position: relative;
-            overflow-x: hidden;
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            opacity: 0.6;
         }
 
-        /* Animated Grid Background */
-        body::before {
-            content: '';
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-image:
-                linear-gradient(rgba(0, 240, 255, 0.03) 1px, transparent 1px),
-                linear-gradient(90deg, rgba(0, 240, 255, 0.03) 1px, transparent 1px);
-            background-size: 50px 50px;
-            animation: gridMove 20s linear infinite;
-            pointer-events: none;
-            z-index: 0;
+        .tab-button.active {
+            color: #34d399;
+            opacity: 1;
         }
 
-        /* Geometric Pattern Overlay */
-        body::after {
-            content: '';
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-image:
-                radial-gradient(circle at 20% 50%, rgba(168, 85, 247, 0.08) 0%, transparent 50%),
-                radial-gradient(circle at 80% 80%, rgba(34, 211, 238, 0.08) 0%, transparent 50%),
-                radial-gradient(circle at 40% 20%, rgba(255, 0, 255, 0.05) 0%, transparent 50%);
-            pointer-events: none;
-            z-index: 0;
-        }
-
-        /* Scanline Effect */
-        .scanline {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 2px;
-            background: linear-gradient(to bottom, transparent, rgba(0, 240, 255, 0.3), transparent);
-            animation: scanline 8s linear infinite;
-            pointer-events: none;
-            z-index: 999;
-            opacity: 0.3;
-        }
-
-        /* === CHROMATIC ABERRATION TEXT === */
-        .cyber-title {
-            position: relative;
-            font-weight: 900;
-            letter-spacing: -0.02em;
-            color: #fff;
-            text-transform: uppercase;
-        }
-
-        .cyber-title::before,
-        .cyber-title::after {
-            content: attr(data-text);
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-        }
-
-        .cyber-title::before {
-            color: #00F0FF;
-            z-index: -1;
-            animation: glitch 3s infinite;
-            clip-path: polygon(0 0, 100% 0, 100% 45%, 0 45%);
-        }
-
-        .cyber-title::after {
-            color: #FF00FF;
-            z-index: -2;
-            animation: glitch 2s infinite reverse;
-            clip-path: polygon(0 55%, 100% 55%, 100% 100%, 0 100%);
-        }
-
-        /* === NEON GLOW CARDS === */
-        .cyber-card {
-            background: rgba(10, 10, 15, 0.85);
-            backdrop-filter: blur(20px) saturate(180%);
-            border: 1px solid rgba(0, 240, 255, 0.2);
-            position: relative;
-            z-index: 1;
-            transition: all 0.4s cubic-bezier(0.2, 0.9, 0.2, 1);
-            overflow: hidden;
-        }
-
-        .cyber-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: -100%;
-            width: 100%;
-            height: 100%;
-            background: linear-gradient(90deg, transparent, rgba(0, 240, 255, 0.1), transparent);
-            transition: left 0.5s;
-        }
-
-        .cyber-card:hover::before {
-            left: 100%;
-        }
-
-        .cyber-card:hover {
-            border-color: rgba(0, 240, 255, 0.6);
-            box-shadow:
-                0 0 20px rgba(0, 240, 255, 0.3),
-                0 0 40px rgba(0, 240, 255, 0.1),
-                inset 0 0 20px rgba(0, 240, 255, 0.05);
-            transform: translateY(-4px) scale(1.01);
-        }
-
-        /* Card Variants */
-        .card-purple {
-            border-color: rgba(168, 85, 247, 0.3);
-        }
-
-        .card-purple:hover {
-            border-color: rgba(168, 85, 247, 0.8);
-            box-shadow:
-                0 0 20px rgba(168, 85, 247, 0.4),
-                0 0 40px rgba(168, 85, 247, 0.2),
-                inset 0 0 20px rgba(168, 85, 247, 0.05);
-        }
-
-        .card-cyan {
-            border-color: rgba(34, 211, 238, 0.3);
-        }
-
-        .card-cyan:hover {
-            border-color: rgba(34, 211, 238, 0.8);
-            box-shadow:
-                0 0 20px rgba(34, 211, 238, 0.4),
-                0 0 40px rgba(34, 211, 238, 0.2),
-                inset 0 0 20px rgba(34, 211, 238, 0.05);
-        }
-
-        .card-red {
-            border-color: rgba(239, 68, 68, 0.3);
-        }
-
-        .card-red:hover {
-            border-color: rgba(239, 68, 68, 0.8);
-            box-shadow:
-                0 0 20px rgba(239, 68, 68, 0.4),
-                0 0 40px rgba(239, 68, 68, 0.2),
-                inset 0 0 20px rgba(239, 68, 68, 0.05);
-        }
-
-        .card-orange {
-            border-color: rgba(249, 115, 22, 0.3);
-        }
-
-        .card-orange:hover {
-            border-color: rgba(249, 115, 22, 0.8);
-            box-shadow:
-                0 0 20px rgba(249, 115, 22, 0.4),
-                0 0 40px rgba(249, 115, 22, 0.2),
-                inset 0 0 20px rgba(249, 115, 22, 0.05);
-        }
-
-        /* === NEON TEXT GLOW === */
-        .text-glow-cyan {
-            color: #00F0FF;
-            text-shadow:
-                0 0 10px rgba(0, 240, 255, 0.8),
-                0 0 20px rgba(0, 240, 255, 0.4),
-                0 0 30px rgba(0, 240, 255, 0.2);
-            animation: neonPulse 2s ease-in-out infinite;
-        }
-
-        .text-glow-purple {
-            color: #A855F7;
-            text-shadow:
-                0 0 10px rgba(168, 85, 247, 0.8),
-                0 0 20px rgba(168, 85, 247, 0.4),
-                0 0 30px rgba(168, 85, 247, 0.2);
-        }
-
-        .text-glow-magenta {
-            color: #FF00FF;
-            text-shadow:
-                0 0 10px rgba(255, 0, 255, 0.8),
-                0 0 20px rgba(255, 0, 255, 0.4),
-                0 0 30px rgba(255, 0, 255, 0.2);
-        }
-
-        .text-glow-red {
-            color: #EF4444;
-            text-shadow:
-                0 0 10px rgba(239, 68, 68, 0.8),
-                0 0 20px rgba(239, 68, 68, 0.4);
-        }
-
-        .text-glow-orange {
-            color: #F97316;
-            text-shadow:
-                0 0 10px rgba(249, 115, 22, 0.8),
-                0 0 20px rgba(249, 115, 22, 0.4);
-        }
-
-        /* === NODE CARDS === */
         .node-card {
-            background: rgba(10, 10, 15, 0.95);
-            backdrop-filter: blur(15px);
+            background: #111113;
+            border: 1px solid var(--border);
+            padding: 0.75rem;
             position: relative;
-            overflow: hidden;
-            border: 2px solid;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
         }
 
-        .node-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 2px;
-            background: linear-gradient(90deg, transparent, var(--glow-color), transparent);
-            animation: neonPulse 2s ease-in-out infinite;
+        .json-key {
+            color: #818cf8;
         }
 
-        .node-card-running {
-            --glow-color: #F97316;
-            border-color: rgba(249, 115, 22, 0.6);
-            box-shadow:
-                0 0 15px rgba(249, 115, 22, 0.3),
-                inset 0 0 15px rgba(249, 115, 22, 0.05);
+        .json-val-str {
+            color: #34d399;
         }
 
-        .node-card-running:hover {
-            border-color: rgba(249, 115, 22, 0.9);
-            box-shadow:
-                0 0 25px rgba(249, 115, 22, 0.5),
-                0 0 50px rgba(249, 115, 22, 0.2),
-                inset 0 0 20px rgba(249, 115, 22, 0.1);
-            transform: translateY(-2px);
+        .json-val-num {
+            color: #fbbf24;
         }
 
-        .node-card-offline {
-            --glow-color: #EF4444;
-            border-color: rgba(239, 68, 68, 0.4);
-            box-shadow:
-                0 0 10px rgba(239, 68, 68, 0.2),
-                inset 0 0 10px rgba(239, 68, 68, 0.03);
+        .json-val-bool {
+            color: #f87171;
         }
 
-        /* === BUTTONS === */
-        button {
-            transition: all 0.3s cubic-bezier(0.2, 0.9, 0.2, 1);
-            position: relative;
-            overflow: hidden;
+        .btn-minimal {
+            background: transparent;
+            color: #818cf8;
+            padding: 4px 2px;
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: 'monospace';
         }
 
-        button::before {
-            content: '';
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            width: 0;
-            height: 0;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.1);
-            transform: translate(-50%, -50%);
-            transition: width 0.6s, height 0.6s;
+        .btn-minimal:hover {
+            color: #34d399;
+            background: rgba(129, 140, 248, 0.1);
+            border-radius: 2px;
         }
 
-        button:hover::before {
-            width: 300px;
-            height: 300px;
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(2px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
         }
 
-        button:hover {
-            transform: scale(1.05);
-            box-shadow: 0 0 20px currentColor;
+        .animate-fade-in {
+            animation: fadeIn 0.2s ease-out forwards;
         }
 
-        /* === SCROLLBAR === */
-        .scrollbar-custom::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        .scrollbar-custom::-webkit-scrollbar-track {
-            background: rgba(10, 10, 15, 0.5);
-            border-radius: 4px;
-        }
-
-        .scrollbar-custom::-webkit-scrollbar-thumb {
-            background: linear-gradient(to bottom, #00F0FF, #A855F7, #FF00FF);
-            border-radius: 4px;
-            box-shadow: 0 0 10px rgba(0, 240, 255, 0.5);
-        }
-
-        .scrollbar-custom::-webkit-scrollbar-thumb:hover {
-            box-shadow: 0 0 20px rgba(0, 240, 255, 0.8);
-        }
-
-        /* === TAB ANIMATION === */
-        .tab-anim {
-            transition: all 0.35s cubic-bezier(0.2, 0.9, 0.2, 1);
-            position: relative;
-        }
-
-        .tab-active-purple {
-            background: linear-gradient(135deg, rgba(168, 85, 247, 0.3), rgba(168, 85, 247, 0.15));
-            border-color: #A855F7 !important;
-            color: #A855F7;
-            box-shadow:
-                0 0 20px rgba(168, 85, 247, 0.5),
-                inset 0 0 20px rgba(168, 85, 247, 0.1);
-            transform: translateY(-2px) scale(1.02);
-        }
-
-        /* === INPUT FIELDS === */
-        input,
-        select,
-        textarea {
-            background: rgba(10, 10, 15, 0.8);
-            border: 1px solid rgba(0, 240, 255, 0.3);
-            color: #fff;
-            transition: all 0.3s ease;
-        }
-
-        input:focus,
-        select:focus,
-        textarea:focus {
-            outline: none;
-            border-color: rgba(0, 240, 255, 0.8);
-            box-shadow:
-                0 0 15px rgba(0, 240, 255, 0.3),
-                inset 0 0 10px rgba(0, 240, 255, 0.05);
-        }
-
-        /* === FILE CARD === */
-        .file-card {
-            background: rgba(10, 10, 15, 0.9);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-            transition: all 0.3s ease;
-        }
-
-        .file-card:hover {
-            border-color: rgba(239, 68, 68, 0.6);
-            box-shadow: 0 0 15px rgba(239, 68, 68, 0.3);
-            transform: translateX(4px);
-        }
-
-        /* === MODAL OVERLAY === */
         .modal-overlay {
-            backdrop-filter: blur(10px);
-            background: rgba(0, 0, 0, 0.8);
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(2px);
         }
 
-        /* === PERFORMANCE OPTIMIZATIONS === */
-        * {
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
+        input {
+            background: #000;
+            border: 1px solid var(--border);
+            color: #34d399;
+            padding: 6px;
+            font-family: inherit;
         }
-
-        button:focus,
-        input:focus {
-            outline: none;
-        }
-    </style>
-    .node-card-offline::before {
-    --glow-color: #6b7280;
-    }
-
-    .modal-overlay {
-    backdrop-filter: blur(8px);
-    animation: fadeIn 0.2s ease-out;
-    }
-
-    @keyframes fadeIn {
-    from {
-    opacity: 0;
-    }
-
-    to {
-    opacity: 1;
-    }
-    }
-
-    @keyframes slideUp {
-    from {
-    transform: translateY(20px);
-    opacity: 0;
-    }
-
-    to {
-    transform: translateY(0);
-    opacity: 1;
-    }
-    }
-
-    .modal-content {
-    animation: slideUp 0.3s ease-out;
-    }
     </style>
 </head>
 
-<body class="text-gray-100 min-h-screen font-sans">
-    <div class="morph-blob-1"></div>
-    <div class="morph-blob-2"></div>
-
-    <div class="max-w-7xl mx-auto p-4 sm:p-6 relative z-10">
-        <header class="cyber-card card-purple rounded-2xl p-6 mb-6 transition-all duration-300">
-            <div class="flex items-center justify-between mb-6">
-                <div class="flex items-center space-x-4">
-                    <div class="p-3 rounded-xl border border-purple-500">
-                        <svg class="w-8 h-8 text-purple-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z">
-                            </path>
-                        </svg>
-                    </div>
-                    <div>
-                        <h1 class="text-2xl font-bold text-glow-purple">IoT Management Dashboard</h1>
-                        <p class="text-xs text-gray-400 mt-0.5">Unified Control Panel • <span
-                                class="text-gray-500 text-[10px]">ren itdt_west</span></p>
-                    </div>
-                </div>
+<body class="selection:bg-indigo-100 antialiased">
+    <div class="max-w-6xl mx-auto px-4 py-4">
+        <!-- Header Minimalis Terminal -->
+        <header class="flex items-center justify-between mb-8 border-b border-gray-800 pb-4">
+            <div class="flex items-center gap-6">
+                <span class="text-accent font-bold">[MENT_IoT]</span>
+                <nav class="flex gap-4 text-xs">
+                    <button data-target="ota" class="main-tab active pb-1 font-bold">[ /OTA ]</button>
+                    <button data-target="forwarder" class="main-tab text-gray-500 hover:text-gray-300 pb-1">[ /PIPELINE
+                        ]</button>
+                </nav>
             </div>
-            <nav class="flex items-center space-x-4">
-                <div class="flex items-center space-x-2 flex-1">
-                    <button data-target="ota" id="main-tab-ota"
-                        class="main-tab tab-anim flex-1 py-3 px-6 rounded-xl font-semibold text-sm border border-gray-700 tab-active-purple">
-                        OTA & Nodes
-                    </button>
-                    <button data-target="forwarder" id="main-tab-forwarder"
-                        class="main-tab tab-anim flex-1 py-3 px-6 rounded-xl font-semibold text-sm border border-gray-700 text-gray-400">
-                        Forwarder
-                    </button>
-                </div>
-                <div class="flex items-center space-x-2">
-                    <a href="/database" target="_blank"
-                        class="tab-anim py-3 px-4 rounded-xl font-semibold text-sm border border-cyan-500/80 text-cyan-400 hover:bg-cyan-500 hover:text-black transition-all duration-300 flex items-center space-x-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
-                            <path d="M3 12v3c0 1.657 3.134 3 7 3s7-1.343 7-3v-3c0 1.657-3.134 3-7 3s-7-1.343-7-3z">
-                            </path>
-                            <path d="M3 7v3c0 1.657 3.134 3 7 3s7-1.343 7-3V7c0 1.657-3.134 3-7 3S3 8.657 3 7z"></path>
-                            <path d="M10 2C6.134 2 3 3.343 3 5s3.134 3 7 3 7-1.343 7-3-3.134-3-7-3z"></path>
-                        </svg>
-                        <span>Database</span>
-                    </a>
-                    <form action="/logout" method="POST">
-                        <button type="submit"
-                            class="tab-anim py-3 px-4 rounded-xl font-semibold text-sm border border-red-500/80 text-red-400 hover:bg-red-500 hover:text-black transition-all duration-300 flex items-center space-x-2">
-                            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 20 20"
-                                fill="currentColor">
-                                <path fill-rule="evenodd"
-                                    d="M3 3a1 1 0 00-1 1v12a1 1 0 102 0V4a1 1 0 00-1-1zm10.293 9.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L14.586 9H7a1 1 0 100 2h7.586l-1.293 1.293z"
-                                    clip-rule="evenodd"></path>
-                            </svg>
-                            <span>Logout</span>
-                        </button>
-                    </form>
-                </div>
-            </nav>
+            <div class="flex items-center gap-4 text-[10px]">
+                <span id="live-indicator" class="text-emerald-500 animate-pulse">● LIVE_STREAM</span>
+                <form action="/logout" method="POST">
+                    <button type="submit"
+                        class="text-gray-600 hover:text-red-500 hover:underline transition-all font-bold tracking-widest">[EXIT]</button>
+                </form>
+            </div>
         </header>
-        <div id="content-ota" class="main-content">
-            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                <div class="lg:col-span-1 space-y-6">
-                    <div class="cyber-card card-cyan rounded-2xl p-6 transition-all duration-300">
-                        <h2 class="text-lg font-semibold mb-4 text-glow-cyan">Upload OTA</h2>
-                        <form id="uploadForm" class="space-y-4">
-                            <input id="fileInput" type="file"
-                                class="block w-full text-sm text-gray-300 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border file:border-cyan-400 file:text-sm file:font-semibold file:bg-transparent file:text-cyan-400 hover:file:bg-cyan-400 hover:file:text-black file:transition-all file:cursor-pointer" />
-                            <button type="submit"
-                                class="w-full border border-cyan-400 text-cyan-400 hover:bg-cyan-400 hover:text-black px-6 py-3 rounded-xl font-bold transition-all duration-300">
-                                Upload Firmware
-                            </button>
-                        </form>
-                        <p id="uploadMsg" class="mt-3 text-sm text-lime-400 min-h-[20px]"></p>
-                    </div>
-                    <div class="cyber-card card-red rounded-2xl p-6 transition-all duration-300">
-                        <h3 class="font-semibold mb-4 text-glow-red">OTA Files</h3>
-                        <div id="fileList" class="space-y-2 max-h-80 overflow-auto scrollbar-custom">
-                            <p class="text-center text-gray-500 text-sm py-8">Belum ada file.</p>
-                        </div>
-                    </div>
-                </div>
-                <div class="lg:col-span-2">
-                    <div class="cyber-card card-orange rounded-2xl p-6 mb-6 transition-all duration-300">
-                        <div class="flex justify-between items-center">
-                            <h3 class="text-lg font-semibold text-glow-orange">Nodes Monitor</h3>
-                            <span
-                                class="text-xs font-mono bg-black/50 px-3 py-1.5 rounded-lg border border-orange-400/30 text-orange-400">●
-                                Auto-refresh: 5s</span>
-                        </div>
-                    </div>
-                    <div class="cyber-card rounded-t-2xl border-b border-orange-400/30 mb-1">
-                        <nav class="flex space-x-1 p-2">
-                            <button id="tab-running" data-target="runningNodes"
-                                class="tab-button tab-anim flex-1 py-3 px-4 rounded-xl font-medium text-sm bg-orange-500/20 text-orange-400 border border-orange-500/30">
-                                Running <span id="count-running"
-                                    class="ml-2 px-2.5 py-0.5 rounded-full text-xs font-bold bg-orange-500/30">0</span>
+
+        <!-- Content Body -->
+        <main id="content-ota" class="main-content animate-fade-in">
+            <div class="flex flex-col gap-6">
+                <!-- Assets & Filters Row -->
+                <div class="flex items-center justify-between gap-4 py-2">
+                    <div class="flex items-center gap-8">
+                        <nav id="nodeTabs" class="flex gap-6 text-xs">
+                            <button id="tab-running" data-target="runningNodes" class="tab-button active font-bold">
+                                [ RUNNING: <span id="count-running">0</span> ]
                             </button>
                             <button id="tab-offline" data-target="offlineNodes"
-                                class="tab-button tab-anim flex-1 py-3 px-4 rounded-xl font-medium text-sm text-gray-400 hover:text-gray-300 border border-gray-700">
-                                Offline <span id="count-offline"
-                                    class="ml-2 px-2.5 py-0.5 rounded-full text-xs font-bold bg-gray-700">0</span>
+                                class="tab-button text-gray-500 font-bold">
+                                [ OFFLINE: <span id="count-offline">0</span> ]
                             </button>
                         </nav>
                     </div>
-                    <div id="runningNodes" class="tab-content grid grid-cols-1 md:grid-cols-2 gap-4"></div>
-                    <div id="offlineNodes" class="tab-content hidden grid grid-cols-1 md:grid-cols-2 gap-4"></div>
+
+                    <div class="flex items-center gap-2">
+                        <button id="triggerUpload" class="btn-minimal">
+                            [+ FW]
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Hidden Upload Form -->
+                <div id="uploadFormContainer" class="hidden border-b border-gray-800 pb-6 animate-fade-in">
+                    <form id="uploadForm" class="flex items-center gap-4">
+                        <input id="fileInput" type="file" class="hidden" />
+                        <label for="fileInput" class="btn-minimal cursor-pointer">
+                            [CHOOSE_FILE: <span id="fileNameLabel">NONE</span> ]
+                        </label>
+                        <button type="submit" class="btn-minimal text-accent">[UPLOAD_ASSETS :3]</button>
+                        <span id="uploadMsg" class="text-[10px] uppercase font-bold text-accent"></span>
+                    </form>
+                    <div id="fileList" class="mt-4 flex flex-wrap gap-2">
+                        <!-- Files via JS -->
+                    </div>
+                </div>
+
+                <!-- Main Monitoring Grid -->
+                <div id="runningNodes"
+                    class="tab-content grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    <!-- Nodes via JS -->
+                </div>
+                <div id="offlineNodes"
+                    class="tab-content hidden grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+                    <!-- Nodes via JS -->
                 </div>
             </div>
-        </div>
-        <div id="content-forwarder" class="main-content hidden">
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-                <div class="cyber-card rounded-2xl p-6 text-center">
-                    <h2 class="text-lg font-semibold text-gray-400 mb-2">Status Forward</h2>
-                    <p id="last-forward-status" class="text-3xl font-bold mt-2 text-[#00d9ff]">-</p>
+        </main>
+
+        <!-- Forwarder Body -->
+        <main id="content-forwarder" class="main-content hidden animate-fade-in">
+            <div class="flex flex-col gap-6">
+                <!-- Status Bar Row -->
+                <div class="flex items-center justify-between gap-4 py-2 border-b border-gray-800 pb-4">
+                    <div class="flex gap-8 text-[10px] font-bold">
+                        <div class="flex flex-col gap-1">
+                            <span class="text-gray-500">CLOUD_STATUS:</span>
+                            <span id="last-forward-status" class="text-accent">[STANDBY]</span>
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <span class="text-gray-500">CACHE_QUEUE:</span>
+                            <span id="buffer-items" class="text-emerald-500">0</span>
+                        </div>
+                        <div class="flex flex-col gap-1">
+                            <span class="text-gray-500">NEXT_SYNC:</span>
+                            <span id="countdown" class="text-yellow-500">00:00</span>
+                        </div>
+                    </div>
                 </div>
-                <div class="cyber-card rounded-2xl p-6 text-center">
-                    <h2 class="text-lg font-semibold text-gray-400 mb-2">Countdown</h2>
-                    <p id="countdown" class="text-3xl font-bold mt-2 font-mono text-[#00d9ff]">00:00</p>
-                </div>
-                <div class="cyber-card rounded-2xl p-6 text-center">
-                    <h2 class="text-lg font-semibold text-gray-400 mb-2">Buffer Items</h2>
-                    <p id="buffer-items" class="text-3xl font-bold mt-2 text-[#00d9ff]">0</p>
+
+                <!-- Telemetry Stream -->
+                <div class="space-y-3">
+                    <div class="text-[10px] text-gray-600 font-bold mb-2">TELEMETRY_PIPELINE_STREAM:</div>
+                    <div id="data-buffer" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-auto">
+                        <div class="col-span-full py-20 text-center text-gray-700 italic opacity-50">
+                            [AWAITING_DATA_PACKETS]</div>
+                    </div>
                 </div>
             </div>
-            <div class="cyber-card rounded-2xl p-6">
-                <h2 class="text-xl font-bold mb-4 text-[#00d9ff]">Data di Buffer</h2>
-                <div id="data-buffer"
-                    class="bg-black/60 rounded-xl p-4 h-96 overflow-y-auto scrollbar-custom font-mono text-sm border border-[#00d9ff]/20">
-                    <p class="text-gray-500">Menunggu data...</p>
-                </div>
-            </div>
-        </div>
-    </div>
-    </div>
+        </main>
     </div>
 
-    <!-- Logs Modal -->
-    <div id="logModal" class="modal-overlay fixed inset-0 bg-black/90 hidden items-center justify-center z-50 p-4">
-        <div class="modal-content cyber-card card-cyan rounded-2xl w-full max-w-3xl p-6">
-            <div class="flex justify-between items-center mb-5">
-                <div class="font-semibold text-xl text-glow-cyan">
-                    Logs - <span id="modalNode"></span>
-                </div>
-                <button data-action="close-modal"
-                    class="text-gray-400 hover:text-cyan-400 transition-all duration-300 p-2">
-                    ✕
-                </button>
+    <!-- Simple Modals -->
+    <div id="logModal" class="modal-overlay fixed inset-0 hidden items-center justify-center z-50 p-6">
+        <div class="modal-content glass-panel w-full max-w-2xl bg-black border-gray-700">
+            <div class="p-3 border-b border-gray-800 flex justify-between items-center">
+                <span class="text-accent font-bold">[LOG_OUTPUT]</span>
+                <button data-action="close-modal" class="text-gray-500 hover:text-white">[X]</button>
             </div>
             <div id="modalBody"
-                class="bg-black/60 p-4 rounded-xl text-sm text-gray-200 min-h-[150px] font-mono whitespace-pre-wrap scrollbar-custom max-h-96 overflow-auto border border-cyan-400/20">
-            </div>
-            <div class="mt-5 flex justify-end">
-                <button data-action="close-modal"
-                    class="px-5 py-2.5 border border-cyan-400 text-cyan-400 hover:bg-cyan-400 hover:text-black rounded-xl text-sm font-semibold transition-all duration-300">
-                    Tutup
-                </button>
-            </div>
+                class="p-4 font-mono text-[10px] leading-tight max-h-[500px] overflow-auto text-emerald-500"></div>
         </div>
     </div>
 
-    <!-- OTA Modal -->
-    <div id="otaModal" class="modal-overlay fixed inset-0 bg-black/90 hidden items-center justify-center z-50 p-4">
-        <div class="modal-content cyber-card card-cyan rounded-2xl w-full max-w-2xl p-6">
-            <div class="flex justify-between items-center mb-5">
-                <div class="font-semibold text-xl text-glow-cyan">
-                    OTA Update - <span id="otaModalNode"></span>
-                </div>
-                <button data-action="close-ota-modal"
-                    class="text-gray-400 hover:text-cyan-400 transition-all duration-300 p-2">
-                    ✕
-                </button>
+    <div id="configModal" class="modal-overlay fixed inset-0 hidden items-center justify-center z-50 p-6">
+        <div class="modal-content glass-panel w-full max-w-md p-6 bg-black border-gray-700">
+            <div class="flex justify-between items-center mb-6">
+                <span class="text-accent font-bold">[RUNTIME_CONFIG]</span>
+                <button data-action="close-config-modal" class="text-gray-500 hover:text-white">[X]</button>
             </div>
-            <div class="bg-black/60 p-4 rounded-xl border border-cyan-400/20 space-y-4">
-                <div>
-                    <label class="block text-sm font-medium text-cyan-400 mb-2">Firmware URL</label>
-                    <input type="text" id="otaUrlInput"
-                        class="w-full bg-black/60 border border-cyan-400/30 rounded-xl px-4 py-3 text-gray-200 focus:border-cyan-400 focus:outline-none transition-all"
-                        placeholder="https://example.com/firmware.bin">
-                    <p class="text-xs text-gray-500 mt-1">Masukkan URL lengkap firmware yang akan diupload</p>
-                </div>
-            </div>
-            <div class="mt-6 flex justify-end gap-3">
-                <button data-action="close-ota-modal"
-                    class="px-5 py-2.5 border border-gray-600 text-gray-400 hover:bg-gray-700 hover:text-white rounded-xl text-sm font-semibold transition-all duration-300">
-                    Batal
-                </button>
-                <button data-action="send-ota"
-                    class="px-5 py-2.5 border border-cyan-400 text-cyan-400 hover:bg-cyan-400 hover:text-black rounded-xl text-sm font-semibold transition-all duration-300">
-                    Kirim OTA
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Config Modal -->
-    <div id="configModal" class="modal-overlay fixed inset-0 bg-black/90 hidden items-center justify-center z-50 p-4">
-        <div class="modal-content cyber-card card-purple rounded-2xl w-full max-w-2xl p-6">
-            <div class="flex justify-between items-center mb-5">
-                <div class="font-semibold text-xl text-glow-purple">
-                    Configure - <span id="configModalNode"></span>
-                </div>
-                <button data-action="close-config-modal"
-                    class="text-gray-400 hover:text-purple-400 transition-all duration-300 p-2">
-                    ✕
-                </button>
-            </div>
-            <div class="bg-black/60 p-4 rounded-xl border border-purple-400/20 space-y-4">
-                <div id="configDefaultFields" class="space-y-4">
-                    <div class="grid grid-cols-2 gap-4">
-                        <div>
-                            <label class="block text-sm font-medium text-purple-400 mb-2">Min Temp (°C)</label>
-                            <input type="number" id="configMinInput" step="0.1"
-                                class="w-full bg-black/60 border border-purple-400/30 rounded-xl px-4 py-3 text-gray-200 focus:border-purple-400 focus:outline-none transition-all">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-medium text-purple-400 mb-2">Max Temp (°C)</label>
-                            <input type="number" id="configMaxInput" step="0.1"
-                                class="w-full bg-black/60 border border-purple-400/30 rounded-xl px-4 py-3 text-gray-200 focus:border-purple-400 focus:outline-none transition-all">
-                        </div>
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-purple-400 mb-2">CK</label>
-                        <input type="text" id="configCkInput"
-                            class="w-full bg-black/60 border border-purple-400/30 rounded-xl px-4 py-3 text-gray-200 focus:border-purple-400 focus:outline-none transition-all">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-purple-400 mb-2">Area</label>
-                        <input type="text" id="configAreaInput"
-                            class="w-full bg-black/60 border border-purple-400/30 rounded-xl px-4 py-3 text-gray-200 focus:border-purple-400 focus:outline-none transition-all">
-                    </div>
-                    <div>
-                        <label class="block text-sm font-medium text-purple-400 mb-2">No</label>
-                        <input type="text" id="configNoInput"
-                            class="w-full bg-black/60 border border-purple-400/30 rounded-xl px-4 py-3 text-gray-200 focus:border-purple-400 focus:outline-none transition-all">
+            <div class="space-y-4">
+                <!-- Modal Content (Scrollable) -->
+                <div class="px-6 py-4 max-h-[70vh] overflow-y-auto custom-scrollbar">
+                    <div id="dynamicConfigFields" class="grid grid-cols-2 items-center gap-4">
+                        <!-- Fields injected by JS -->
                     </div>
                 </div>
-
-                <div id="configMDCWFields" class="hidden space-y-4">
-                    <div>
-                        <label class="block text-sm font-medium text-purple-400 mb-2">Prefix (Node Name)</label>
-                        <input type="text" id="configPrefixInput"
-                            class="w-full bg-black/60 border border-purple-400/30 rounded-xl px-4 py-3 text-gray-200 focus:border-purple-400 focus:outline-none transition-all">
-                        <p class="text-xs text-gray-500 mt-1">Changing prefix will restart the device.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="mt-6 flex justify-end gap-3">
-                <button data-action="close-config-modal"
-                    class="px-5 py-2.5 border border-gray-600 text-gray-400 hover:bg-gray-700 hover:text-white rounded-xl text-sm font-semibold transition-all duration-300">
-                    Batal
-                </button>
                 <button data-action="send-config"
-                    class="px-5 py-2.5 border border-purple-400 text-purple-400 hover:bg-purple-400 hover:text-black rounded-xl text-sm font-semibold transition-all duration-300">
-                    Kirim Config
-                </button>
+                    class="btn-minimal w-full text-accent font-bold tracking-widest">[COMMIT_CHANGES]</button>
+            </div>
+        </div>
+    </div>
+    </div>
+
+    <div id="otaModal" class="modal-overlay fixed inset-0 hidden items-center justify-center z-50 p-6">
+        <div class="modal-content glass-panel w-full max-w-sm p-6 bg-black border-gray-700">
+            <div class="flex justify-between items-center mb-6">
+                <span class="text-accent font-bold">[DEPLOY_FLASH]</span>
+                <button data-action="close-ota-modal" class="text-gray-500 hover:text-white">[X]</button>
+            </div>
+            <div class="space-y-4">
+                <input type="text" id="otaUrlInput" class="w-full text-[10px]" placeholder="BOOT_URL">
+                <button data-action="send-ota"
+                    class="btn-minimal w-full text-accent font-bold tracking-widest">[EXECUTE_OTA]</button>
             </div>
         </div>
     </div>
 
     <script src="/static/app.js"></script>
     <script>
-        let forwarderInterval = null;
-
-        // Main Tab Switching (OTA vs Forwarder)
+        // UI Interaction Script
         document.querySelectorAll('.main-tab').forEach(tab => {
             tab.addEventListener('click', function () {
-                const target = this.getAttribute('data-target');
+                const target = this.dataset.target;
+                document.querySelectorAll('.main-tab').forEach(t => t.classList.remove('active', 'font-bold'));
+                this.classList.add('active', 'font-bold');
 
-                // Remove active class from all main tabs
-                document.querySelectorAll('.main-tab').forEach(t => {
-                    t.classList.remove('tab-active-purple');
-                    t.classList.add('text-gray-400');
-                });
-
-                // Add active class to clicked tab
-                this.classList.add('tab-active-purple');
-                this.classList.remove('text-gray-400');
-
-                // Hide all main content
-                document.querySelectorAll('.main-content').forEach(content => {
-                    content.classList.add('hidden');
-                });
-
-                // Show selected content
+                document.querySelectorAll('.main-content').forEach(c => c.classList.add('hidden'));
                 document.getElementById('content-' + target).classList.remove('hidden');
 
-                // Start/stop forwarder interval
                 if (target === 'forwarder') {
-                    updateForwarderStatus();
-                    forwarderInterval = setInterval(updateForwarderStatus, 2000);
+                    updateForwarder();
+                    window.fwdInterval = setInterval(updateForwarder, 3000);
                 } else {
-                    if (forwarderInterval) {
-                        clearInterval(forwarderInterval);
-                        forwarderInterval = null;
-                    }
+                    if (window.fwdInterval) clearInterval(window.fwdInterval);
+                    if (window.fetchNodes) window.fetchNodes();
+                    if (window.fetchFiles) window.fetchFiles();
                 }
             });
         });
 
-        // Sub Tab Switching (Running vs Offline Nodes)
         document.querySelectorAll('.tab-button').forEach(tab => {
             tab.addEventListener('click', function () {
-                const target = this.getAttribute('data-target');
-
-                // Remove active from all sub tabs
+                const target = this.dataset.target;
                 document.querySelectorAll('.tab-button').forEach(t => {
-                    t.classList.remove('bg-orange-500/20', 'text-orange-400', 'border-orange-500/30');
-                    t.classList.add('text-gray-400', 'hover:text-gray-300', 'border-gray-700');
+                    t.classList.remove('active', 'text-white');
+                    t.classList.add('text-gray-500');
                 });
+                this.classList.add('active', 'text-white');
+                this.classList.remove('text-gray-500');
 
-                // Add active to clicked tab
-                this.classList.add('bg-orange-500/20', 'text-orange-400', 'border-orange-500/30');
-                this.classList.remove('text-gray-400', 'hover:text-gray-300', 'border-gray-700');
-
-                // Hide all tab content
-                document.querySelectorAll('.tab-content').forEach(content => {
-                    content.classList.add('hidden');
-                });
-
-                // Show selected content
+                document.querySelectorAll('.tab-content').forEach(c => c.classList.add('hidden'));
                 document.getElementById(target).classList.remove('hidden');
             });
         });
 
-        function formatTime(seconds) {
-            if (isNaN(seconds) || seconds < 0) return "00:00";
-            const mins = Math.floor(seconds / 60);
-            const secs = Math.floor(seconds % 60);
-            return `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
-        }
+        // Local Upload UX
+        const fileInput = document.getElementById('fileInput');
+        const fileNameLabel = document.getElementById('fileNameLabel');
+        fileInput.addEventListener('change', (e) => {
+            fileNameLabel.textContent = e.target.files.length > 0 ? e.target.files[0].name : "NONE";
+        });
 
-        function updateForwarderStatus() {
-            fetch('/forwarder/status')
-                .then(response => response.json())
-                .then(data => {
-                    const statusEl = document.getElementById('last-forward-status');
-                    statusEl.textContent = data.LastForwardStatus || 'Belum ada';
-                    statusEl.className = 'text-3xl font-bold mt-2 ';
-                    if (data.LastForwardStatus === 'Sukses') {
-                        statusEl.classList.add('text-glow-cyan');
-                    } else if (data.LastForwardStatus === 'Gagal') {
-                        statusEl.classList.add('text-red-400');
-                    } else {
-                        statusEl.classList.add('text-glow-purple');
-                    }
+        document.getElementById('triggerUpload').addEventListener('click', () => {
+            document.getElementById('uploadFormContainer').classList.toggle('hidden');
+        });
 
-                    const countdownEl = document.getElementById('countdown');
-                    const nextForwardTime = new Date(data.NextForwardTime);
-                    const now = new Date();
-                    const diffSeconds = (nextForwardTime - now) / 1000;
-                    countdownEl.textContent = formatTime(diffSeconds);
+        function updateForwarder() {
+            fetch('/forwarder/status').then(r => r.json()).then(data => {
+                document.getElementById('last-forward-status').textContent = `[${data.LastForwardStatus || 'STANDBY'}]`;
+                document.getElementById('buffer-items').textContent = data.BufferItemCount || 0;
 
-                    document.getElementById('buffer-items').textContent = data.BufferItemCount || 0;
+                const next = new Date(data.NextForwardTime);
+                const seconds = Math.max(0, Math.floor((next - new Date()) / 1000));
+                document.getElementById('countdown').textContent = `${Math.floor(seconds / 60).toString().padStart(2, '0')}:${(seconds % 60).toString().padStart(2, '0')}`;
 
-                    const dataBufferEl = document.getElementById('data-buffer');
-                    if (data.ReceivedDataBuffer && data.ReceivedDataBuffer.length > 0) {
-                        dataBufferEl.innerHTML = '';
-                        data.ReceivedDataBuffer.forEach(item => {
-                            const p = document.createElement('p');
-                            p.className = 'text-gray-300 mb-1';
-                            p.textContent = `[Area: ${item.area}, CK: ${item.ck}] Temp: ${item.temp?.length || 0}, Door: ${item.door?.length || 0}`;
-                            dataBufferEl.appendChild(p);
-                        });
-                    } else {
-                        dataBufferEl.innerHTML = '<p class="text-gray-500">Buffer kosong.</p>';
-                    }
-                })
-                .catch(err => {
-                    console.error("Error:", err);
-                    document.getElementById('data-buffer').innerHTML = '<p class="text-red-400">Gagal memuat status.</p>';
-                });
+                const buffer = document.getElementById('data-buffer');
+                if (data.ReceivedDataBuffer?.length) {
+                    buffer.innerHTML = data.ReceivedDataBuffer.reverse().slice(0, 12).map(item => `
+                        <div class="node-card animate-fade-in font-mono text-[10px] leading-tight">
+                            <div class="flex justify-between mb-1 border-b border-gray-800 pb-1">
+                                <span class="text-accent font-bold">#PACKET_RECV</span>
+                                <span class="text-emerald-500">OK</span>
+                            </div>
+                            <div>{ <span class="json-key">"area"</span>: <span class="json-val-num">${item.area}</span>, </div>
+                            <div class="pl-2"> <span class="json-key">"ck"</span>: <span class="json-val-num">${item.ck}</span>, </div>
+                            <div class="pl-2"> <span class="json-key">"temp"</span>: [${item.temp?.length || 0} pts], </div>
+                            <div class="pl-2"> <span class="json-key">"door"</span>: [${item.door?.length || 0} pts] }</div>
+                        </div>
+                    `).join('');
+                } else {
+                    buffer.innerHTML = '<div class="col-span-full py-20 text-center text-gray-700 italic opacity-50">[BUFFER_EMPTY]</div>';
+                }
+            }).catch(() => { });
         }
     </script>
 </body>

@@ -53,8 +53,8 @@ services:
       dockerfile: Dockerfile
       args:
         GOLANG_VERSION: 1.24-alpine
-    ports:
-      - "8888:8000"
+    # ports:
+    #   - "8888:8000"
     environment:
       - DB_HOST=postgres_db
       - MQTT_BROKER_URI=tcp://emqx:1883
@@ -90,7 +90,7 @@ services:
     ports:
       - "9999:9999"
     volumes:
-      - ./ota/static/uploads:/app/static/uploads
+      - ota_uploads:/app/static/uploads
     environment:
       - MQTT_BROKER=tcp://emqx:1883
       # OTA service script calls for MQTT_USER (not USERNAME)
@@ -98,6 +98,9 @@ services:
       - MQTT_PASS=${MQTT_PASS}
       - TELE_BOT_OTA=${TELE_BOT_OTA}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - SERVER_NAME=${SERVER_NAME:-ren_itdt_west}
+      - WEBHOOK_TOKEN=${WEBHOOK_TOKEN:-}
+      - FORWARDER_URL=http://backend:8000/forwarder/status
     restart: unless-stopped
     depends_on:
       emqx:
@@ -145,6 +148,7 @@ volumes:
   postgres_data:
   emqx_data:
   emqx_log:
+  ota_uploads:
 
 networks:
   iot-net:

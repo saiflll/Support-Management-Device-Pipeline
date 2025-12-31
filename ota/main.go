@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"crypto/rand"
@@ -30,9 +30,30 @@ type NodeInfo struct {
 	Ck           string   `json:"ck,omitempty"`
 	Area         string   `json:"area,omitempty"`
 	No           string   `json:"no,omitempty"`
+	Min          float64  `json:"min,omitempty"`
+	Max          float64  `json:"max,omitempty"`
+	Min0         float64  `json:"min0,omitempty"`
+	Max0         float64  `json:"max0,omitempty"`
+	Min1         float64  `json:"min1,omitempty"`
+	Max1         float64  `json:"max1,omitempty"`
+	Min2         float64  `json:"min2,omitempty"`
+	Max2         float64  `json:"max2,omitempty"`
+	Min3         float64  `json:"min3,omitempty"`
+	Max3         float64  `json:"max3,omitempty"`
+	Min4         float64  `json:"min4,omitempty"`
+	Max4         float64  `json:"max4,omitempty"`
+	ProxNc0      int      `json:"prox_nc0"`
+	ProxNc1      int      `json:"prox_nc1"`
+	ProxNc2      int      `json:"prox_nc2"`
+	Interval     uint64   `json:"interval,omitempty"`
+	IP           string   `json:"ip,omitempty"`
 	Updated      string   `json:"updated,omitempty"`
 	Model        string   `json:"model,omitempty"`
 	Prefix       string   `json:"prefix,omitempty"`
+	Version      string   `json:"version,omitempty"`
+	AppMode      string   `json:"app_mode,omitempty"`
+	Trans        string   `json:"trans,omitempty"`
+	PassCode     string   `json:"pass_code,omitempty"`
 	Logs         []string `json:"logs,omitempty"` // last 3 log lines
 }
 
@@ -63,37 +84,128 @@ type Field struct {
 }
 
 // Model registry - easy to add new models
+var commonTempFields = []Field{
+	{Name: "ck", Label: "Central Kitchen", Type: "number", Required: true},
+	{Name: "area", Label: "Area ID", Type: "number", Required: true},
+	{Name: "interval", Label: "Interval (ms)", Type: "number", Required: true},
+}
+
 var modelRegistry = map[string]ModelConfig{
 	"TEMP": {
-		Name:        "TEMP",
-		DisplayName: "Temperature Sensor",
-		Command:     "set_threshold",
-		Fields: []Field{
-			{Name: "min", Label: "Min Temp (°C)", Type: "number", Required: true, Step: floatPtr(0.1)},
-			{Name: "max", Label: "Max Temp (°C)", Type: "number", Required: true, Step: floatPtr(0.1)},
-			{Name: "ck", Label: "CK", Type: "text", Required: true},
-			{Name: "area", Label: "Area", Type: "text", Required: true},
-			{Name: "no", Label: "No", Type: "text", Required: true},
-		},
+		Name: "TEMP", DisplayName: "Temperature Sensor (Base)", Command: "set_config",
+		Fields: append(commonTempFields, []Field{
+			{Name: "min0", Label: "Min T1", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "max0", Label: "Max T1", Type: "number", Required: false, Step: floatPtr(0.1)},
+		}...),
+	},
+	"M1": {
+		Name: "M1", DisplayName: "TEMP-M1 (1 DS)", Command: "set_config",
+		Fields: append(commonTempFields, []Field{
+			{Name: "min0", Label: "Min T1", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "max0", Label: "Max T1", Type: "number", Required: false, Step: floatPtr(0.1)},
+		}...),
+	},
+	"M3": {
+		Name: "M3", DisplayName: "TEMP-M3 (2 DS + 2 Prox)", Command: "set_config",
+		Fields: append(commonTempFields, []Field{
+			{Name: "min0", Label: "Min T1", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "max0", Label: "Max T1", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "min1", Label: "Min T2", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "max1", Label: "Max T2", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "prox_nc0", Label: "Prox 1 (0:NO, 1:NC)", Type: "number", Required: false},
+			{Name: "prox_nc1", Label: "Prox 2 (0:NO, 1:NC)", Type: "number", Required: false},
+		}...),
+	},
+	"M4": {
+		Name: "M4", DisplayName: "TEMP-M4 (Multi DS)", Command: "set_config",
+		Fields: append(commonTempFields, []Field{
+			{Name: "min0", Label: "Min T1", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "max0", Label: "Max T1", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "min1", Label: "Min T2", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "max1", Label: "Max T2", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "min2", Label: "Min T3", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "max2", Label: "Max T3", Type: "number", Required: false, Step: floatPtr(0.1)},
+		}...),
+	},
+	"M5": {
+		Name: "M5", DisplayName: "TEMP-M5 (1 DS + 2 Prox)", Command: "set_config",
+		Fields: append(commonTempFields, []Field{
+			{Name: "min0", Label: "Min T1", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "max0", Label: "Max T1", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "prox_nc0", Label: "Prox 1 (0:NO, 1:NC)", Type: "number", Required: false},
+			{Name: "prox_nc1", Label: "Prox 2 (0:NO, 1:NC)", Type: "number", Required: false},
+		}...),
+	},
+	"M6": {
+		Name: "M6", DisplayName: "TEMP-M6 (1 DS + 1 Prox)", Command: "set_config",
+		Fields: append(commonTempFields, []Field{
+			{Name: "min0", Label: "Min T1", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "max0", Label: "Max T1", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "prox_nc0", Label: "Prox 1 (0:NO, 1:NC)", Type: "number", Required: false},
+		}...),
+	},
+	"M7": {
+		Name: "M7", DisplayName: "TEMP-M7 (1 Prox)", Command: "set_config",
+		Fields: append(commonTempFields, []Field{
+			{Name: "prox_nc0", Label: "Prox 1 (0:NO, 1:NC)", Type: "number", Required: false},
+		}...),
+	},
+	"M10": {
+		Name: "M10", DisplayName: "TEMP-M10 (2 DS)", Command: "set_config",
+		Fields: append(commonTempFields, []Field{
+			{Name: "min0", Label: "Min T1", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "max0", Label: "Max T1", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "min1", Label: "Min T2", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "max1", Label: "Max T2", Type: "number", Required: false, Step: floatPtr(0.1)},
+		}...),
+	},
+	"M11": {
+		Name: "M11", DisplayName: "TEMP-M11 (2 Prox)", Command: "set_config",
+		Fields: append(commonTempFields, []Field{
+			{Name: "prox_nc0", Label: "Prox 1 (0:NO, 1:NC)", Type: "number", Required: false},
+			{Name: "prox_nc1", Label: "Prox 2 (0:NO, 1:NC)", Type: "number", Required: false},
+		}...),
 	},
 	"MDCW": {
 		Name:        "MDCW",
-		DisplayName: "MDCW Device",
+		DisplayName: "MDCW Weighing",
 		Command:     "set_config",
 		Fields: []Field{
-			{Name: "prefix", Label: "Prefix (Node Name)", Type: "text", Required: true, Placeholder: "e.g., NODE_A"},
+			{Name: "prefix", Label: "Device Prefix", Type: "text", Required: true, Placeholder: "e.g., MDCW_01"},
+			{Name: "interval", Label: "Interval (ms)", Type: "number", Required: true},
 		},
 	},
-	// Easy to add more models here!
-	// "DOOR": {
-	//     Name:        "DOOR",
-	//     DisplayName: "Door Sensor",
-	//     Command:     "set_door_config",
-	//     Fields: []Field{
-	//         {Name: "zone", Label: "Zone", Type: "text", Required: true},
-	//         {Name: "alert_delay", Label: "Alert Delay (seconds)", Type: "number", Required: true},
-	//     },
-	// },
+	"V1": {
+		Name:        "V1",
+		DisplayName: "MDCW V1 (Standard)",
+		Command:     "set_config",
+		Fields: []Field{
+			{Name: "prefix", Label: "Device Prefix", Type: "text", Required: true, Placeholder: "e.g., MDCW_01"},
+			{Name: "interval", Label: "Interval (ms)", Type: "number", Required: true},
+		},
+	},
+	"V2": {
+		Name:        "V2",
+		DisplayName: "MDCW V2 (Prox)",
+		Command:     "set_config",
+		Fields: []Field{
+			{Name: "prefix", Label: "Device Prefix", Type: "text", Required: true, Placeholder: "e.g., MDCW_01"},
+			{Name: "interval", Label: "Interval (ms)", Type: "number", Required: true},
+			{Name: "prox_nc0", Label: "Prox 1 (0:NO, 1:NC)", Type: "number", Required: false},
+			{Name: "prox_nc1", Label: "Prox 2 (0:NO, 1:NC)", Type: "number", Required: false},
+			{Name: "prox_nc2", Label: "Prox 3 (0:NO, 1:NC)", Type: "number", Required: false},
+		},
+	},
+	"TROLI": {
+		Name:        "TROLI",
+		DisplayName: "Troli Scanner (Mode A/B)",
+		Command:     "set_config",
+		Fields: []Field{
+			{Name: "app_mode", Label: "App Mode", Type: "select", Required: true, Options: []string{"A", "B"}},
+			{Name: "trans", Label: "Trans (IN/OUT) - Mode A Only", Type: "select", Required: false, Options: []string{"IN", "OUT"}},
+			{Name: "pass_code", Label: "Target Product Code - Mode B", Type: "text", Required: false, Placeholder: "e.g., 100209"},
+		},
+	},
 }
 
 // Helper function for float pointer
@@ -112,7 +224,16 @@ var (
 	store            *session.Store
 	telegramBotToken string
 	telegramChatID   string
+
+	// Webhook Key (Optional security)
+	webhookToken string
 )
+
+type EMQXWebhook struct {
+	Event    string `json:"event"`
+	ClientID string `json:"clientid"`
+	Reason   string `json:"reason,omitempty"`
+}
 
 var macRegex = regexp.MustCompile(`[0-9a-fA-F]{12}`)
 
@@ -126,13 +247,18 @@ func getEnv(key, def string) string {
 
 func main() {
 	// ensure upload dir
-	if err := os.MkdirAll("static/uploads", 0755); err != nil {
+	targetDir := filepath.Join("static", "uploads")
+	if err := os.MkdirAll(targetDir, 0755); err != nil {
 		log.Fatalf("failed to create upload directory: %v", err)
 	}
+
+	// Clean registry and sync with disk on startup
+	loadInitialFiles(targetDir)
 
 	// --- Auth Config ---
 	telegramBotToken = getEnv("TELE_BOT_OTA", "")
 	telegramChatID = getEnv("TELEGRAM_CHAT_ID", "")
+	webhookToken = getEnv("WEBHOOK_TOKEN", "")
 	if telegramBotToken == "" || telegramChatID == "" {
 		log.Println("Peringatan: TELE_BOT_OTA atau TELEGRAM_CHAT_ID tidak diatur. Fitur login tidak akan berfungsi.")
 	}
@@ -154,7 +280,8 @@ func main() {
 	loadInitialFiles("static/uploads")
 	engine := html.New("./views", ".html")
 	app := fiber.New(fiber.Config{
-		Views: engine,
+		Views:     engine,
+		BodyLimit: 100 * 1024 * 1024, // 100MB Limit
 	})
 
 	// static assets & files
@@ -165,6 +292,7 @@ func main() {
 	app.Get("/login", handleShowLogin)
 	app.Post("/login", handleLogin)
 	app.Post("/request-code", handleRequestCode)
+	app.Post("/api/webhook/emqx", handleEMQXWebhook)
 
 	// --- Protected Routes ---
 	// Grup ini memerlukan autentikasi
@@ -173,13 +301,13 @@ func main() {
 
 	protected.Get("/", func(c *fiber.Ctx) error {
 		brokerHost := getEnv("MQTT_BROKER", "")
+		serverName := getEnv("SERVER_NAME", "ren_itdt_west")
 		return c.Render("index", fiber.Map{
 			"broker":     brokerHost,
-			"serverName": "ren_itdt_west",
+			"serverName": serverName,
 		})
 	})
 
-	protected.Get("/database", handleDatabaseRedirect)
 	protected.Post("/logout", handleLogout)
 
 	api := protected.Group("/api")
@@ -221,12 +349,17 @@ func main() {
 		now := time.Now()
 		for _, info := range latestNodes {
 			if info.Updated != "" {
-				updatedTime, err := time.Parse("2006-01-02 15:04:05", info.Updated)
+				// FIX: Gunakan time.Local agar parsing sesuai dengan timezone server
+				updatedTime, err := time.ParseInLocation("2006-01-02 15:04:05", info.Updated, time.Local)
 				if err == nil {
-					if now.Sub(updatedTime) > 10*time.Second {
-						info.Status = "offline" // Mark as offline if older than 10s
+					// Fallback: Jika tidak ada update selama 45 detik (Heartbeat alat 30s), tandai offline
+					if info.Status != "offline" && now.Sub(updatedTime) > 45*time.Second {
+						info.Status = "offline"
 					}
 				}
+			} else {
+				// No update record yet? Default to offline
+				info.Status = "offline"
 			}
 		}
 
@@ -294,8 +427,48 @@ func main() {
 
 	// API: files list
 	api.Get("/files", func(c *fiber.Ctx) error {
-		fileMutex.RLock()
-		defer fileMutex.RUnlock()
+		fileMutex.Lock()
+		defer fileMutex.Unlock()
+
+		targetDir := filepath.Join("static", "uploads")
+		// 1. Get current files on disk
+		entries, err := os.ReadDir(targetDir)
+		diskFiles := make(map[string]bool)
+		if err == nil {
+			for _, entry := range entries {
+				if !entry.IsDir() {
+					diskFiles[entry.Name()] = true
+				}
+			}
+		}
+
+		// 2. Clean registry: remove if not on disk
+		tempMap := make(map[string]FileInfo)
+		for name, info := range fileInfos {
+			if diskFiles[name] {
+				tempMap[name] = info
+			} else {
+				log.Printf("[SYNC] Removing stale entry: %s", name)
+			}
+		}
+		fileInfos = tempMap
+
+		// 3. Add to registry: if on disk but not in map (e.g. manual upload)
+		for name := range diskFiles {
+			if _, exists := fileInfos[name]; !exists {
+				info, err := os.Stat(filepath.Join(targetDir, name))
+				if err == nil {
+					log.Printf("[SYNC] Adding missing disk file: %s", name)
+					fileInfos[name] = FileInfo{
+						Name:       name,
+						URL:        "/files/" + name,
+						UploadTime: info.ModTime(),
+					}
+				}
+			}
+		}
+
+		// 4. Return sorted/current list
 		files := make([]FileInfo, 0, len(fileInfos))
 		for _, f := range fileInfos {
 			files = append(files, f)
@@ -304,9 +477,12 @@ func main() {
 	})
 
 	// DELETE file endpoint
-	api.Delete("/files/:name", func(c *fiber.Ctx) error {
-		name := c.Params("name")
-		// security: prevent path traversal
+	api.Delete("/files/*", func(c *fiber.Ctx) error {
+		name := c.Params("*")
+		if name == "" {
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "filename required"})
+		}
+		// security: prevent path traversal and ensure we only touch static/uploads
 		clean := filepath.Base(name)
 		path := filepath.Join("static", "uploads", clean)
 
@@ -314,9 +490,12 @@ func main() {
 		defer fileMutex.Unlock()
 
 		if _, err := os.Stat(path); os.IsNotExist(err) {
-			return c.Status(http.StatusNotFound).JSON(fiber.Map{"error": "file not found"})
+			// If file is missing from disk, still remove it from internal map for sync
+			delete(fileInfos, clean)
+			return c.Status(http.StatusNotFound).JSON(fiber.Map{"error": "file not found on disk, registry cleaned"})
 		}
 		if err := os.Remove(path); err != nil {
+			log.Printf("Failed to delete file %s: %v", path, err)
 			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "failed delete"})
 		}
 		delete(fileInfos, clean)
@@ -400,22 +579,38 @@ func main() {
 		// Get model from nodeStatus
 		nodeMutex.RLock()
 		model := ""
+		version := ""
 		if info, ok := nodeStatus[nodeID]; ok {
 			model = info.Model
+			version = info.Version
 		}
 		nodeMutex.RUnlock()
 
+		// Smart model detection: use variant from version if available
+		activeModel := model
+		if version != "" && strings.Contains(version, "-") {
+			parts := strings.Split(version, "-")
+			variant := parts[len(parts)-1]
+			if _, exists := modelRegistry[variant]; exists {
+				activeModel = variant
+			}
+		}
+
 		// Default to TEMP if no model specified
-		if model == "" {
-			model = "TEMP"
+		if activeModel == "" {
+			activeModel = "TEMP"
 		}
 
 		// Get model config from registry
-		modelConfig, exists := modelRegistry[model]
+		modelConfig, exists := modelRegistry[activeModel]
 		if !exists {
-			return c.Status(400).JSON(fiber.Map{
-				"error": fmt.Sprintf("unknown model: %s", model),
-			})
+			// Second fallback to base model
+			modelConfig, exists = modelRegistry[model]
+			if !exists {
+				return c.Status(400).JSON(fiber.Map{
+					"error": fmt.Sprintf("unknown model: %s", activeModel),
+				})
+			}
 		}
 
 		// Build payload dynamically based on model fields
@@ -440,6 +635,28 @@ func main() {
 						info.No = fmt.Sprint(value)
 					case "prefix":
 						info.Prefix = fmt.Sprint(value)
+					case "interval":
+						if f, ok := value.(float64); ok {
+							info.Interval = uint64(f)
+						}
+					case "prox_nc0":
+						if f, ok := value.(float64); ok {
+							info.ProxNc0 = int(f)
+						}
+					case "prox_nc1":
+						if f, ok := value.(float64); ok {
+							info.ProxNc1 = int(f)
+						}
+					case "prox_nc2":
+						if f, ok := value.(float64); ok {
+							info.ProxNc2 = int(f)
+						}
+					case "app_mode":
+						info.AppMode = fmt.Sprint(value)
+					case "trans":
+						info.Trans = fmt.Sprint(value)
+					case "pass_code":
+						info.PassCode = fmt.Sprint(value)
 					}
 				}
 				nodeMutex.Unlock()
@@ -489,6 +706,26 @@ func main() {
 		return c.JSON(fiber.Map{"status": "OTA triggered", "topic": topic})
 	})
 
+	// Reboot trigger
+	protected.Post("/reboot", func(c *fiber.Ctx) error {
+		type R struct {
+			Node string `json:"node"`
+		}
+		var r R
+		if err := c.BodyParser(&r); err != nil {
+			return c.Status(400).JSON(fiber.Map{"error": "invalid body"})
+		}
+		payload := map[string]interface{}{"cmd": "reboot"}
+		b, err := json.Marshal(payload)
+		if err != nil {
+			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create payload"})
+		}
+		topic := fmt.Sprintf("nodes/%s/command", r.Node)
+		token := mqttClient.Publish(topic, 0, false, b)
+		token.Wait()
+		return c.JSON(fiber.Map{"status": "Reboot triggered", "topic": topic})
+	})
+
 	// logs endpoint (last 3 lines)
 	protected.Get("/logs/:id", func(c *fiber.Ctx) error {
 		id := c.Params("id")
@@ -502,7 +739,7 @@ func main() {
 
 	// Forwarder proxy endpoint
 	protected.Get("/forwarder/status", func(c *fiber.Ctx) error {
-		forwarderURL := getEnv("FORWARDER_URL", "http://forwarder:8888/forwarder/status")
+		forwarderURL := getEnv("FORWARDER_URL", "http://backend:8000/forwarder/status")
 
 		resp, err := http.Get(forwarderURL)
 		if err != nil {
@@ -526,6 +763,25 @@ func main() {
 	// Start MQTT connection (non-blocking)
 	go initMQTT()
 
+	// Start background cleanup for very old offline nodes (e.g., every hour)
+	go func() {
+		ticker := time.NewTicker(1 * time.Hour)
+		for range ticker.C {
+			nodeMutex.Lock()
+			now := time.Now()
+			for id, info := range nodeStatus {
+				if info.Updated != "" {
+					updatedTime, err := time.Parse("2006-01-02 15:04:05", info.Updated)
+					if err == nil && now.Sub(updatedTime) > 7*24*time.Hour {
+						log.Printf("Cleaning up old node: %s", id)
+						delete(nodeStatus, id)
+					}
+				}
+			}
+			nodeMutex.Unlock()
+		}
+	}()
+
 	// Listen
 	log.Fatal(app.Listen("0.0.0.0:9999"))
 }
@@ -544,12 +800,7 @@ func requireAuth(c *fiber.Ctx) error {
 }
 
 func handleShowLogin(c *fiber.Ctx) error {
-	sess, _ := store.Get(c)
-	// Jika sudah login, langsung arahkan ke halaman utama
-	if sess.Get("authenticated") == true {
-		return c.Redirect("/")
-	}
-	return c.Render("login", fiber.Map{})
+	return c.Render("login", nil)
 }
 
 func handleLogin(c *fiber.Ctx) error {
@@ -558,29 +809,44 @@ func handleLogin(c *fiber.Ctx) error {
 		return c.Status(http.StatusInternalServerError).SendString("Session error")
 	}
 
-	submittedCode := c.FormValue("code")
+	submittedCode := strings.ToLower(c.FormValue("code"))
 	if submittedCode == "" {
 		return c.Render("login", fiber.Map{"error": "Kode tidak boleh kosong."})
 	}
 
 	// Ambil kode dari sesi
-	authCode := sess.Get("auth_code")
-	authExpires := sess.Get("auth_expires")
+	authCodeVal := sess.Get("auth_code")
+	authExpiresVal := sess.Get("auth_expires")
 
-	if authCode == nil || authExpires == nil {
-		return c.Render("login", fiber.Map{"error": "Kode verifikasi salah atau sudah kedaluwarsa."})
+	if authCodeVal == nil || authExpiresVal == nil {
+		return c.Render("login", fiber.Map{"error": "Sesi tidak ditemukan. Silakan minta kode baru."})
 	}
 
-	// Convert Unix timestamp back to time.Time
-	expiryUnix, ok := authExpires.(int64)
-	if !ok {
-		return c.Render("login", fiber.Map{"error": "Kode verifikasi salah atau sudah kedaluwarsa."})
+	authCode, ok1 := authCodeVal.(string)
+
+	// Robust expiry check (handle int, int64, float64 types)
+	var expiryUnix int64
+	var ok2 bool
+	switch v := authExpiresVal.(type) {
+	case int64:
+		expiryUnix = v
+		ok2 = true
+	case int:
+		expiryUnix = int64(v)
+		ok2 = true
+	case float64:
+		expiryUnix = int64(v)
+		ok2 = true
+	}
+
+	if !ok1 || !ok2 {
+		return c.Render("login", fiber.Map{"error": "Data sesi korup. Silakan minta kode baru."})
 	}
 
 	expiryTime := time.Unix(expiryUnix, 0)
 
-	if authCode.(string) != submittedCode || time.Now().After(expiryTime) {
-		return c.Render("login", fiber.Map{"error": "Kode verifikasi salah atau sudah kedaluwarsa."})
+	if authCode != submittedCode || time.Now().After(expiryTime) {
+		return c.Render("login", fiber.Map{"error": "Kode verifikasi salah atau sudah kadaluarsa."})
 	}
 
 	// Kode valid, hapus dari sesi dan set status login
@@ -601,11 +867,6 @@ func handleLogout(c *fiber.Ctx) error {
 	}
 	sess.Destroy()
 	return c.Redirect("/login")
-}
-
-func handleDatabaseRedirect(c *fiber.Ctx) error {
-	// Redirect to pgweb on localhost
-	return c.Redirect("http://localhost:8080", http.StatusFound)
 }
 
 func handleRequestCode(c *fiber.Ctx) error {
@@ -638,8 +899,8 @@ func handleRequestCode(c *fiber.Ctx) error {
 
 	log.Printf("Code generated and saved: %s", code)
 
-	// Kirim kode ke Telegram
-	message := fmt.Sprintf("Kode verifikasi Anda untuk IoT OTA adalah: `%s`\nKode ini berlaku selama 5 menit.", code)
+	// Kirim kode ke Telegram dalam gaya JSON
+	message := fmt.Sprintf("```json\n{\n  \"event\": \"AUTH_CODE_GENERATED\",\n  \"service\": \"OTA_CORE\",\n  \"auth_code\": \"%s\",\n  \"expires\": \"5m\",\n  \"status\": \"pending\"\n}\n```", code)
 	go sendTelegramMessage(message)
 
 	return c.JSON(fiber.Map{"status": "ok"})
@@ -770,19 +1031,37 @@ func mqttHandler(client mqtt.Client, msg mqtt.Message) {
 		newMacMatches := macRegex.FindAllString(nodeID, -1)
 		if len(newMacMatches) > 0 {
 			newMac := newMacMatches[len(newMacMatches)-1]
-			// Find the old node ID with the same MAC
 			for oldID, oldInfo := range nodeStatus {
 				if oldID == nodeID {
 					continue
 				}
 				oldMacMatches := macRegex.FindAllString(oldID, -1)
 				if len(oldMacMatches) > 0 && oldMacMatches[len(oldMacMatches)-1] == newMac {
-					// Found an old node for this MAC. Migrate data and delete it.
-					log.Printf("Migrating config from old node '%s' to new node '%s'", oldID, nodeID)
-					newNodeInfo := &NodeInfo{Ck: oldInfo.Ck, Area: oldInfo.Area, No: oldInfo.No, Prefix: oldInfo.Prefix}
+					log.Printf("MAC match! Migrating '%s' -> '%s'", oldID, nodeID)
+					// Copy all fields to new node ID entry
+					newNodeInfo := &NodeInfo{
+						Ck:           oldInfo.Ck,
+						Area:         oldInfo.Area,
+						No:           oldInfo.No,
+						Min:          oldInfo.Min,
+						Max:          oldInfo.Max,
+						Interval:     oldInfo.Interval,
+						Prefix:       oldInfo.Prefix,
+						Model:        oldInfo.Model,
+						Version:      oldInfo.Version,
+						AppMode:      oldInfo.AppMode,
+						Trans:        oldInfo.Trans,
+						PassCode:     oldInfo.PassCode,
+						IP:           oldInfo.IP,
+						RamFreeBytes: oldInfo.RamFreeBytes,
+						SD_OK:        oldInfo.SD_OK,
+						Logs:         oldInfo.Logs,
+						Status:       "online",
+						Updated:      now,
+					}
 					nodeStatus[nodeID] = newNodeInfo
 					delete(nodeStatus, oldID)
-					break // Assume only one old node per MAC
+					break
 				}
 			}
 		}
@@ -806,24 +1085,140 @@ func mqttHandler(client mqtt.Client, msg mqtt.Message) {
 				if mod, ex := m["model"]; ex {
 					info.Model = fmt.Sprintf("%v", mod)
 				}
+				if v, ex := m["ver"]; ex {
+					info.Version = fmt.Sprintf("%v", v)
+				}
+				if ip, ex := m["ip"]; ex {
+					info.IP = fmt.Sprintf("%v", ip)
+				}
 				if p, ex := m["prefix"]; ex {
 					info.Prefix = fmt.Sprintf("%v", p)
 				}
+				// Handle nested "conf" object if present
+				if conf, ex := m["conf"]; ex {
+					if cm, ok := conf.(map[string]interface{}); ok {
+						if v, ok := cm["ck"]; ok {
+							info.Ck = fmt.Sprintf("%v", v)
+						}
+						if v, ok := cm["area"]; ok {
+							info.Area = fmt.Sprintf("%v", v)
+						}
+						if v, ok := cm["no"]; ok {
+							info.No = fmt.Sprintf("%v", v)
+						}
+						if v, ok := cm["min"]; ok {
+							if f, ok := v.(float64); ok {
+								info.Min = f
+							}
+						}
+						if v, ok := cm["max"]; ok {
+							if f, ok := v.(float64); ok {
+								info.Max = f
+							}
+						}
+						// Multi-thresholds
+						for i := 0; i < 5; i++ {
+							minKey := fmt.Sprintf("min%d", i)
+							maxKey := fmt.Sprintf("max%d", i)
+							if v, ok := cm[minKey]; ok {
+								if f, ok := v.(float64); ok {
+									switch i {
+									case 0:
+										info.Min0 = f
+									case 1:
+										info.Min1 = f
+									case 2:
+										info.Min2 = f
+									case 3:
+										info.Min3 = f
+									case 4:
+										info.Min4 = f
+									}
+								}
+							}
+							if v, ok := cm[maxKey]; ok {
+								if f, ok := v.(float64); ok {
+									switch i {
+									case 0:
+										info.Max0 = f
+									case 1:
+										info.Max1 = f
+									case 2:
+										info.Max2 = f
+									case 3:
+										info.Max3 = f
+									case 4:
+										info.Max4 = f
+									}
+								}
+							}
+						}
+						if v, ok := cm["prefix"]; ok {
+							info.Prefix = fmt.Sprintf("%v", v)
+						}
+						if v, ok := cm["interval"]; ok {
+							if f, ok := v.(float64); ok {
+								info.Interval = uint64(f)
+							}
+						}
+						// Proximity NC/NO
+						for i := 0; i < 3; i++ {
+							key := fmt.Sprintf("prox_nc%d", i)
+							if v, ok := cm[key]; ok {
+								if f, ok := v.(float64); ok {
+									switch i {
+									case 0:
+										info.ProxNc0 = int(f)
+									case 1:
+										info.ProxNc1 = int(f)
+									case 2:
+										info.ProxNc2 = int(f)
+									}
+								}
+							}
+							// Troli specific fields
+							if v, ok := cm["app_mode"]; ok {
+								info.AppMode = fmt.Sprintf("%v", v)
+							}
+							if v, ok := cm["trans"]; ok {
+								info.Trans = fmt.Sprintf("%v", v)
+							}
+							if v, ok := cm["pass_code"]; ok {
+								info.PassCode = fmt.Sprintf("%v", v)
+							}
+						}
+					}
+				} else {
+					info.Status = fmt.Sprintf("%v", tmp)
+				}
 			} else {
-				info.Status = fmt.Sprintf("%v", tmp)
+				info.Status = string(raw)
 			}
-		} else {
-			info.Status = string(raw)
+			info.Updated = now
 		}
-		info.Updated = now
-
 	case "monitor":
+		// User: "serial monitor dari /monitor"
+		// Append monitor payload to logs as well
+		monStr := string(raw)
+		info.Logs = append(info.Logs, "[MON] "+monStr)
+		if len(info.Logs) > 10 { // Allow more logs for serial monitor
+			info.Logs = info.Logs[len(info.Logs)-10:]
+		}
+
 		var m map[string]interface{}
 		if err := json.Unmarshal(raw, &m); err == nil {
-			if v, ok := m["ram_free_bytes"]; ok {
-				if val, ok := v.(float64); ok { // JSON numbers are float64 by default
+			if v, ok := m["ram"]; ok {
+				if val, ok := v.(float64); ok {
 					info.RamFreeBytes = int64(val)
 				}
+			}
+			if v, ok := m["ram_free_bytes"]; ok {
+				if val, ok := v.(float64); ok {
+					info.RamFreeBytes = int64(val)
+				}
+			}
+			if v, ok := m["ip"]; ok {
+				info.IP = fmt.Sprintf("%v", v)
 			}
 			if v, ok := m["sd_ok"]; ok {
 				if b, ok := v.(bool); ok {
@@ -836,22 +1231,16 @@ func mqttHandler(client mqtt.Client, msg mqtt.Message) {
 			if v, ok := m["prefix"]; ok {
 				info.Prefix = fmt.Sprintf("%v", v)
 			}
-			// optionally parse other fields if present
 		}
-		// Log if unmarshal fails, to help debug malformed payloads from devices
-		// else { log.Printf("failed to unmarshal monitor payload from %s: %s", nodeID, string(raw)) }
 		info.Updated = now
 
 	case "log":
-		// log lines are text; append and keep last 3
 		line := string(raw)
-		// sanitize: trim
 		line = strings.TrimSpace(line)
 		if line != "" {
-			// append
-			info.Logs = append(info.Logs, line)
-			if len(info.Logs) > 3 {
-				info.Logs = info.Logs[len(info.Logs)-3:]
+			info.Logs = append(info.Logs, "[LOG] "+line)
+			if len(info.Logs) > 10 {
+				info.Logs = info.Logs[len(info.Logs)-10:]
 			}
 			info.Updated = now
 		}
@@ -859,4 +1248,61 @@ func mqttHandler(client mqtt.Client, msg mqtt.Message) {
 		// ignore
 	}
 	nodeStatus[nodeID] = info
+}
+
+func handleEMQXWebhook(c *fiber.Ctx) error {
+	// Optional security check
+	if webhookToken != "" && c.Get("X-Webhook-Token") != webhookToken {
+		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
+	}
+
+	var payload EMQXWebhook
+	if err := c.BodyParser(&payload); err != nil {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "cannot parse body"})
+	}
+
+	nodeID := payload.ClientID
+	if nodeID == "" {
+		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "empty clientid"})
+	}
+
+	// FILTER: Ignore technical client IDs unless they already exist as valid nodes
+	isTechnical := strings.HasPrefix(nodeID, "web-") ||
+		strings.HasPrefix(nodeID, "megdev-") ||
+		strings.HasPrefix(nodeID, "servfi-") ||
+		strings.HasPrefix(nodeID, "forming-") ||
+		strings.HasPrefix(nodeID, "forwarder-")
+
+	nodeMutex.Lock()
+	defer nodeMutex.Unlock()
+
+	exists := false
+	if _, ok := nodeStatus[nodeID]; ok {
+		exists = ok
+	}
+
+	if isTechnical && !exists {
+		return c.JSON(fiber.Map{"status": "ignored", "reason": "technical_client"})
+	}
+
+	if !exists {
+		nodeStatus[nodeID] = &NodeInfo{}
+	}
+	info := nodeStatus[nodeID]
+
+	now := time.Now().Format("2006-01-02 15:04:05")
+	info.Updated = now
+
+	switch payload.Event {
+	case "client.connected":
+		info.Status = "online"
+		log.Printf("Webhook: Node %s connected", nodeID)
+	case "client.disconnected":
+		info.Status = "offline"
+		log.Printf("Webhook: Node %s disconnected (reason: %s)", nodeID, payload.Reason)
+	default:
+		return c.JSON(fiber.Map{"status": "ignored", "event": payload.Event})
+	}
+
+	return c.JSON(fiber.Map{"status": "ok"})
 }

@@ -12,6 +12,7 @@ import (
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
+	"github.com/gofiber/fiber/v2/middleware/session"
 	"github.com/gofiber/template/html/v2"
 	_ "github.com/lib/pq"
 )
@@ -25,11 +26,16 @@ func getEnv(key, fallback string) string {
 
 // Payload structure matching the JSON from IoT device
 type Payload struct {
-	Ts     string `json:"ts"`     // Timestamp: YYYY-MM-DD HH:MM:SS
-	Reg2   int    `json:"reg2"`   // Total Pack Count (pieces)
-	Reg5   int    `json:"reg5"`   // Status Code: 1=OK, 2=Under, 3=Over
-	Reg114 int    `json:"reg114"` // Weight in grams
-	Prefix string `json:"prefix"` // Node prefix identifier
+	Ts     interface{} `json:"ts"` // Can be string or number (millis)
+	Reg2   int         `json:"reg2"`
+	Reg5   int         `json:"reg5"`
+	Reg114 int         `json:"reg114"`
+	Prefix string      `json:"prefix"`
+	Data   struct {
+		Reg2   int `json:"reg2"`
+		Reg5   int `json:"reg5"`
+		Reg114 int `json:"reg114"`
+	} `json:"data"`
 }
 
 // Record structure for database rows
@@ -45,6 +51,12 @@ type Record struct {
 }
 
 var db *sql.DB
+var store = session.New()
+
+type AdminLogin struct {
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
 
 func main() {
 	// --- Google Sheets Integration ---
@@ -142,7 +154,7 @@ func main() {
 	app.Get("/", func(c *fiber.Ctx) error {
 		log.Println("Rendering index template...")
 		return c.Render("index", fiber.Map{
-			"Title": "Dashboard Ringan",
+			"Title": "MDCW Production Monitor",
 			"Time":  time.Now().Format("15:04:05"),
 		})
 	})
@@ -247,7 +259,30 @@ func messagePubHandler(client mqtt.Client, msg mqtt.Message) {
 		return
 	}
 
-	insertData(payload)
+	// Support nested hierarchical structure from new firmware
+	if payload.Reg2 == 0 && payload.Data.Reg2 != 0 {
+		payload.Reg2 = payload.Data.Reg2
+	}
+	if payload.Reg5 == 0 && payload.Data.Reg5 != 0 {
+		payload.Reg5 = payload.Data.Reg5
+	}
+	if payload.Reg114 == 0 && payload.Data.Reg114 != 0 {
+		payload.Reg114 = payload.Data.Reg114
+	}
+
+	// Handle TS: if it's empty or a number (millis), replace with current server time format
+	nowStr := time.Now().Format("2006-01-02 15:04:05")
+	if payload.Ts == nil {
+		payload.Ts = nowStr
+	} else {
+		// If Ts is a string, keep it. If it's a number, it's likely millis(), so use server time
+		if _, ok := payload.Ts.(string); !ok {
+			payload.Ts = nowStr
+		}
+	}
+
+	// Jalankan insert ke DB secara async agar tidak memblokir MQTT handler
+	go insertData(payload)
 }
 
 func subscribe(client mqtt.Client) {
@@ -304,13 +339,15 @@ func insertData(p Payload) {
 		return
 	}
 
+	tsStr := fmt.Sprintf("%v", p.Ts)
+
 	// Skip data with weight = 0 and log it
 	if p.Reg114 == 0 {
-		log.Printf("[SKIP] Data with weight=0 from %s at %s (reg2=%d, reg5=%d)", p.Prefix, p.Ts, p.Reg2, p.Reg5)
+		log.Printf("[SKIP] Data with weight=0 from %s at %s (reg2=%d, reg5=%d)", p.Prefix, tsStr, p.Reg2, p.Reg5)
 
 		// Insert to skip_log
 		skipQuery := `INSERT INTO skip_log (ts, reg2, reg5, reg114, prefix, reason) VALUES ($1, $2, $3, $4, $5, $6)`
-		_, err := db.Exec(skipQuery, p.Ts, p.Reg2, p.Reg5, p.Reg114, p.Prefix, "Weight is zero")
+		_, err := db.Exec(skipQuery, tsStr, p.Reg2, p.Reg5, p.Reg114, p.Prefix, "Weight is zero")
 		if err != nil {
 			log.Println("Error logging skipped data:", err)
 		}
@@ -319,7 +356,7 @@ func insertData(p Payload) {
 
 	query := `INSERT INTO production_mdcw (ts, reg2, reg5, reg114, prefix) VALUES ($1, $2, $3, $4, $5)`
 
-	_, err := db.Exec(query, p.Ts, p.Reg2, p.Reg5, p.Reg114, p.Prefix)
+	_, err := db.Exec(query, tsStr, p.Reg2, p.Reg5, p.Reg114, p.Prefix)
 	if err != nil {
 		log.Println("Error inserting data:", err)
 	} else {
@@ -329,7 +366,7 @@ func insertData(p Payload) {
 		go func(payload Payload) {
 			// Convert to lib.Payload type
 			libPayload := lib.Payload{
-				Ts:     payload.Ts,
+				Ts:     fmt.Sprintf("%v", payload.Ts),
 				Reg2:   payload.Reg2,
 				Reg5:   payload.Reg5,
 				Reg114: payload.Reg114,

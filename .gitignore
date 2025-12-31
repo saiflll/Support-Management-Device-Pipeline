@@ -28,9 +28,7 @@ venv/
 # === Lingkungan & Konfigurasi ===
 # Abaikan berkas environment yang berisi data sensitif
 *.env
-.envi
-.envi.txt
-listmac.txt
-docs
-dev
 
+# listmac.txt
+# docs
+# dev
