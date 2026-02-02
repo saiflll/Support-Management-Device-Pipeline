@@ -105,6 +105,12 @@ var modelRegistry = map[string]ModelConfig{
 			{Name: "max0", Label: "Max T1", Type: "number", Required: false, Step: floatPtr(0.1)},
 		}...),
 	},
+	"M2": {
+		Name: "M2", DisplayName: "TEMP-M2 (Modbus + 1 Prox)", Command: "set_config",
+		Fields: append(commonTempFields, []Field{
+			{Name: "prox_nc0", Label: "Prox 1 (0:NO, 1:NC)", Type: "number", Required: false},
+		}...),
+	},
 	"M3": {
 		Name: "M3", DisplayName: "TEMP-M3 (2 DS + 2 Prox)", Command: "set_config",
 		Fields: append(commonTempFields, []Field{
@@ -117,7 +123,7 @@ var modelRegistry = map[string]ModelConfig{
 		}...),
 	},
 	"M4": {
-		Name: "M4", DisplayName: "TEMP-M4 (Multi DS)", Command: "set_config",
+		Name: "M4", DisplayName: "TEMP-M4 (3 DS + 1 Prox)", Command: "set_config",
 		Fields: append(commonTempFields, []Field{
 			{Name: "min0", Label: "Min T1", Type: "number", Required: false, Step: floatPtr(0.1)},
 			{Name: "max0", Label: "Max T1", Type: "number", Required: false, Step: floatPtr(0.1)},
@@ -125,6 +131,7 @@ var modelRegistry = map[string]ModelConfig{
 			{Name: "max1", Label: "Max T2", Type: "number", Required: false, Step: floatPtr(0.1)},
 			{Name: "min2", Label: "Min T3", Type: "number", Required: false, Step: floatPtr(0.1)},
 			{Name: "max2", Label: "Max T3", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "prox_nc0", Label: "Prox 1 (0:NO, 1:NC)", Type: "number", Required: false},
 		}...),
 	},
 	"M5": {
@@ -150,13 +157,25 @@ var modelRegistry = map[string]ModelConfig{
 			{Name: "prox_nc0", Label: "Prox 1 (0:NO, 1:NC)", Type: "number", Required: false},
 		}...),
 	},
+	"M8": {
+		Name: "M8", DisplayName: "TEMP-M8 (Modbus Only)", Command: "set_config",
+		Fields: commonTempFields,
+	},
+	"M9": {
+		Name: "M9", DisplayName: "TEMP-M9 (1 DS Only)", Command: "set_config",
+		Fields: append(commonTempFields, []Field{
+			{Name: "min0", Label: "Min T1", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "max0", Label: "Max T1", Type: "number", Required: false, Step: floatPtr(0.1)},
+		}...),
+	},
 	"M10": {
-		Name: "M10", DisplayName: "TEMP-M10 (2 DS)", Command: "set_config",
+		Name: "M10", DisplayName: "TEMP-M10 (2 DS + 1 Prox)", Command: "set_config",
 		Fields: append(commonTempFields, []Field{
 			{Name: "min0", Label: "Min T1", Type: "number", Required: false, Step: floatPtr(0.1)},
 			{Name: "max0", Label: "Max T1", Type: "number", Required: false, Step: floatPtr(0.1)},
 			{Name: "min1", Label: "Min T2", Type: "number", Required: false, Step: floatPtr(0.1)},
 			{Name: "max1", Label: "Max T2", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "prox_nc0", Label: "Prox 1 (0:NO, 1:NC)", Type: "number", Required: false},
 		}...),
 	},
 	"M11": {
