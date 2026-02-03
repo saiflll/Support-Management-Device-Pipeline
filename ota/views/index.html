@@ -225,6 +225,18 @@
                     </div>
                 </div>
 
+                <!-- Tools Row (Filter & Export) -->
+                <div class="flex items-center justify-between gap-4 border-b border-gray-800/50 pb-4">
+                     <div class="flex gap-2 w-full max-w-md">
+                        <input type="text" id="forwardFilter" placeholder="[FILTER_STREAM_BY_CK_OR_AREA]" 
+                               class="bg-black border border-gray-800 text-emerald-500 text-[10px] p-2 flex-1 focus:border-emerald-500 outline-none font-mono placeholder-gray-700">
+                     </div>
+                     <div class="flex gap-2">
+                        <button id="btn-refresh-fwd" class="btn-minimal text-accent border border-indigo-900/30 px-3 py-1.5 hover:bg-indigo-900/20">[FORCE_FETCH]</button>
+                        <button id="btn-export-csv" class="btn-minimal text-emerald-500 border border-emerald-900/30 px-3 py-1.5 hover:bg-emerald-900/20">[EXPORT_EXT_DATA_CSV]</button>
+                     </div>
+                </div>
+
                 <!-- Telemetry Stream -->
                 <div class="space-y-3">
                     <div class="text-[10px] text-gray-600 font-bold mb-2">TELEMETRY_PIPELINE_STREAM:</div>

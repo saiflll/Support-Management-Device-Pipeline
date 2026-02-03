@@ -159,6 +159,11 @@ document.addEventListener('DOMContentLoaded', () => {
   const fileInput = document.getElementById('fileInput');
   const fileNameLabel = document.getElementById('fileNameLabel');
 
+  // Forwarder Tools
+  document.getElementById('forwardFilter').addEventListener('input', renderForwarderBuffer);
+  document.getElementById('btn-refresh-fwd').addEventListener('click', updateForwarder);
+  document.getElementById('btn-export-csv').addEventListener('click', exportForwarderCSV);
+
   uploadForm.addEventListener('submit', async (e) => {
     e.preventDefault();
     const file = fileInput.files[0];

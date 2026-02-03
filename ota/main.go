@@ -676,6 +676,55 @@ func main() {
 						info.Trans = fmt.Sprint(value)
 					case "pass_code":
 						info.PassCode = fmt.Sprint(value)
+					// --- Fix: Added missing threshold fields ---
+					case "min":
+						if f, ok := value.(float64); ok {
+							info.Min = f
+						}
+					case "max":
+						if f, ok := value.(float64); ok {
+							info.Max = f
+						}
+					case "min0":
+						if f, ok := value.(float64); ok {
+							info.Min0 = f
+						}
+					case "max0":
+						if f, ok := value.(float64); ok {
+							info.Max0 = f
+						}
+					case "min1":
+						if f, ok := value.(float64); ok {
+							info.Min1 = f
+						}
+					case "max1":
+						if f, ok := value.(float64); ok {
+							info.Max1 = f
+						}
+					case "min2":
+						if f, ok := value.(float64); ok {
+							info.Min2 = f
+						}
+					case "max2":
+						if f, ok := value.(float64); ok {
+							info.Max2 = f
+						}
+					case "min3":
+						if f, ok := value.(float64); ok {
+							info.Min3 = f
+						}
+					case "max3":
+						if f, ok := value.(float64); ok {
+							info.Max3 = f
+						}
+					case "min4":
+						if f, ok := value.(float64); ok {
+							info.Min4 = f
+						}
+					case "max4":
+						if f, ok := value.(float64); ok {
+							info.Max4 = f
+						}
 					}
 				}
 				nodeMutex.Unlock()
