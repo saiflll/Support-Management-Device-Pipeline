@@ -900,14 +900,14 @@ func main() {
 }
 
 func requireAuth(c *fiber.Ctx) error {
-	// sess, err := store.Get(c)
-	// if err != nil {
-	// 	return c.Status(http.StatusInternalServerError).SendString("Session error")
-	// }
+	sess, err := store.Get(c)
+	if err != nil {
+		return c.Status(http.StatusInternalServerError).SendString("Session error")
+	}
 
-	// if sess.Get("authenticated") != true {
-	// 	return c.Redirect("/login")
-	// }
+	if sess.Get("authenticated") != true {
+		return c.Redirect("/login")
+	}
 
 	return c.Next()
 }
