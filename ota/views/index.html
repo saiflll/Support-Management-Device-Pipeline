@@ -184,18 +184,54 @@
                     </div>
                 </div>
 
-                <!-- Hidden Upload Form -->
-                <div id="uploadFormContainer" class="hidden border-b border-gray-800 pb-6 animate-fade-in">
-                    <form id="uploadForm" class="flex items-center gap-4">
-                        <input id="fileInput" type="file" class="hidden" />
-                        <label for="fileInput" class="btn-minimal cursor-pointer">
-                            [CHOOSE_FILE: <span id="fileNameLabel">NONE</span> ]
-                        </label>
-                        <button type="submit" class="btn-minimal text-accent">[UPLOAD_ASSETS :3]</button>
-                        <span id="uploadMsg" class="text-[10px] uppercase font-bold text-accent"></span>
-                    </form>
-                    <div id="fileList" class="mt-4 flex flex-wrap gap-2">
-                        <!-- Files via JS -->
+                <!-- Integrated Upload & Asset Vault -->
+                <div id="uploadFormContainer"
+                    class="hidden glass-panel border border-gray-800 rounded-lg p-6 mb-6 animate-fade-in shadow-2xl">
+                    <div
+                        class="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-8 border-b border-gray-800/50 pb-6">
+                        <div>
+                            <div class="flex items-center gap-2 mb-1">
+                                <svg class="w-5 h-5 text-indigo-400" fill="none" stroke="currentColor"
+                                    viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10">
+                                    </path>
+                                </svg>
+                                <h3 class="text-sm font-bold text-gray-200 tracking-wide uppercase">FIRMWARE_VAULT</h3>
+                            </div>
+                            <p class="text-[10px] text-gray-500 font-mono">MANAGE AND DEPLOY BINARY ASSETS FOR OTA
+                                DISTRIBUTIONS</p>
+                        </div>
+
+                        <form id="uploadForm" class="flex items-center gap-3">
+                            <input id="fileInput" type="file" class="hidden" />
+                            <label for="fileInput"
+                                class="flex items-center gap-2 bg-black border border-gray-700 px-3 py-2 rounded cursor-pointer hover:border-indigo-500 transition-all group">
+                                <svg class="w-4 h-4 text-gray-500 group-hover:text-indigo-400" fill="none"
+                                    stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                        d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.414a4 4 0 00-5.656-5.656l-6.415 6.414a6 6 0 108.486 8.486L20.5 13">
+                                    </path>
+                                </svg>
+                                <span id="fileNameLabel"
+                                    class="text-[10px] text-gray-400 font-mono truncate max-w-[150px]">SELECT_FIRMWARE</span>
+                            </label>
+                            <button type="submit"
+                                class="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded text-[10px] font-bold tracking-widest transition-all shadow-lg shadow-indigo-900/40">
+                                UPLOAD_BIN
+                            </button>
+                        </form>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div
+                            class="flex items-center gap-2 text-[10px] font-bold text-gray-500 uppercase tracking-widest mb-2">
+                            <span>REGISTERED_ASSETS:</span>
+                            <span id="uploadMsg" class="text-accent ml-auto"></span>
+                        </div>
+                        <div id="fileList" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                            <!-- Files via JS -->
+                        </div>
                     </div>
                 </div>
 

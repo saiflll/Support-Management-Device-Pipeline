@@ -1,7 +1,7 @@
 # ============================================
 # Stage 1: Build
 # ============================================
-ARG GOLANG_VERSION=1.25-alpine
+ARG GOLANG_VERSION=1.24-alpine
 FROM golang:${GOLANG_VERSION} AS builder
 
 WORKDIR /build

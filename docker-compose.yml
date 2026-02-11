@@ -86,7 +86,7 @@ services:
       context: ./ota
       dockerfile: Dockerfile
       args:
-        GOLANG_VERSION: 1.25-alpine
+        GOLANG_VERSION: 1.24-alpine
     ports:
       - "9999:9999"
     volumes:

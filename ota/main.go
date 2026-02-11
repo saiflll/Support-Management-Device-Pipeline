@@ -46,6 +46,7 @@ type NodeInfo struct {
 	ProxNc1      int      `json:"prox_nc1"`
 	ProxNc2      int      `json:"prox_nc2"`
 	Interval     uint64   `json:"interval,omitempty"`
+	Delay        uint64   `json:"delay,omitempty"`
 	IP           string   `json:"ip,omitempty"`
 	Updated      string   `json:"updated,omitempty"`
 	Model        string   `json:"model,omitempty"`
@@ -54,6 +55,8 @@ type NodeInfo struct {
 	AppMode      string   `json:"app_mode,omitempty"`
 	Trans        string   `json:"trans,omitempty"`
 	PassCode     string   `json:"pass_code,omitempty"`
+	MinRH        float64  `json:"min_rh,omitempty"`
+	MaxRH        float64  `json:"max_rh,omitempty"`
 	Logs         []string `json:"logs,omitempty"` // last 3 log lines
 }
 
@@ -61,6 +64,7 @@ type FileInfo struct {
 	Name       string    `json:"name"`
 	URL        string    `json:"url"`
 	UploadTime time.Time `json:"upload_time"`
+	Size       int64     `json:"size"`
 }
 
 // ModelConfig defines configuration fields for each model type
@@ -83,27 +87,21 @@ type Field struct {
 	Options     []string `json:"options,omitempty"` // for select type
 }
 
-// Model registry - easy to add new models
 var commonTempFields = []Field{
 	{Name: "ck", Label: "Central Kitchen", Type: "number", Required: true},
 	{Name: "area", Label: "Area ID", Type: "number", Required: true},
 	{Name: "interval", Label: "Interval (ms)", Type: "number", Required: true},
+	{Name: "delay", Label: "Prox Delay (ms)", Type: "number", Required: false},
 }
 
 var modelRegistry = map[string]ModelConfig{
 	"TEMP": {
 		Name: "TEMP", DisplayName: "Temperature Sensor (Base)", Command: "set_config",
-		Fields: []Field{
-			{Name: "node_prefix", Label: "Node Prefix", Type: "text", Required: true, Placeholder: "e.g., CK3-Factory"},
-			{Name: "sensor_interval", Label: "Sensor Interval (ms)", Type: "number", Required: true},
-			{Name: "status_interval", Label: "Status Interval (ms)", Type: "number", Required: false},
-			{Name: "ram_interval", Label: "RAM Interval (ms)", Type: "number", Required: false},
-			{Name: "display_brightness", Label: "Brightness (0-15)", Type: "slider", Required: false, Min: floatPtr(0), Max: floatPtr(15), Step: floatPtr(1)},
-			// Wifi/MQTT Configs (Optional)
-			{Name: "wifi_ssid", Label: "WiFi SSID", Type: "text", Required: false},
-			{Name: "wifi_pass", Label: "WiFi Pass", Type: "text", Required: false},
-			{Name: "mqtt_server", Label: "MQTT Server", Type: "text", Required: false},
-		},
+		Fields: append(commonTempFields, []Field{
+			{Name: "range0", Label: "Range T1", Type: "range", Required: false, Step: floatPtr(0.1), Min: floatPtr(-100), Max: floatPtr(100)},
+			{Name: "range1", Label: "Range T2", Type: "range", Required: false, Step: floatPtr(0.1), Min: floatPtr(-100), Max: floatPtr(100)},
+			{Name: "range_rh", Label: "Range RH (%)", Type: "range", Required: false, Step: floatPtr(1), Min: floatPtr(0), Max: floatPtr(100)},
+		}...),
 	},
 	"M1": {
 		Name: "M1", DisplayName: "TEMP-M1 (1 DS)", Command: "set_config",
@@ -448,42 +446,45 @@ func main() {
 		targetDir := filepath.Join("static", "uploads")
 		// 1. Get current files on disk
 		entries, err := os.ReadDir(targetDir)
-		diskFiles := make(map[string]bool)
 		if err == nil {
+			diskFiles := make(map[string]bool)
 			for _, entry := range entries {
 				if !entry.IsDir() {
 					diskFiles[entry.Name()] = true
 				}
 			}
-		}
 
-		// 2. Clean registry: remove if not on disk
-		tempMap := make(map[string]FileInfo)
-		for name, info := range fileInfos {
-			if diskFiles[name] {
-				tempMap[name] = info
-			} else {
-				log.Printf("[SYNC] Removing stale entry: %s", name)
+			// 2. Clean registry: remove items from memory if they are no longer on disk
+			tempMap := make(map[string]FileInfo)
+			for name, info := range fileInfos {
+				if diskFiles[name] {
+					tempMap[name] = info
+				} else {
+					log.Printf("[SYNC] Removing stale entry: %s", name)
+				}
 			}
-		}
-		fileInfos = tempMap
+			fileInfos = tempMap
 
-		// 3. Add to registry: if on disk but not in map (e.g. manual upload)
-		for name := range diskFiles {
-			if _, exists := fileInfos[name]; !exists {
-				info, err := os.Stat(filepath.Join(targetDir, name))
-				if err == nil {
-					log.Printf("[SYNC] Adding missing disk file: %s", name)
-					fileInfos[name] = FileInfo{
-						Name:       name,
-						URL:        "/files/" + name,
-						UploadTime: info.ModTime(),
+			// 3. Add to registry: if on disk but not in map (e.g. manual upload)
+			for name := range diskFiles {
+				if _, exists := fileInfos[name]; !exists {
+					info, err := os.Stat(filepath.Join(targetDir, name))
+					if err == nil {
+						log.Printf("[SYNC] Adding missing disk file: %s", name)
+						fileInfos[name] = FileInfo{
+							Name:       name,
+							URL:        "/files/" + name,
+							UploadTime: info.ModTime(),
+							Size:       info.Size(),
+						}
 					}
 				}
 			}
+		} else {
+			log.Printf("[SYNC] Warning: could not read upload directory: %v", err)
 		}
 
-		// 4. Return sorted/current list
+		// 4. Return sorted/current list from memory
 		files := make([]FileInfo, 0, len(fileInfos))
 		for _, f := range fileInfos {
 			files = append(files, f)
@@ -561,22 +562,30 @@ func main() {
 	protected.Post("/upload", func(c *fiber.Ctx) error {
 		f, err := c.FormFile("file")
 		if err != nil {
-			return c.Status(http.StatusBadRequest).SendString("file required")
+			log.Printf("Upload failed: %v", err)
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "file required"})
 		}
-		dst := filepath.Join("static", "uploads", filepath.Base(f.Filename))
+
+		// Security: Always use Base name to prevent path traversal and ensure consistency
+		baseName := filepath.Base(f.Filename)
+		dst := filepath.Join("static", "uploads", baseName)
+
 		if err := c.SaveFile(f, dst); err != nil {
-			return err
+			log.Printf("Failed to save file %s: %v", dst, err)
+			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "failed to save to disk"})
 		}
 
 		fileMutex.Lock()
 		defer fileMutex.Unlock()
-		fileInfos[f.Filename] = FileInfo{
-			Name:       f.Filename,
-			URL:        "/files/" + f.Filename,
+		fileInfos[baseName] = FileInfo{
+			Name:       baseName,
+			URL:        "/files/" + baseName,
 			UploadTime: time.Now(),
+			Size:       f.Size,
 		}
 
-		return c.JSON(fiber.Map{"status": "ok", "filename": f.Filename})
+		log.Printf("Successfully uploaded: %s as %s (%d bytes)", f.Filename, baseName, f.Size)
+		return c.JSON(fiber.Map{"status": "ok", "filename": baseName})
 	})
 
 	// Config -> publish to nodes/{id}/command (Dynamic model-based)
@@ -654,6 +663,10 @@ func main() {
 						if f, ok := value.(float64); ok {
 							info.Interval = uint64(f)
 						}
+					case "delay":
+						if f, ok := value.(float64); ok {
+							info.Delay = uint64(f)
+						}
 					case "prox_nc0":
 						if f, ok := value.(float64); ok {
 							info.ProxNc0 = int(f)
@@ -720,6 +733,15 @@ func main() {
 					case "max4":
 						if f, ok := value.(float64); ok {
 							info.Max4 = f
+						}
+					// --- RH Support ---
+					case "min_rh":
+						if f, ok := value.(float64); ok {
+							info.MinRH = f
+						}
+					case "max_rh":
+						if f, ok := value.(float64); ok {
+							info.MaxRH = f
 						}
 					}
 				}
@@ -1006,7 +1028,12 @@ func loadInitialFiles(dir string) {
 			info, err := entry.Info()
 			if err == nil {
 				name := info.Name()
-				fileInfos[name] = FileInfo{Name: name, URL: "/files/" + name, UploadTime: info.ModTime()}
+				fileInfos[name] = FileInfo{
+					Name:       name,
+					URL:        "/files/" + name,
+					UploadTime: info.ModTime(),
+					Size:       info.Size(),
+				}
 			}
 		}
 	}
@@ -1225,6 +1252,11 @@ func mqttHandler(client mqtt.Client, msg mqtt.Message) {
 								info.Interval = uint64(f)
 							}
 						}
+						if v, ok := cm["delay"]; ok {
+							if f, ok := v.(float64); ok {
+								info.Delay = uint64(f)
+							}
+						}
 						// Proximity NC/NO
 						for i := 0; i < 3; i++ {
 							key := fmt.Sprintf("prox_nc%d", i)
@@ -1249,6 +1281,17 @@ func mqttHandler(client mqtt.Client, msg mqtt.Message) {
 							}
 							if v, ok := cm["pass_code"]; ok {
 								info.PassCode = fmt.Sprintf("%v", v)
+							}
+						}
+						// RH specific parsing
+						if v, ok := cm["min_rh"]; ok {
+							if f, ok := v.(float64); ok {
+								info.MinRH = f
+							}
+						}
+						if v, ok := cm["max_rh"]; ok {
+							if f, ok := v.(float64); ok {
+								info.MaxRH = f
 							}
 						}
 					}

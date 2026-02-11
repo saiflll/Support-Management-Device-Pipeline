@@ -22,31 +22,55 @@ window.handleBtnClick = function (btn) {
   if (action === 'close-ota-modal') document.getElementById('otaModal').classList.add('hidden');
 };
 
+window._lastFilesJson = "";
+
 async function fetchFiles() {
   try {
     const res = await fetch('/api/files');
     const files = await res.json();
+
+    // Prevent "blink" if nothing changed
+    const currentJson = JSON.stringify(files);
+    if (currentJson === window._lastFilesJson) return;
+    window._lastFilesJson = currentJson;
+
     const fileList = document.getElementById('fileList');
     fileList.innerHTML = '';
+
     if (!files || files.length === 0) {
-      fileList.innerHTML = '<div class="text-[10px] text-slate-300 text-center py-12 italic uppercase tracking-[.25em] font-black opacity-60">Inventory Empty</div>';
+      fileList.innerHTML = `
+        <div class="col-span-full py-12 flex flex-col items-center justify-center border-2 border-dashed border-gray-800 rounded-lg opacity-40">
+            <svg class="w-8 h-8 mb-2 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+            <div class="text-[10px] uppercase font-bold tracking-widest text-gray-400">Inventory Empty</div>
+        </div>`;
       return;
     }
-    files.forEach(f => {
+
+    files.sort((a, b) => new Date(b.upload_time) - new Date(a.upload_time)).forEach(f => {
       const el = document.createElement('div');
-      el.className = 'flex items-center gap-1 animate-fade-in group';
+      el.className = 'group relative glass-panel border border-gray-800 p-3 rounded hover:border-indigo-500/50 transition-all animate-fade-in flex flex-col justify-between h-[100px] bg-black/40';
       const fileUrl = `${location.origin}/files/${f.name}`;
+      const uploadDate = new Date(f.upload_time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
+
       el.innerHTML = `
-        <div class="btn-minimal text-[10px] flex items-center gap-2 cursor-pointer select-none" 
-             title="Double click to copy link"
-             ondblclick="copyToClipboard('${fileUrl}', this)">
-          <span class="text-gray-500">FILE:</span>
-          <span>${escapeHtml(f.name)}</span>
+        <div class="flex justify-between items-start">
+            <div class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-indigo-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                <div class="truncate pr-2">
+                    <div class="text-[10px] font-bold text-gray-200 truncate" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</div>
+                    <div class="text-[9px] text-gray-500 font-mono mt-0.5 uppercase tracking-tighter">${uploadDate} • ${formatBytes(f.size || 0)}</div>
+                </div>
+            </div>
+            <button data-action="delete-file" data-name="${escapeHtml(f.name)}" class="p-1.5 text-gray-600 hover:text-red-500 hover:bg-red-500/10 rounded transition-all">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+            </button>
         </div>
-        <button data-action="delete-file" data-name="${escapeHtml(f.name)}" 
-                class="btn-minimal text-red-500 hover:bg-red-500/20 font-bold transition-all">
-          [X]
-        </button>
+        
+        <div class="mt-auto">
+            <button onclick="copyToClipboard('${fileUrl}', this)" class="w-full text-[9px] font-bold text-indigo-400/70 hover:text-indigo-300 bg-indigo-500/5 py-1 rounded border border-indigo-500/10 hover:border-indigo-500/30 transition-all font-mono">
+                COPY_URL
+            </button>
+        </div>
       `;
       fileList.appendChild(el);
     });
@@ -222,38 +246,60 @@ document.addEventListener('DOMContentLoaded', () => {
   setInterval(fetchFiles, 4000);
   setInterval(fetchNodes, 4000);
 
+  // Move upload listener before potentially crashing forwarder tools
   const uploadForm = document.getElementById('uploadForm');
   const fileInput = document.getElementById('fileInput');
   const fileNameLabel = document.getElementById('fileNameLabel');
 
-  // Forwarder Tools
-  document.getElementById('forwardFilter').addEventListener('input', renderForwarderBuffer);
-  document.getElementById('btn-refresh-fwd').addEventListener('click', updateForwarder);
-  document.getElementById('btn-export-csv').addEventListener('click', exportForwarderCSV);
-
-  uploadForm.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const file = fileInput.files[0];
-    if (!file) return;
-    const fd = new FormData();
-    fd.append('file', file);
-    document.getElementById('uploadMsg').textContent = 'TRANSMITTING ASSET...';
-    try {
-      const res = await fetch('/upload', { method: 'POST', body: fd });
-      if (res.ok) {
-        document.getElementById('uploadMsg').textContent = 'PACKET SAVED.';
-        uploadForm.reset();
-        fileNameLabel.textContent = "NONE";
-        setTimeout(() => {
-          document.getElementById('uploadMsg').textContent = '';
-          document.getElementById('uploadFormContainer').classList.add('hidden');
-          fetchFiles();
-        }, 1500);
-      } else {
-        document.getElementById('uploadMsg').textContent = 'ERROR IN TRANSMISSION.';
+  if (uploadForm) {
+    uploadForm.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const file = fileInput.files[0];
+      if (!file) {
+        document.getElementById('uploadMsg').textContent = 'SELECT FILE FIRST.';
+        return;
       }
-    } catch (err) { document.getElementById('uploadMsg').textContent = 'NETWORK FAILURE.'; }
-  });
+      const fd = new FormData();
+      fd.append('file', file);
+      document.getElementById('uploadMsg').textContent = 'TRANSMITTING ASSET...';
+      try {
+        const res = await fetch('/upload', { method: 'POST', body: fd });
+        if (res.ok) {
+          document.getElementById('uploadMsg').textContent = 'PACKET SAVED.';
+          uploadForm.reset();
+          if (fileNameLabel) fileNameLabel.textContent = "SELECT_FIRMWARE";
+          setTimeout(() => {
+            document.getElementById('uploadMsg').textContent = '';
+            document.getElementById('uploadFormContainer').classList.add('hidden');
+            fetchFiles();
+          }, 1500);
+        } else {
+          let errorMsg = 'SERVER ERROR.';
+          try {
+            const errData = await res.json();
+            errorMsg = errData.error || errorMsg;
+          } catch (e) {
+            if (res.status === 401 || res.status === 403) errorMsg = 'AUTH REQUIRED.';
+            if (res.status === 413) errorMsg = 'FILE TOO LARGE.';
+          }
+          document.getElementById('uploadMsg').textContent = `FAIL: ${errorMsg}`;
+          console.error('Upload failed:', res.status, errorMsg);
+        }
+      } catch (err) {
+        document.getElementById('uploadMsg').textContent = 'NETWORK FAILURE.';
+        console.error('Network error during upload:', err);
+      }
+    });
+  }
+
+  // Forwarder Tools - Ensure elements exist before adding listeners
+  const fFilter = document.getElementById('forwardFilter');
+  const fRefresh = document.getElementById('btn-refresh-fwd');
+  const fExport = document.getElementById('btn-export-csv');
+
+  if (fFilter) fFilter.addEventListener('input', renderForwarderBuffer);
+  if (fRefresh) fRefresh.addEventListener('click', typeof updateForwarder === 'function' ? updateForwarder : () => console.warn('updateForwarder not found'));
+  if (fExport) fExport.addEventListener('click', exportForwarderCSV);
 
   // Delegation for static and dynamic elements using a safer approach
   document.addEventListener('click', async (e) => {
@@ -633,3 +679,84 @@ function copyToClipboard(text, el) {
   }
 }
 
+function renderForwarderBuffer() {
+  const filter = document.getElementById('forwardFilter')?.value.toLowerCase() || '';
+  const buffer = document.getElementById('data-buffer');
+  if (!buffer) return;
+
+  if (!window.currentBufferData || window.currentBufferData.length === 0) {
+    buffer.innerHTML = '<div class="col-span-full py-20 text-center text-gray-700 italic opacity-50">[AWAITING_DATA_PACKETS]</div>';
+    return;
+  }
+
+  const filtered = window.currentBufferData.filter(item => {
+    const ck = String(item.ck || '').toLowerCase();
+    const area = String(item.area || '').toLowerCase();
+    return ck.includes(filter) || area.includes(filter);
+  });
+
+  if (filtered.length > 0) {
+    buffer.innerHTML = filtered.slice(0, 12).map((item, i) => `
+                        <div onclick="openBufferDetail(${i})" class="group relative bg-[#111113] border border-gray-800 p-3 rounded cursor-pointer hover:border-gray-600 hover:bg-gray-900/20 transition-all">
+                             <div class="flex justify-between items-start mb-2">
+                                <div class="flex items-center gap-1.5">
+                                    <svg class="w-3 h-3 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                    <span class="text-[10px] font-bold text-gray-300 group-hover:text-white">PACKET #${i + 1}</span>
+                                </div>
+                                <span class="text-[9px] text-gray-600 font-mono group-hover:text-emerald-400 transition-colors">READY</span>
+                             </div>
+                             
+                             <div class="space-y-1.5 pt-2 border-t border-gray-800/50">
+                                <div class="flex items-center justify-between text-[10px] font-mono">
+                                     <div class="flex items-center gap-1 text-indigo-400">
+                                        <svg class="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+                                        <span>${item.ck || '?'} / ${item.area || '?'}</span>
+                                     </div>
+                                     <svg class="w-3 h-3 text-gray-700 group-hover:text-purple-500 transition-colors transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
+                                </div>
+                                <div class="flex gap-2 text-[9px] text-gray-500">
+                                   <span class="flex items-center gap-1 bg-gray-900 px-1 rounded">
+                                     <span class="w-1.5 h-1.5 rounded-full bg-red-500/50"></span>
+                                     TEMP: ${item.temp?.length || 0}
+                                   </span>
+                                   <span class="flex items-center gap-1 bg-gray-900 px-1 rounded">
+                                     <span class="w-1.5 h-1.5 rounded-full bg-blue-500/50"></span>
+                                     DOOR: ${item.door?.length || 0}
+                                   </span>
+                                </div>
+                             </div>
+                        </div>
+                    `).join('');
+  } else {
+    buffer.innerHTML = '<div class="col-span-full py-20 text-center text-gray-700 italic opacity-50">[NO_MATCHING_DATA]</div>';
+  }
+}
+
+function exportForwarderCSV() {
+  if (!window.currentBufferData || window.currentBufferData.length === 0) {
+    alert('NO_DATA_TO_EXPORT');
+    return;
+  }
+
+  const headers = ['CK', 'AREA', 'TEMP_COUNT', 'DOOR_COUNT'];
+  const rows = window.currentBufferData.map(item => [
+    item.ck || '',
+    item.area || '',
+    item.temp?.length || 0,
+    item.door?.length || 0
+  ]);
+
+  const csvContent = [headers, ...rows].map(e => e.join(",")).join("\n");
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+
+  const now = new Date();
+  const dateStr = now.toISOString().split('T')[0];
+  link.setAttribute("href", url);
+  link.setAttribute("download", `mdcw_export_${dateStr}.csv`);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+}
