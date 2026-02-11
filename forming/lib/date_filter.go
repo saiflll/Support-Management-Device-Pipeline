@@ -29,9 +29,9 @@ func GetRecordsByDateRange(db *sql.DB, startDate, endDate, prefixFilter, statusF
 		argId++
 	}
 
-	// Prefix filter
+	// Prefix filter (Normalized)
 	if prefixFilter != "" && prefixFilter != "all" {
-		query += fmt.Sprintf(" AND prefix = $%d", argId)
+		query += fmt.Sprintf(" AND UPPER(REPLACE(prefix, ' ', '')) = $%d", argId)
 		args = append(args, prefixFilter)
 		argId++
 	}
@@ -115,7 +115,8 @@ func GetPrefixes(db *sql.DB) ([]string, error) {
 		return []string{}, nil
 	}
 
-	query := `SELECT DISTINCT prefix FROM production_mdcw WHERE prefix IS NOT NULL ORDER BY prefix ASC`
+	// Get list of unique prefixes, normalized (UPPERCASE, NO SPACES)
+	query := `SELECT DISTINCT UPPER(REPLACE(prefix, ' ', '')) FROM production_mdcw WHERE prefix IS NOT NULL ORDER BY 1 ASC`
 
 	rows, err := db.Query(query)
 	if err != nil {

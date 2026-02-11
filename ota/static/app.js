@@ -1,5 +1,26 @@
 ﻿// static/app.js
 // Megdev IoT Core - Runtime Logic
+console.log("App.js loaded v3");
+
+window.handleBtnClick = function (btn) {
+  const action = btn.dataset.action;
+  const node = btn.dataset.node || '';
+  const name = btn.dataset.name || '';
+
+  console.log('Button clicked:', action, node, name);
+
+  if (action === 'ota') openOta(node);
+  if (action === 'configure') openConfig(node);
+  if (action === 'reboot') requestReboot(node);
+  if (action === 'logs') openLogs(node);
+  if (action === 'send-ota') sendOta();
+  if (action === 'send-config') sendConfig();
+  if (action === 'delete-file') confirmDeleteFile(name);
+  if (action === 'delete-node') confirmDeleteNode(node);
+  if (action === 'close-modal') document.getElementById('logModal').classList.add('hidden');
+  if (action === 'close-config-modal') document.getElementById('configModal').classList.add('hidden');
+  if (action === 'close-ota-modal') document.getElementById('otaModal').classList.add('hidden');
+};
 
 async function fetchFiles() {
   try {
@@ -69,25 +90,71 @@ function renderNodes(nodes) {
     const formattedTime = info.last_seen ? new Date(info.last_seen).toLocaleString() : 'Never';
 
     const cardHtml = `
-      <div class="flex justify-between items-start mb-2">
-        <span class="${isOnline ? 'text-emerald-500' : 'text-gray-600'} font-bold">${isOnline ? '●' : '○'} ${info.model || 'UNKNOWN'} ${info.version ? `<span class="text-[8px] opacity-70">v${info.version}</span>` : ''}</span>
-        ${!isOnline ? `
-        <button data-action="delete-node" data-node="${k}" class="text-red-500 hover:bg-red-900/30 px-1 rounded transition-colors" title="Purge Node">
-          [DELETE]
-        </button>` : ''}
-      </div>
-      <div class="space-y-0.5 font-mono text-[10px] leading-tight text-gray-400">
-        <div><span class="json-key">"id"</span>: <span class="json-val-str">"${escapeHtml(k)}"</span>,</div>
-        <div><span class="json-key">"ip"</span>: <span class="json-val-str">"${info.ip || '0.0.0.0'}"</span>,</div>
-        <div><span class="json-key">"status"</span>: <span class="${isOnline ? 'json-val-str' : 'text-gray-600'}">"${info.status || 'unknown'}"</span>,</div>
-        <div><span class="json-key">"metrics"</span>: { <span class="json-key">"ram"</span>: <span class="json-val-num">${formatBytes(info.ram_free_bytes || 0)}</span> },</div>
-        <div><span class="json-key">"config"</span>: { ${info.model?.startsWith('MDCW') ? `"${info.prefix || '-'}"` : `"${info.ck || '-'}"`} }</div>
-      </div>
-      <div class="flex justify-center gap-3 mt-4 border-t border-gray-800 pt-3">
-        <button data-action="ota" data-node="${k}" class="btn-minimal">[ ota ]</button>
-        <button data-action="configure" data-node="${k}" class="btn-minimal">[ config ]</button>
-        <button data-action="reboot" data-node="${k}" class="btn-minimal">[ reboot ]</button>
-        <button data-action="logs" data-node="${k}" class="btn-minimal">[ log ]</button>
+      <div class="h-full flex flex-col">
+        <!-- Header -->
+        <div class="flex justify-between items-start mb-3 pb-2 border-b border-gray-800/50">
+            <div class="flex items-center gap-2">
+                <div class="relative flex h-2 w-2">
+                  ${isOnline ? '<span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>' : ''}
+                  <span class="relative inline-flex rounded-full h-2 w-2 ${isOnline ? 'bg-emerald-500' : 'bg-gray-600'}"></span>
+                </div>
+                <div>
+                    <div class="text-xs font-bold text-gray-200 leading-none tracking-wide">${info.model || 'UNKNOWN'}</div>
+                    ${info.version ? `<div class="text-[9px] text-gray-500 font-mono mt-0.5">v${info.version}</div>` : ''}
+                </div>
+            </div>
+            ${!isOnline ? `
+            <button onclick="handleBtnClick(this)" data-action="delete-node" data-node="${k}" class="text-gray-600 hover:text-red-500 transition-colors" title="Purge Node">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5">
+                <path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clip-rule="evenodd" />
+              </svg>
+            </button>` : ''}
+        </div>
+
+        <!-- Info Grid -->
+        <div class="space-y-2 mb-4 flex-1">
+            <!-- ID Row -->
+            <div class="flex items-center gap-2 group cursor-pointer" title="Double click to copy ID" ondblclick="copyToClipboard('${escapeHtml(k)}', this)">
+                <svg class="w-3.5 h-3.5 text-gray-600 group-hover:text-indigo-400 transition-colors shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"></path></svg>
+                <span class="text-[10px] font-mono text-indigo-300/90 truncate">${escapeHtml(k)}</span>
+            </div>
+
+            <!-- IP + RAM Row -->
+            <div class="grid grid-cols-2 gap-2">
+                <div class="flex items-center gap-2" title="IP Address">
+                    <svg class="w-3.5 h-3.5 text-gray-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <span class="text-[10px] font-mono text-gray-400">${info.ip || '0.0.0.0'}</span>
+                </div>
+                 <div class="flex items-center gap-2" title="Free RAM">
+                    <svg class="w-3.5 h-3.5 text-gray-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 3v2m6-2v2M9 19v2m6-2v2M5 9H3m2 6H3m18-6h-2m2 6h-2M7 19h10a2 2 0 002-2V7a2 2 0 00-2-2H7a2 2 0 00-2 2v10a2 2 0 002 2zM9 9h6v6H9V9z"></path></svg>
+                    <span class="text-[10px] font-mono text-orange-300">${formatBytes(info.ram_free_bytes || 0)}</span>
+                </div>
+            </div>
+            
+            <!-- Config Context Row -->
+            <div class="flex items-center gap-2 pt-2 border-t border-gray-800/30 mt-2">
+                 <svg class="w-3.5 h-3.5 text-teal-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>
+                 <span class="text-[10px] font-mono text-teal-500/80 truncate">
+                    ${info.model?.startsWith('MDCW') ? `PREFIX: ${info.prefix || '-'}` : `CK: ${info.ck || '-'}`}
+                 </span>
+            </div>
+        </div>
+
+        <!-- Actions -->
+        <div class="grid grid-cols-4 gap-2 mt-auto">
+            <button onclick="handleBtnClick(this)" data-action="ota" data-node="${k}" class="h-6 rounded bg-gray-800 hover:bg-gray-700 hover:text-emerald-400 transition-all text-gray-500 border border-gray-700 flex items-center justify-center" title="OTA Update">
+                 <span class="text-[9px] font-bold tracking-wider">OTA</span>
+            </button>
+            <button onclick="handleBtnClick(this)" data-action="configure" data-node="${k}" class="h-6 rounded bg-gray-800 hover:bg-gray-700 hover:text-indigo-400 transition-all text-gray-500 border border-gray-700 flex items-center justify-center" title="Configuration">
+                <span class="text-[9px] font-bold tracking-wider">CFG</span>
+            </button>
+            <button onclick="handleBtnClick(this)" data-action="reboot" data-node="${k}" class="h-6 rounded bg-gray-800 hover:bg-gray-700 hover:text-yellow-400 transition-all text-gray-500 border border-gray-700 flex items-center justify-center" title="Reboot Device">
+                <span class="text-[9px] font-bold tracking-wider">RBT</span>
+            </button>
+            <button onclick="handleBtnClick(this)" data-action="logs" data-node="${k}" class="h-6 rounded bg-gray-800 hover:bg-gray-700 hover:text-blue-400 transition-all text-gray-500 border border-gray-700 flex items-center justify-center" title="View Logs">
+                <span class="text-[9px] font-bold tracking-wider">LOG</span>
+            </button>
+        </div>
       </div>
     `;
 
@@ -188,13 +255,17 @@ document.addEventListener('DOMContentLoaded', () => {
     } catch (err) { document.getElementById('uploadMsg').textContent = 'NETWORK FAILURE.'; }
   });
 
-  document.body.addEventListener('click', async (e) => {
-    const btn = e.target.closest('[data-action]');
-    if (!btn) return;
+  // Delegation for static and dynamic elements using a safer approach
+  document.addEventListener('click', async (e) => {
+    // Traverse up to find the button
+    const btn = e.target.closest('button');
+    if (!btn || !btn.dataset.action) return;
 
     const action = btn.dataset.action;
     const node = btn.dataset.node || '';
     const name = btn.dataset.name || '';
+
+    console.log('Action clicked:', action, node, name); // Debug
 
     if (action === 'ota') openOta(node);
     if (action === 'configure') openConfig(node);
@@ -306,7 +377,119 @@ async function openConfig(node) {
       label.className = 'text-[10px] text-gray-400 font-mono uppercase truncate';
       label.textContent = f.label;
 
-      const input = document.createElement('input');
+      let input;
+
+      if (f.type === 'range') {
+        // Dual Slider Logic (Min + Max)
+        const wrapper = document.createElement('div');
+        wrapper.className = 'w-full flexflex-col gap-1';
+
+        const valuesDiv = document.createElement('div');
+        valuesDiv.className = 'flex justify-between text-[9px] text-emerald-500 font-mono mb-1';
+        const valMin = document.createElement('span');
+        const valMax = document.createElement('span');
+        valuesDiv.appendChild(valMin);
+        valuesDiv.appendChild(valMax);
+
+        const inputMin = document.createElement('input');
+        inputMin.type = 'range';
+        inputMin.min = f.min !== undefined ? f.min : -100;
+        inputMin.max = f.max !== undefined ? f.max : 100;
+        inputMin.step = f.step !== undefined ? f.step : 0.1;
+        inputMin.className = 'w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer mb-1';
+
+        const inputMax = document.createElement('input');
+        inputMax.type = 'range';
+        inputMax.min = f.min !== undefined ? f.min : -100;
+        inputMax.max = f.max !== undefined ? f.max : 100;
+        inputMax.step = f.step !== undefined ? f.step : 0.1;
+        inputMax.className = 'w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer';
+
+        // IDs for retrieval
+        // Name format: range0 -> min0, max0
+        const baseName = f.name.replace('range', ''); // "0"
+        inputMin.id = `input-min${baseName}`;
+        inputMax.id = `input-max${baseName}`;
+        inputMin.dataset.group = f.name; // Tag for grouping
+        inputMax.dataset.group = f.name;
+
+        // Initial Values
+        const currentMin = info[`min${baseName}`] !== undefined ? info[`min${baseName}`] : 0;
+        const currentMax = info[`max${baseName}`] !== undefined ? info[`max${baseName}`] : 0;
+        inputMin.value = currentMin;
+        inputMax.value = currentMax;
+
+        const updateLabels = () => {
+          // Enforce Min <= Max
+          if (parseFloat(inputMin.value) > parseFloat(inputMax.value)) {
+            inputMin.value = inputMax.value;
+          }
+          valMin.textContent = `MIN: ${inputMin.value}`;
+          valMax.textContent = `MAX: ${inputMax.value}`;
+        };
+
+        inputMin.addEventListener('input', updateLabels);
+        inputMax.addEventListener('input', () => {
+          if (parseFloat(inputMax.value) < parseFloat(inputMin.value)) {
+            inputMax.value = inputMin.value;
+          }
+          updateLabels();
+        });
+
+        updateLabels();
+
+        wrapper.appendChild(valuesDiv);
+        wrapper.appendChild(inputMin);
+        wrapper.appendChild(inputMax);
+
+        fieldDiv.appendChild(label);
+        fieldDiv.appendChild(wrapper);
+        fieldsContainer.appendChild(fieldDiv);
+        return;
+      }
+
+      if (f.type === 'slider') {
+        // Wrapper for slider + value display
+        const wrapper = document.createElement('div');
+        wrapper.className = 'flex items-center gap-2 w-full';
+
+        input = document.createElement('input');
+        input.type = 'range';
+        input.min = f.min !== undefined ? f.min : 0;
+        input.max = f.max !== undefined ? f.max : 100;
+        input.step = f.step !== undefined ? f.step : 1;
+        input.className = 'flex-1 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer'; // Tailwind slider style
+
+        const valDisplay = document.createElement('span');
+        valDisplay.className = 'text-[10px] text-emerald-500 font-mono w-8 text-right';
+        valDisplay.textContent = '0';
+
+        input.addEventListener('input', () => {
+          valDisplay.textContent = input.value;
+        });
+
+        wrapper.appendChild(input);
+        wrapper.appendChild(valDisplay);
+
+        // We attach the input to wrapper so we can find it later easily or just append wrapper
+        input.id = `input-${f.name}`; // ID goes to input
+        input.name = f.name;
+
+        // Fill initial value
+        let initialVal = 0;
+        if (info[f.name] !== undefined) {
+          initialVal = info[f.name];
+        }
+        input.value = initialVal;
+        valDisplay.textContent = initialVal;
+
+        fieldDiv.appendChild(label);
+        fieldDiv.appendChild(wrapper);
+        fieldsContainer.appendChild(fieldDiv);
+        return; // Skip default input appending
+      }
+
+      input = document.createElement('input');
       input.id = `input-${f.name}`;
       input.name = f.name;
       input.type = f.type || 'text';
@@ -335,11 +518,23 @@ async function sendConfig() {
 
   const payload = { node: window.currentConfigNode };
   window.currentModelDef.fields.forEach(f => {
+    // Handle standard inputs
     const input = document.getElementById(`input-${f.name}`);
     if (input) {
       let val = input.value;
       if (f.type === 'number') val = parseFloat(val);
       payload[f.name] = val;
+    }
+
+    // Handle range inputs (split back to min/max)
+    if (f.type === 'range') {
+      const baseName = f.name.replace('range', '');
+      const minInput = document.getElementById(`input-min${baseName}`);
+      const maxInput = document.getElementById(`input-max${baseName}`);
+      if (minInput && maxInput) {
+        payload[`min${baseName}`] = parseFloat(minInput.value);
+        payload[`max${baseName}`] = parseFloat(maxInput.value);
+      }
     }
   });
 

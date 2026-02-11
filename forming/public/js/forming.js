@@ -3,7 +3,6 @@ function appData() {
     return {
         activeTab: 'all',
         prefixes: [],
-        searchQuery: '',
         statusFilter: 'all',
         sortBy: 'newest',
         startDate: '',
@@ -12,6 +11,7 @@ function appData() {
         init() {
             this.loadPrefixes();
             this.loadData();
+            this.refreshSummary();
             console.log("Alpine init complete");
         },
 
@@ -30,8 +30,7 @@ function appData() {
                 status: this.statusFilter,
                 sort: this.sortBy,
                 start_date: this.startDate,
-                end_date: this.endDate,
-                search: this.searchQuery
+                end_date: this.endDate
             });
 
             let url = '/data-list?' + params.toString();
@@ -62,27 +61,15 @@ function appData() {
             });
         },
 
-        async exportToCSV() {
-            const table = document.querySelector('table');
-            if (!table) return;
-
-            let csv = [];
-            const headers = Array.from(table.querySelectorAll('thead th')).map(th => th.textContent.trim());
-            csv.push(headers.join(','));
-
-            const rows = table.querySelectorAll('tbody tr');
-            rows.forEach(row => {
-                const cells = Array.from(row.querySelectorAll('td')).map(td => '"' + td.textContent.trim().replace(/"/g, '""') + '"');
-                if (cells.length > 1) csv.push(cells.join(','));
+        exportToCSV() {
+            const params = new URLSearchParams({
+                prefix: this.activeTab,
+                status: this.statusFilter,
+                sort: this.sortBy,
+                start_date: this.startDate,
+                end_date: this.endDate
             });
-
-            const blob = new Blob([csv.join('\n')], {
-                type: 'text/csv;charset=utf-8;'
-            });
-            const link = document.createElement('a');
-            link.href = URL.createObjectURL(blob);
-            link.download = `production_data_${new Date().toISOString().slice(0, 10)}.csv`;
-            link.click();
+            window.location.href = '/export-csv?' + params.toString();
         }
     }
 }

@@ -77,10 +77,12 @@ body {
 }
 
 @keyframes pulse {
+
   0%,
   100% {
     opacity: 1;
   }
+
   50% {
     opacity: 0.5;
   }
@@ -125,34 +127,55 @@ body {
 .tabs {
   display: flex;
   gap: 0.5rem;
-  flex-wrap: wrap;
+  overflow-x: auto;
+  white-space: nowrap;
   margin-bottom: 1.5rem;
-  border-bottom: 2px solid var(--border);
   padding-bottom: 0.5rem;
+  scrollbar-width: none;
+  /* Firefox */
+  -ms-overflow-style: none;
+  /* IE/Edge */
+  /* Remove border-bottom from container to let tabs stand freely */
+  border-bottom: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+  /* Chrome/Safari */
 }
 
 .tab {
   padding: 0.75rem 1.5rem;
   font-size: 0.875rem;
   font-weight: 600;
-  border-radius: 8px 8px 0 0;
-  border: none;
-  background: transparent;
+  border-radius: 8px;
+  /* Fully rounded or top-rounded based on user image */
+  border: 1px solid var(--border);
+  background: #f1f5f9;
+  /* Light gray background for inactive */
   color: var(--text-muted);
   cursor: pointer;
   transition: all 0.2s;
-  position: relative;
+  flex-shrink: 0;
+  /* Prevent shrinking */
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .tab:hover {
-  background: var(--primary-light);
-  color: var(--primary);
+  background: #e2e8f0;
+  color: var(--text-main);
+  border-color: #cbd5e1;
 }
 
 .tab.active {
-  background: var(--primary);
+  background: #3b82f6;
+  /* Blue similar to user image */
   color: white;
-  box-shadow: var(--shadow);
+  border-color: #3b82f6;
+  box-shadow: 0 4px 6px -1px rgba(59, 130, 246, 0.5);
+  font-weight: 700;
 }
 
 /* Controls */

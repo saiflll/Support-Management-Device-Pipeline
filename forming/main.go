@@ -2,11 +2,13 @@ package main
 
 import (
 	"database/sql"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"forming/lib"
 	"log"
 	"os"
+	"strconv"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -237,6 +239,150 @@ func main() {
 		})
 	})
 
+	// API Endpoint untuk Export CSV
+	app.Get("/export-csv", func(c *fiber.Ctx) error {
+		startDate := c.Query("start_date")
+		endDate := c.Query("end_date")
+		status := c.Query("status")
+		prefix := c.Query("prefix")
+
+		// Construct filename
+		filename := fmt.Sprintf("mdcw.%s_%s.csv", startDate, endDate)
+		if startDate == "" || endDate == "" {
+			filename = fmt.Sprintf("mdcw.export_%s.csv", time.Now().Format("20060102_150405"))
+		}
+
+		c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
+		c.Set("Content-Type", "text/csv")
+
+		// Query Logic (No Limit)
+		query := "SELECT id, ts, reg2, reg5, reg114, prefix, created_at FROM production_mdcw WHERE 1=1"
+		args := []interface{}{}
+		argId := 1
+
+		if startDate != "" {
+			query += fmt.Sprintf(" AND DATE(created_at) >= $%d", argId)
+			args = append(args, startDate)
+			argId++
+		}
+		if endDate != "" {
+			query += fmt.Sprintf(" AND DATE(created_at) <= $%d", argId)
+			args = append(args, endDate)
+			argId++
+		}
+		if prefix != "" && prefix != "all" {
+			query += fmt.Sprintf(" AND UPPER(REPLACE(prefix, ' ', '')) = $%d", argId)
+			args = append(args, prefix)
+			argId++
+		}
+
+		// Status filter matching getRecords
+		if status != "" && status != "all" {
+			switch status {
+			case "ok":
+				query += " AND reg5 IN (41, 521, 553)"
+			case "idle":
+				query += " AND reg5 IN (9, 90)"
+			case "metal":
+				query += fmt.Sprintf(" AND reg5 = $%d", argId)
+				args = append(args, 8201)
+				argId++
+			case "under":
+				query += fmt.Sprintf(" AND reg5 = $%d", argId)
+				args = append(args, 25)
+				argId++
+			case "over":
+				query += fmt.Sprintf(" AND reg5 = $%d", argId)
+				args = append(args, 73)
+				argId++
+			case "mati":
+				query += fmt.Sprintf(" AND reg5 = $%d", argId)
+				args = append(args, 8)
+				argId++
+			case "unknown":
+				query += " AND reg5 NOT IN (8, 9, 90, 41, 521, 553, 8201, 25, 73)"
+			default:
+				if val, err := strconv.Atoi(status); err == nil {
+					query += fmt.Sprintf(" AND reg5 = $%d", argId)
+					args = append(args, val)
+					argId++
+				}
+			}
+		}
+
+		query += " ORDER BY created_at DESC"
+
+		rows, err := db.Query(query, args...)
+		if err != nil {
+			return c.Status(500).SendString(err.Error())
+		}
+		defer rows.Close()
+
+		w := csv.NewWriter(c.Response().BodyWriter())
+		w.Write([]string{"ID", "Timestamp", "Prefix", "Berat (g)", "Pack Count", "Status"})
+
+		for rows.Next() {
+			var r Record
+			var prefixNull sql.NullString
+			var reg2Null, reg5Null, reg114Null sql.NullInt64
+
+			if err := rows.Scan(&r.ID, &r.Ts, &reg2Null, &reg5Null, &reg114Null, &prefixNull, &r.CreatedAt); err != nil {
+				continue
+			}
+
+			p := "-"
+			if prefixNull.Valid {
+				p = prefixNull.String
+			}
+
+			reg114 := 0
+			if reg114Null.Valid {
+				reg114 = int(reg114Null.Int64)
+			}
+			intPart := reg114 / 10
+			decPart := reg114 % 10
+			weight := fmt.Sprintf("%d,%d g", intPart, decPart)
+
+			reg2 := 0
+			if reg2Null.Valid {
+				reg2 = int(reg2Null.Int64)
+			}
+
+			reg5 := 0
+			if reg5Null.Valid {
+				reg5 = int(reg5Null.Int64)
+			}
+
+			// Status mapping
+			statusText := fmt.Sprintf("? (%d)", reg5)
+			switch reg5 {
+			case 8:
+				statusText = "Mati"
+			case 9, 90:
+				statusText = "Idle"
+			case 41, 521, 553:
+				statusText = "OK"
+			case 8201:
+				statusText = "Metal"
+			case 25:
+				statusText = "Under"
+			case 73:
+				statusText = "Over"
+			}
+
+			w.Write([]string{
+				fmt.Sprintf("%d", r.ID),
+				r.Ts,
+				p,
+				weight,
+				fmt.Sprintf("%d", reg2),
+				statusText,
+			})
+		}
+		w.Flush()
+		return nil
+	})
+
 	// API Endpoint untuk Prefixes (untuk tab dinamis)
 	app.Get("/prefixes", func(c *fiber.Ctx) error {
 		prefixes, err := lib.GetPrefixes(db)
@@ -390,7 +536,7 @@ func getRecords(prefixFilter string, statusFilter string, sortBy string) ([]Reco
 
 	// Filter by prefix (optional)
 	if prefixFilter != "" && prefixFilter != "all" {
-		query += fmt.Sprintf(" AND prefix = $%d", argId)
+		query += fmt.Sprintf(" AND UPPER(REPLACE(prefix, ' ', '')) = $%d", argId)
 		args = append(args, prefixFilter)
 		argId++
 	}
@@ -494,15 +640,16 @@ func getSummary() ([]Summary, error) {
 	}
 
 	// Count total records and sum of weight (reg114) per prefix in last 1 hour
+	// Normalize prefix for grouping
 	query := `
 		SELECT
-			COALESCE(prefix, 'Unknown') as prefix,
+			COALESCE(UPPER(REPLACE(prefix, ' ', '')), 'UNKNOWN') as prefix_norm,
 			COUNT(*) as total_count,
 			COALESCE(SUM(reg114), 0) as total_weight
 		FROM production_mdcw
 		WHERE created_at >= NOW() - INTERVAL '1 hour'
-		GROUP BY prefix
-		ORDER BY prefix ASC
+		GROUP BY 1
+		ORDER BY 1 ASC
 	`
 
 	rows, err := db.Query(query)
