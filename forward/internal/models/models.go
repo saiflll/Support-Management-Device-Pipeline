@@ -13,8 +13,9 @@ type DoorData struct {
 }
 
 type AreaData struct {
-	CK   int        `json:"ck"`
-	Area int        `json:"area"`
-	Door []DoorData `json:"door"`
-	Temp []TempData `json:"temp"`
+	CK    int        `json:"ck"`
+	Area  int        `json:"area"`
+	Door  []DoorData `json:"door"`
+	Temp  []TempData `json:"temp"`
+	Topic string     `json:"topic,omitempty"`
 }

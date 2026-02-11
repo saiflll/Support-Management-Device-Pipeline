@@ -102,6 +102,18 @@ func createTables() {
             password_hash TEXT NOT NULL,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
         );`,
+		`CREATE TABLE IF NOT EXISTS pipelines (
+            pipeline_id SERIAL PRIMARY KEY,
+            name TEXT,
+            source_topic TEXT NOT NULL,
+            broker_url TEXT NOT NULL,
+            dest_topic TEXT NOT NULL,
+            username TEXT,
+            password TEXT,
+            interval_minutes INTEGER DEFAULT 8,
+            is_active BOOLEAN DEFAULT TRUE,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+        );`,
 	}
 
 	for _, command := range commands {

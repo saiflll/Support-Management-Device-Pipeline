@@ -679,7 +679,7 @@ function copyToClipboard(text, el) {
   }
 }
 
-function renderForwarderBuffer() {
+window.renderForwarderBuffer = function () {
   const filter = document.getElementById('forwardFilter')?.value.toLowerCase() || '';
   const buffer = document.getElementById('data-buffer');
   if (!buffer) return;
@@ -701,29 +701,13 @@ function renderForwarderBuffer() {
                              <div class="flex justify-between items-start mb-2">
                                 <div class="flex items-center gap-1.5">
                                     <svg class="w-3 h-3 text-emerald-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                                    <span class="text-[10px] font-bold text-gray-300 group-hover:text-white">PACKET #${i + 1}</span>
+                                    <span class="text-[10px] font-bold text-gray-300 group-hover:text-white">PACKET</span>
                                 </div>
-                                <span class="text-[9px] text-gray-600 font-mono group-hover:text-emerald-400 transition-colors">READY</span>
+                                <span class="text-[9px] text-gray-600 font-mono group-hover:text-emerald-400 transition-colors">${new Date().toLocaleTimeString()}</span>
                              </div>
-                             
-                             <div class="space-y-1.5 pt-2 border-t border-gray-800/50">
-                                <div class="flex items-center justify-between text-[10px] font-mono">
-                                     <div class="flex items-center gap-1 text-indigo-400">
-                                        <svg class="w-3 h-3 opacity-70" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
-                                        <span>${item.ck || '?'} / ${item.area || '?'}</span>
-                                     </div>
-                                     <svg class="w-3 h-3 text-gray-700 group-hover:text-purple-500 transition-colors transform group-hover:translate-x-1" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 8l4 4m0 0l-4 4m4-4H3"></path></svg>
-                                </div>
-                                <div class="flex gap-2 text-[9px] text-gray-500">
-                                   <span class="flex items-center gap-1 bg-gray-900 px-1 rounded">
-                                     <span class="w-1.5 h-1.5 rounded-full bg-red-500/50"></span>
-                                     TEMP: ${item.temp?.length || 0}
-                                   </span>
-                                   <span class="flex items-center gap-1 bg-gray-900 px-1 rounded">
-                                     <span class="w-1.5 h-1.5 rounded-full bg-blue-500/50"></span>
-                                     DOOR: ${item.door?.length || 0}
-                                   </span>
-                                </div>
+                             <div class="flex items-center justify-between text-[10px] font-mono border-t border-gray-800/50 pt-2">
+                                 <span class="text-indigo-400">CK:${item.ck} / AREA:${item.area}</span>
+                                 <span class="text-gray-500">T:${item.temp?.length || 0} D:${item.door?.length || 0}</span>
                              </div>
                         </div>
                     `).join('');

@@ -36,6 +36,11 @@ var messageHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Messa
 		receivedData = []models.AreaData{singleData}
 	}
 
+	// Inject topic metadata
+	for i := range receivedData {
+		receivedData[i].Topic = msg.Topic()
+	}
+
 	log.Printf("Debug: Data setelah unmarshal: %+v", receivedData)
 
 	if len(receivedData) == 0 {

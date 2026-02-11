@@ -1,186 +1,220 @@
-Berikut adalah paket lengkap dokumentasi, modul OTA, dan Full Code Final untuk kedua model (M1 & MDCW) yang sudah distandarisasi menggunakan protokol JSON terbaru, Preferences, dan LWT.
+# System Documentation & Protocol Specification
 
-1. DOKUMENTASI STANDARISASI (Simpan sebagai IOT_PROTOCOL.md)
-Ini adalah "Kitab Suci" komunikasi antara ESP32 dan Dashboard.
+Dokumentasi lengkap mengenai format JSON untuk **Sensor Data Ingestion** (Forwarder) dan **Device Actuator/Management** (OTA Dashboard).
 
-Markdown
+---
 
-# IOT STANDARDIZATION PROTOCOL v2.0
+# PART 1: SENSOR DATA INGESTION (FORWARDER)
 
-## 1. Topik MQTT
-Format Topic: `nodes/{NODE_ID}/{FUNCTION}`
+Format ini digunakan oleh device (atau gateway) untuk mengirimkan data sensor (Suhu, RH, Pintu) ke sistem Forwarder. Data ini yang akan diproses, di-buffer, dan diteruskan ke broker tujuan (Cloud/DB).
 
-| Function  | Topik                  | Arah          | QoS | Keterangan |
-| :---      | :---                   | :---          | :-- | :--- |
-| **Status**| `nodes/+/status`       | Device -> Cloud | 1 (Retain) | Discovery, Heartbeat, Sync Config. |
-| **Monitor**| `nodes/+/monitor`     | Device -> Cloud | 0 | Data Sensor Live, RAM, Error logs. |
-| **Command**| `nodes/{ID}/command`  | Cloud -> Device | 1 | Perintah (Config, OTA, Reboot). |
-| **Log** | `nodes/{ID}/log`       | Device -> Cloud | 0 | Debugging text string. |
+**Topik MQTT Default**: `sensor/data/ingest` (Bisa dikonfigurasi per device)
 
-## 2. Struktur JSON
+## ✅ Valid Data Formats
 
-### A. Discovery & Status (`nodes/{ID}/status`)
-Payload ini dikirim saat boot, reconnect, atau setelah config berubah.
+### 1. Format Lengkap (Standard)
+Format paling standar yang disarankan.
 ```json
 {
-  "id": "CK3-14-1-AABBCC",
-  "model": "TEMP_M1",           // "TEMP_M1" atau "MDCW_V1"
-  "ver": "2.1.0",
-  "state": "online",            // "online" atau "offline" (LWT)
-  "ip": "192.168.1.10",
-  "conf": {                     // Current Configuration on Device
-    "ck": 3,
-    "area": 14,
-    "no": 1,
-    "min": 20.0,
-    "max": 25.0,
-    "prefix": "cek"             // Khusus MDCW
-  }
+  "ck": 5,                  // [REQUIRED] ID Central Kitchen (Integer)
+  "area": 20,               // [REQUIRED] ID Area (Integer)
+  "door": [                 // [REQUIRED] Array Pintu (Boleh kosong [])
+    {
+      "doorid": 101,        // ID Pintu (Integer)
+      "value": 0            // 0: Terbuka, 1: Tertutup
+    }
+  ],
+  "temp": [                 // [REQUIRED] Array Suhu (Min 1 item)
+    {
+      "no": 1,              // Nomor Urut Sensor (Integer)
+      "ts": "2026-02-11T11:37:01.422922+07:00", // RFC3339Nano Timezone
+      "temp": 18.06,        // Suhu Float
+      "rh": 54.1            // [OPTIONAL] Humidity Float (boleh null)
+    }
+  ]
 }
-B. Live Monitoring (nodes/{ID}/monitor)
-Payload data sensor real-time.
+```
 
-JSON
-
+### 2. Format Minimal (Tanpa RH & Pintu)
+```json
 {
-  "id": "CK3-14-1-AABBCC",
-  "ts": "2024-01-01 10:00:00",
-  "ram": 120000,
-  "data": {
-    // Jika Model TEMP_M1
-    "temp": 24.5,
-    "relay": 1
-    // Jika Model MDCW_V1
-    "total": 100,
-    "code": 55,
-    "weight": 10
-  }
+  "ck": 3,
+  "area": 14,
+  "door": [],
+  "temp": [
+    {
+      "no": 8,
+      "ts": "2026-02-11T11:52:51.301271+07:00",
+      "temp": -41.44,
+      "rh": null
+    }
+  ]
 }
-C. Control Command (nodes/{ID}/command)
-Dashboard mengirim ini ke alat.
+```
 
-JSON
+### 3. Format Multi-Sensor
+```json
+{
+  "ck": 5,
+  "area": 20,
+  "door": [
+    { "doorid": 1, "value": 0 },
+    { "doorid": 2, "value": 1 }
+  ],
+  "temp": [
+    {
+      "no": 1,
+      "ts": "2026-02-11T11:37:01+07:00",
+      "temp": 22.5,
+      "rh": 65.3
+    },
+    {
+      "no": 2,
+      "ts": "2026-02-11T11:37:02+07:00",
+      "temp": 23.1,
+      "rh": 64.8
+    }
+  ]
+}
+```
 
-// 1. Ganti Config (Kirim field yang mau diubah saja)
+### 4. Batching (Array)
+Forwarder akan mengumpulkan data-data di atas dan mengirimkannya ke Cloud dalam bentuk Array untuk efisiensi.
+```json
+[
+  { "ck": 5, "area": 20, "temp": [...], "door": [...] },
+  { "ck": 5, "area": 20, "temp": [...], "door": [...] }
+]
+```
+
+---
+
+# PART 2: DEVICE ACTUATOR & MANAGEMENT (OTA)
+
+Format ini digunakan untuk komunikasi antara **Dashboard OTA** dan **Device** (ESP32).
+Digunakan untuk konfigurasi remote, reboot, dan update firmware.
+
+**Topik MQTT Device**:
+*   Subscribe: `nodes/{NODE_ID}/command` (Menerima perintah)
+*   Publish: `nodes/{NODE_ID}/status` (Melaporkan status & config saat ini)
+*   Publish: `nodes/{NODE_ID}/monitor` (Data live untuk dashboard)
+
+## 📡 Actuator Commands (Downlink)
+
+Dashboard mengirim JSON ini ke toplik `nodes/{NODE_ID}/command`.
+
+### 1. Set Configuration (`set_config`)
+Mengubah parameter device secara remote. Field yang dikirim tergantung Model device.
+
+**Model: TEMP (Umum), M1-M11**
+```json
+{
+  "cmd": "set_config",      // [REQUIRED] Command ID
+  "ck": 5,                  // [OPTIONAL] Set CK ID
+  "area": 20,               // [OPTIONAL] Set Area ID
+  "no": 1,                  // [OPTIONAL] Set Node Number
+  "interval": 1000,         // [OPTIONAL] Interval kirim data (ms)
+  "delay": 500,             // [OPTIONAL] Delay baca sensor (ms)
+  
+  // Calibration / Offsets
+  "min": -2.0,              // Offset/Min Temp Value
+  "max": 2.0,               // Offset/Max Temp Value
+  
+  // Specific Ranges (M10, M11, etc)
+  "min0": 0.0, "max0": 0.0, // Range T1
+  "min1": 0.0, "max1": 0.0, // Range T2
+  "min2": 0.0, "max2": 0.0, // Range T3
+  
+  // Proximity Logic
+  "prox_nc0": 1,            // 1=NC (Normally Closed), 0=NO
+  "prox_nc1": 0,
+  
+  // Humidity
+  "min_rh": 0.0, 
+  "max_rh": 100.0
+}
+```
+
+**Model: MDCW / V1 / V2 (Timbangan)**
+```json
 {
   "cmd": "set_config",
-  "ck": 5,
-  "min": 18.0,
-  "prefix": "LINE-A"
+  "prefix": "MDCW_01",      // Kode Prefix Alat
+  "interval": 500,
+  "prox_nc0": 1
 }
+```
 
-// 2. OTA Update
+**Model: TROLI**
+```json
+{
+  "cmd": "set_config",
+  "app_mode": "A",          // "A" (IN/OUT) atau "B" (Product Checking)
+  "trans": "IN",            // "IN" atau "OUT" (Mode A)
+  "pass_code": "100209"     // Target Product Code (Mode B)
+}
+```
+
+### 2. OTA Update (`ota`)
+Memerintahkan device untuk download firmware baru.
+```json
 {
   "cmd": "ota",
-  "url": "[http://domain.com/firmware.bin](http://domain.com/firmware.bin)"
+  "url": "http://192.168.x.x:9999/files/firmware_v2.bin"
 }
+```
 
-// 3. Reboot
+### 3. Reboot Device (`reboot`)
+Memerintahkan device untuk restart.
+```json
 {
   "cmd": "reboot"
 }
-2. MODUL RAW OTA (Reusable Code)
-Ini adalah fungsi mentah OTA. Kamu bisa copy-paste fungsi ini ke kode ESP32 manapun.
+```
 
-Syarat Library: #include <HTTPClient.h>, #include <Update.h>
+---
 
-C++
+## 📡 Device Reporting (Uplink)
 
-// --- MODUL RAW OTA START ---
-void performOTA(const String &url) {
-  if (url.length() == 0) return;
+Device mengirim JSON ini ke dashboard.
+
+### 1. Status Report (`nodes/{NODE_ID}/status`)
+Dikirim saat boot atau saat konfigurasi berubah (Retained Message).
+```json
+{
+  "status": "online",
+  "ip": "192.168.1.50",
+  "model": "M1",
+  "version": "1.0.2-M1",
+  "updated": "2026-02-11 13:00:00", // Waktu terakhir update
+  "ram_free_bytes": 145000,
+  "sd_ok": true,                    // Status SD Card
   
-  Serial.println("[OTA] Starting Update from: " + url);
-  
-  HTTPClient http;
-  // Gunakan WiFiClientSecure jika HTTPS
-  WiFiClient client; 
-  
-  http.begin(client, url);
-  int httpCode = http.GET();
-
-  if (httpCode == HTTP_CODE_OK) {
-    int contentLength = http.getSize();
-    bool canBegin = Update.begin(contentLength);
-
-    if (canBegin) {
-      Serial.println("[OTA] Writing firmware...");
-      WiFiClient *stream = http.getStreamPtr();
-      size_t written = Update.writeStream(*stream);
-
-      if (written == contentLength) {
-        Serial.println("[OTA] Written successfully: " + String(written) + "/" + String(contentLength));
-      } else {
-        Serial.println("[OTA] Written only partial: " + String(written) + "/" + String(contentLength));
-      }
-
-      if (Update.end()) {
-        if (Update.isFinished()) {
-          Serial.println("[OTA] Update Successfully Completed. Rebooting...");
-          delay(1000);
-          ESP.restart();
-        } else {
-          Serial.println("[OTA] Update not finished? Something went wrong!");
-        }
-      } else {
-        Serial.println("[OTA] Error Occurred. Error #: " + String(Update.getError()));
-      }
-    } else {
-      Serial.println("[OTA] Not enough space to begin OTA");
-    }
-  } else {
-    Serial.println("[OTA] HTTP Failed, code: " + String(httpCode));
-  }
-  http.end();
+  // Current Config Values (Mirror dari setting)
+  "ck": "5",
+  "area": "20",
+  "no": "1",
+  "interval": 1000,
+  "prox_nc0": 1,
+  "min0": 0.5
 }
-// --- MODUL RAW OTA END ---
-3. TEMPLATE KODE BARU (Skeleton)
-Jika mau buat alat baru, gunakan kerangka ini agar langsung kompatibel dengan dashboard.
+```
 
-C++
-
-#include <Arduino.h>
-#include <WiFi.h>
-#include <PubSubClient.h>
-#include <ArduinoJson.h>
-#include <Preferences.h>
-// Include module OTA di atas...
-
-// --- SETUP IDENTITAS ---
-#define MODEL_NAME "NAMA_ALAT_BARU" // Ganti ini
-#define FW_VER     "1.0.0"
-
-// --- SETUP CONFIG ---
-Preferences prefs;
-// Definisi variabel global config (default value)
-int configSatu = 10; 
-String configDua = "test";
-
-void setup() {
-  // 1. Load Config
-  prefs.begin("conf", true);
-  configSatu = prefs.getInt("satu", 10);
-  configDua = prefs.getString("dua", "test");
-  prefs.end();
-
-  // 2. Setup WiFi & MQTT (Standard LWT)
-  // ... (Lihat contoh Full Code di bawah)
-  
-  // 3. Setup Hardware Khusus
-  // >>> MASUKKAN SETUP SENSOR DISINI <<<
+### 2. Live Monitor (`nodes/{NODE_ID}/monitor`)
+Dikirim secara periodik untuk update data live di dashboard (mirip Status tapi lebih ringan/sering).
+```json
+{
+  "ram_free_bytes": 144500,
+  "status": "online"
+  // Bisa ditambahkan data sensor live jika diperlukan dashboard
 }
+```
 
-void loop() {
-  // 1. Maintain Connection
-  // ...
-  
-  // 2. Logic Utama
-  // >>> MASUKKAN LOGIC BACA SENSOR DISINI <<<
-  
-  // 3. Publish Data
-  // Gunakan format JSON "monitor"
-}
+---
 
-void mqttCallback(...) {
-  // Handle "set_config" -> Update variabel -> Save Preferences
-}
+## 📝 Catatan Implementasi
+
+1.  **Timezone**: Selalu gunakan WIB (UTC+7) atau sertakan offset `+07:00` dalam timestamp.
+2.  **Field Validation**: Forwarder akan membuang extra field tak dikenal, tapi Actuator (ESP32) harus memparsing JSON dengan toleransi (abaikan field tak dikenal).
+3.  **Topic Forwarding**: Forwarder otomatis menghapus field `topic` dari payload sensor sebelum diteruskan ke cloud (sesuai Format 4).
+4.  **Error Handling**: Jika JSON `set_config` salah tipe data (misal string dikirim ke int), ESP32 sebaiknya mengabaikan field tersebut dan tidak crash.

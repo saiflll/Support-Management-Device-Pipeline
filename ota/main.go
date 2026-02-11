@@ -825,25 +825,52 @@ func main() {
 
 	// Forwarder proxy endpoint
 	protected.Get("/forwarder/status", func(c *fiber.Ctx) error {
-		forwarderURL := getEnv("FORWARDER_URL", "http://backend:8000/forwarder/status")
-
+		forwarderURL := getEnv("FORWARDER_URL", "http://backend:8888/forwarder/status")
 		resp, err := http.Get(forwarderURL)
 		if err != nil {
-			return c.Status(http.StatusServiceUnavailable).JSON(fiber.Map{
-				"error": "Forwarder service tidak tersedia",
-			})
+			return c.Status(http.StatusServiceUnavailable).JSON(fiber.Map{"error": "Forwarder service tidak tersedia"})
 		}
 		defer resp.Body.Close()
-
-		body, err := io.ReadAll(resp.Body)
-		if err != nil {
-			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{
-				"error": "Gagal membaca response dari forwarder",
-			})
-		}
-
+		body, _ := io.ReadAll(resp.Body)
 		c.Set("Content-Type", "application/json")
 		return c.Send(body)
+	})
+
+	// Pipeline CRUD proxies
+	protected.Get("/api/pipelines", func(c *fiber.Ctx) error {
+		forwarderURL := getEnv("FORWARDER_API_URL", "http://backend:8888/api/pipelines")
+		resp, err := http.Get(forwarderURL)
+		if err != nil {
+			return c.Status(http.StatusServiceUnavailable).JSON(fiber.Map{"error": "Forwarder service tidak tersedia"})
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		c.Set("Content-Type", "application/json")
+		return c.Send(body)
+	})
+
+	protected.Post("/api/pipelines", func(c *fiber.Ctx) error {
+		forwarderURL := getEnv("FORWARDER_API_URL", "http://backend:8888/api/pipelines")
+		resp, err := http.Post(forwarderURL, "application/json", strings.NewReader(string(c.Body())))
+		if err != nil {
+			return c.Status(http.StatusServiceUnavailable).JSON(fiber.Map{"error": "Forwarder service tidak tersedia"})
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		c.Status(resp.StatusCode).Set("Content-Type", "application/json")
+		return c.Send(body)
+	})
+
+	protected.Delete("/api/pipelines/:id", func(c *fiber.Ctx) error {
+		id := c.Params("id")
+		forwarderURL := getEnv("FORWARDER_API_URL", "http://backend:8888/api/pipelines") + "/" + id
+		req, _ := http.NewRequest("DELETE", forwarderURL, nil)
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			return c.Status(http.StatusServiceUnavailable).JSON(fiber.Map{"error": "Forwarder service tidak tersedia"})
+		}
+		defer resp.Body.Close()
+		return c.SendStatus(resp.StatusCode)
 	})
 
 	// Start MQTT connection (non-blocking)

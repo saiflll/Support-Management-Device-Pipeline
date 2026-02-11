@@ -13,6 +13,7 @@ import (
 	"sync"
 	"time"
 
+	"IoTT/internal/database"
 	"IoTT/internal/models"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -29,24 +30,53 @@ const (
 
 // ForwarderStatus menampung data untuk ditampilkan di dashboard.
 type ForwarderStatus struct {
-	LastForwardTime    time.Time
-	NextForwardTime    time.Time
-	BufferSize         int
-	BufferItemCount    int
-	LastForwardStatus  string
-	LastForwardError   string
-	ReceivedDataBuffer []models.AreaData
+	Topic              string            `json:"topic"`
+	ReceivedDataBuffer []models.AreaData `json:"ReceivedDataBuffer"`
+	Pipelines          []PipelineStatus  `json:"pipelines"`
+}
+
+type Pipeline struct {
+	ID              int    `json:"id"`
+	Name            string `json:"name"`
+	SourceTopic     string `json:"source_topic"`
+	BrokerURL       string `json:"broker_url"`
+	DestTopic       string `json:"dest_topic"`
+	Username        string `json:"username"`
+	Password        string `json:"password"`
+	IntervalMinutes int    `json:"interval_minutes"`
+	IsActive        bool   `json:"is_active"`
+}
+
+type PipelineStatus struct {
+	ID                int       `json:"id"`
+	SourceTopic       string    `json:"source_topic"`
+	LastForwardTime   time.Time `json:"last_forward_time"`
+	NextForwardTime   time.Time `json:"next_forward_time"`
+	BufferSize        int       `json:"buffer_size"`
+	BufferItemCount   int       `json:"buffer_item_count"`
+	LastForwardStatus string    `json:"last_forward_status"`
+	LastForwardError  string    `json:"last_forward_error"`
+	BrokerURL         string    `json:"broker_url"`
+	DestTopic         string    `json:"dest_topic"`
+}
+
+type PipelineInstance struct {
+	Config   Pipeline
+	Client   mqtt.Client
+	Buffer   []models.AreaData
+	Mutex    sync.Mutex
+	Ticker   *time.Ticker
+	StopChan chan struct{}
+	Status   PipelineStatus
 }
 
 var (
-	buffer           []models.AreaData
-	bufferMutex      = &sync.Mutex{}
-	publicMqttClient mqtt.Client
-	status           = ForwarderStatus{
-		LastForwardStatus: "Belum ada",
-	}
+	// pipelines runtime
+	pipelineInstances = make(map[int]*PipelineInstance)
+	pipelinesMutex    = &sync.Mutex{}
+
+	status      = ForwarderStatus{}
 	statusMutex = &sync.Mutex{}
-	ticker      *time.Ticker
 
 	// Session store for authentication
 	store            *session.Store
@@ -77,147 +107,209 @@ func Start() {
 		log.Println("⚠️ Warning: TELE_BOT_ALRT or TELEGRAM_CHAT_ID not set. Login feature may not work.")
 	}
 
-	setupPublicMQTT()
-	ticker = time.NewTicker(aggregationInterval)
+	// Start the pipeline manager
+	go pipelineManager()
 
-	statusMutex.Lock()
-	status.NextForwardTime = time.Now().Add(aggregationInterval)
-	statusMutex.Unlock()
+	log.Println("✅ Forwarder worker started with Dynamic Pipeline Management.")
+}
 
+func pipelineManager() {
+	for {
+		syncPipelines()
+		time.Sleep(30 * time.Second)
+	}
+}
+
+func syncPipelines() {
+	importDB := database.DB
+	if importDB == nil {
+		return
+	}
+
+	rows, err := importDB.Query("SELECT pipeline_id, name, source_topic, broker_url, dest_topic, username, password, interval_minutes, is_active FROM pipelines")
+	if err != nil {
+		log.Printf("Error querying pipelines: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	foundIDs := make(map[int]bool)
+	for rows.Next() {
+		var p Pipeline
+		if err := rows.Scan(&p.ID, &p.Name, &p.SourceTopic, &p.BrokerURL, &p.DestTopic, &p.Username, &p.Password, &p.IntervalMinutes, &p.IsActive); err != nil {
+			continue
+		}
+		foundIDs[p.ID] = true
+
+		if p.IsActive {
+			pipelinesMutex.Lock()
+			instance, exists := pipelineInstances[p.ID]
+			if !exists {
+				log.Printf("🚀 Starting new pipeline: %s -> %s", p.SourceTopic, p.DestTopic)
+				instance = startPipeline(p)
+				pipelineInstances[p.ID] = instance
+			} else if instance.Config != p {
+				log.Printf("🔄 Restarting pipeline due to config change: %d", p.ID)
+				instance.Stop()
+				instance = startPipeline(p)
+				pipelineInstances[p.ID] = instance
+			}
+			pipelinesMutex.Unlock()
+		} else {
+			pipelinesMutex.Lock()
+			if instance, exists := pipelineInstances[p.ID]; exists {
+				log.Printf("🛑 Stopping inactive pipeline: %d", p.ID)
+				instance.Stop()
+				delete(pipelineInstances, p.ID)
+			}
+			pipelinesMutex.Unlock()
+		}
+	}
+
+	// Stop pipelines not in DB anymore
+	pipelinesMutex.Lock()
+	for id, instance := range pipelineInstances {
+		if !foundIDs[id] {
+			log.Printf("🗑️ Stopping deleted pipeline: %d", id)
+			instance.Stop()
+			delete(pipelineInstances, id)
+		}
+	}
+	pipelinesMutex.Unlock()
+}
+
+func startPipeline(p Pipeline) *PipelineInstance {
+	interval := time.Duration(p.IntervalMinutes) * time.Minute
+	if interval < 1*time.Minute {
+		interval = 1 * time.Minute
+	}
+
+	inst := &PipelineInstance{
+		Config:   p,
+		StopChan: make(chan struct{}),
+		Buffer:   []models.AreaData{},
+		Status: PipelineStatus{
+			ID:                p.ID,
+			SourceTopic:       p.SourceTopic,
+			BrokerURL:         p.BrokerURL,
+			DestTopic:         p.DestTopic,
+			LastForwardStatus: "Initializing",
+			NextForwardTime:   time.Now().Add(interval),
+		},
+	}
+
+	// Setup MQTT Client for this pipeline
+	opts := mqtt.NewClientOptions()
+	opts.AddBroker(p.BrokerURL)
+	opts.SetClientID(fmt.Sprintf("forwarder-%d-%d", p.ID, time.Now().UnixNano()))
+	if p.Username != "" {
+		opts.SetUsername(p.Username)
+		opts.SetPassword(p.Password)
+	}
+
+	inst.Client = mqtt.NewClient(opts)
+	if token := inst.Client.Connect(); token.Wait() && token.Error() != nil {
+		log.Printf("❌ Failed to connect pipeline %d: %v", p.ID, token.Error())
+		inst.Status.LastForwardError = token.Error().Error()
+		inst.Status.LastForwardStatus = "Connection Failed"
+	}
+
+	inst.Ticker = time.NewTicker(interval)
 	go func() {
 		for {
-			<-ticker.C
-			log.Println("⏰ (Forwarder) Timer 8 menit tercapai, memicu proses rekap data.")
-			flushBufferIfNecessary(true) // Force flush on timer
+			select {
+			case <-inst.Ticker.C:
+				inst.Flush(true)
+			case <-inst.StopChan:
+				if inst.Client != nil && inst.Client.IsConnected() {
+					inst.Client.Disconnect(250)
+				}
+				inst.Ticker.Stop()
+				return
+			}
 		}
 	}()
 
-	log.Println("✅ Forwarder worker started. Will aggregate data and forward to public EMQX.")
+	return inst
+}
+
+func (inst *PipelineInstance) Stop() {
+	close(inst.StopChan)
+}
+
+func (inst *PipelineInstance) Flush(force bool) {
+	inst.Mutex.Lock()
+	defer inst.Mutex.Unlock()
+
+	if len(inst.Buffer) == 0 {
+		inst.Status.NextForwardTime = time.Now().Add(time.Duration(inst.Config.IntervalMinutes) * time.Minute)
+		return
+	}
+
+	currentSize := 0
+	jsonData, _ := json.Marshal(inst.Buffer)
+	currentSize = len(jsonData)
+
+	// Flush if forced or size reached
+	if force || currentSize >= maxBufferSize {
+		if inst.Client == nil || !inst.Client.IsConnected() {
+			log.Printf("Error: MQTT client for pipeline %d not connected. Retrying...", inst.Config.ID)
+			inst.Client.Connect() // Try reconnect
+			if !inst.Client.IsConnected() {
+				inst.Status.LastForwardStatus = "Gagal"
+				inst.Status.LastForwardError = "Client disconnected"
+				return
+			}
+		}
+
+		token := inst.Client.Publish(inst.Config.DestTopic, 1, false, jsonData)
+		if token.WaitTimeout(10*time.Second) && token.Error() != nil {
+			inst.Status.LastForwardStatus = "Gagal"
+			inst.Status.LastForwardError = token.Error().Error()
+		} else {
+			inst.Status.LastForwardStatus = "Sukses"
+			inst.Status.LastForwardError = ""
+			inst.Status.LastForwardTime = time.Now()
+			inst.Buffer = []models.AreaData{}
+		}
+		inst.Status.NextForwardTime = time.Now().Add(time.Duration(inst.Config.IntervalMinutes) * time.Minute)
+		if inst.Ticker != nil {
+			inst.Ticker.Reset(time.Duration(inst.Config.IntervalMinutes) * time.Minute)
+		}
+	}
+
+	inst.Status.BufferSize = currentSize
+	inst.Status.BufferItemCount = len(inst.Buffer)
 }
 
 func AddToBufferAndAggregate(data []models.AreaData) {
-	bufferMutex.Lock()
-	// Limit buffer to 2000 items (approx 2 MB) to prevent OOM
-	if len(buffer) < 2000 {
-		buffer = append(buffer, data...)
-	} else {
-		log.Println("⚠️ Warning: Forwarder local buffer full (2000 items). Dropping new data to prevent OOM.")
-	}
-	bufferMutex.Unlock()
-
-	// Update status for dashboard display
+	// 1. Update global Log Buffer
 	statusMutex.Lock()
 	status.ReceivedDataBuffer = append(status.ReceivedDataBuffer, data...)
-	if len(status.ReceivedDataBuffer) > 100 { // Keep only last 100 items for display
+	if len(status.ReceivedDataBuffer) > 100 {
 		status.ReceivedDataBuffer = status.ReceivedDataBuffer[len(status.ReceivedDataBuffer)-100:]
 	}
 	statusMutex.Unlock()
 
-	flushBufferIfNecessary(false) // Check if flush is needed due to size
-}
+	// 2. Distribute to Pipeline Buffers
+	pipelinesMutex.Lock()
+	defer pipelinesMutex.Unlock()
 
-func flushBufferIfNecessary(force bool) {
-	bufferMutex.Lock()
-	defer bufferMutex.Unlock()
-
-	currentSize := 0
-	if len(buffer) > 0 {
-		jsonData, _ := json.Marshal(buffer)
-		currentSize = len(jsonData)
-	}
-
-	// Flush if forced, time is up, or size limit is reached
-	if len(buffer) > 0 && (force || time.Now().After(status.NextForwardTime) || currentSize >= maxBufferSize) {
-		log.Printf("Flushing buffer. Items: %d, Size: %d, Forced: %v", len(buffer), currentSize, force)
-		forwardData(buffer)
-		buffer = []models.AreaData{} // Clear buffer
-
-		statusMutex.Lock()
-		status.NextForwardTime = time.Now().Add(aggregationInterval)
-		// Don't clear status.ReceivedDataBuffer here if we want to see it on the web
-		// status.ReceivedDataBuffer = []models.AreaData{}
-		ticker.Reset(aggregationInterval) // Reset timer
-		statusMutex.Unlock()
-	}
-
-	// Always update buffer size and count for the dashboard
-	statusMutex.Lock()
-	status.BufferSize = currentSize
-	status.BufferItemCount = len(buffer)
-	statusMutex.Unlock()
-}
-
-func forwardData(dataToForward []models.AreaData) {
-	statusMutex.Lock()
-	status.LastForwardTime = time.Now()
-	statusMutex.Unlock()
-
-	if publicMqttClient == nil || !publicMqttClient.IsConnected() {
-		log.Println("Error: Public MQTT client not connected. Skipping forward.")
-		statusMutex.Lock()
-		status.LastForwardStatus = "Gagal"
-		status.LastForwardError = "Client tidak terhubung"
-		statusMutex.Unlock()
-		return
-	}
-
-	topic := os.Getenv("MQTT_TOPIC_PUB")
-	if topic == "" {
-		topic = "sensor/data/ingest" // Default topic
-	}
-
-	payload, err := json.Marshal(dataToForward)
-	if err != nil {
-		log.Printf("Error marshalling data for forwarding: %v", err)
-		statusMutex.Lock()
-		status.LastForwardStatus = "Gagal"
-		status.LastForwardError = fmt.Sprintf("JSON Marshal Error: %v", err)
-		statusMutex.Unlock()
-		return
-	}
-
-	token := publicMqttClient.Publish(topic, 1, false, payload)
-	if token.WaitTimeout(5*time.Second) && token.Error() != nil {
-		log.Printf("Error forwarding data to public MQTT: %v", token.Error())
-		statusMutex.Lock()
-		status.LastForwardStatus = "Gagal"
-		status.LastForwardError = fmt.Sprintf("Publish Error: %v", token.Error())
-		statusMutex.Unlock()
-	} else {
-		log.Printf("Successfully forwarded %d data points to topic %s", len(dataToForward), topic)
-		statusMutex.Lock()
-		status.LastForwardStatus = "Sukses"
-		status.LastForwardError = ""
-		statusMutex.Unlock()
-	}
-}
-
-func setupPublicMQTT() {
-	broker := os.Getenv("MQTT_BROKER_PUB")
-	if broker == "" {
-		log.Println("Warning: MQTT_BROKER_PUB not set. Forwarder will not work.")
-		return
-	}
-	clientID := fmt.Sprintf("servfi-forwarder-%d", time.Now().UnixNano())
-
-	opts := mqtt.NewClientOptions()
-	opts.AddBroker(broker)
-	opts.SetClientID(clientID)
-	opts.OnConnect = func(c mqtt.Client) { log.Println("✅ Forwarder connected to Public MQTT Broker.") }
-	opts.OnConnectionLost = func(c mqtt.Client, err error) { log.Printf("⚠️ Forwarder connection to Public MQTT lost: %v", err) }
-
-	// Tambahkan kredensial jika tersedia di environment
-	username := os.Getenv("MQTT_USERNAME_FOR")
-	password := os.Getenv("MQTT_PASSWORD_FOR")
-	if username != "" {
-		opts.SetUsername(username)
-		opts.SetPassword(password)
-		log.Println("(Forwarder) Menggunakan kredensial MQTT.")
-	}
-
-	publicMqttClient = mqtt.NewClient(opts)
-	if token := publicMqttClient.Connect(); token.Wait() && token.Error() != nil {
-		log.Printf("❌ Failed to connect forwarder to public MQTT broker: %v", token.Error())
+	for _, inst := range pipelineInstances {
+		inst.Mutex.Lock()
+		for _, d := range data {
+			// SIMPLE TOPIC MATCHING
+			if inst.Config.SourceTopic == "ALL" || d.Topic == inst.Config.SourceTopic {
+				if len(inst.Buffer) < 2000 {
+					// Create copy and strip topic for clean forwarding (Format 4)
+					cleanData := d
+					cleanData.Topic = ""
+					inst.Buffer = append(inst.Buffer, cleanData)
+				}
+			}
+		}
+		inst.Mutex.Unlock()
+		inst.Flush(false) // Check if size limit reached
 	}
 }
 
@@ -239,7 +331,50 @@ func RegisterForwarderHandlers(app *fiber.App) {
 	app.Get("/forwarder/status", func(c *fiber.Ctx) error {
 		statusMutex.Lock()
 		defer statusMutex.Unlock()
+
+		pipelinesMutex.Lock()
+		status.Pipelines = []PipelineStatus{}
+		for _, inst := range pipelineInstances {
+			status.Pipelines = append(status.Pipelines, inst.Status)
+		}
+		pipelinesMutex.Unlock()
+
 		return c.Status(http.StatusOK).JSON(status)
+	})
+
+	// CRUD Pipeline API (AUTH DISABLED for now)
+	app.Get("/api/pipelines", func(c *fiber.Ctx) error {
+		importDB := database.DB
+		rows, _ := importDB.Query("SELECT pipeline_id, name, source_topic, broker_url, dest_topic, username, password, interval_minutes, is_active FROM pipelines")
+		defer rows.Close()
+		var res []Pipeline
+		for rows.Next() {
+			var p Pipeline
+			rows.Scan(&p.ID, &p.Name, &p.SourceTopic, &p.BrokerURL, &p.DestTopic, &p.Username, &p.Password, &p.IntervalMinutes, &p.IsActive)
+			res = append(res, p)
+		}
+		return c.JSON(res)
+	})
+
+	app.Post("/api/pipelines", func(c *fiber.Ctx) error {
+		var p Pipeline
+		if err := c.BodyParser(&p); err != nil {
+			return err
+		}
+		importDB := database.DB
+		err := importDB.QueryRow("INSERT INTO pipelines (name, source_topic, broker_url, dest_topic, username, password, interval_minutes, is_active) VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING pipeline_id",
+			p.Name, p.SourceTopic, p.BrokerURL, p.DestTopic, p.Username, p.Password, p.IntervalMinutes, p.IsActive).Scan(&p.ID)
+		if err != nil {
+			return c.Status(500).SendString(err.Error())
+		}
+		return c.JSON(p)
+	})
+
+	app.Delete("/api/pipelines/:id", func(c *fiber.Ctx) error {
+		id := c.Params("id")
+		importDB := database.DB
+		importDB.Exec("DELETE FROM pipelines WHERE pipeline_id = $1", id)
+		return c.SendStatus(204)
 	})
 
 	// Rute untuk redirect ke Database (protected)
