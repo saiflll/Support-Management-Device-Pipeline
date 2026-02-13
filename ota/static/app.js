@@ -354,8 +354,13 @@ function openOta(node) {
 }
 
 async function sendOta() {
-  let url = document.getElementById('otaUrlInput').value;
+  let url = document.getElementById('otaUrlInput').value.trim();
   if (!url) return;
+
+  // Ensure protocol is present
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    url = 'http://' + url;
+  }
 
   // Deteksi localhost/127.0.0.1 - Masalah umum yang Anda alami
   if (url.includes('localhost') || url.includes('127.0.0.1')) {

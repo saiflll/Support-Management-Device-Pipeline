@@ -90,6 +90,7 @@ type Field struct {
 var commonTempFields = []Field{
 	{Name: "ck", Label: "Central Kitchen", Type: "number", Required: true},
 	{Name: "area", Label: "Area ID", Type: "number", Required: true},
+	{Name: "no", Label: "Node Number (Sensor #)", Type: "number", Required: true},
 	{Name: "interval", Label: "Interval (ms)", Type: "number", Required: true},
 	{Name: "delay", Label: "Prox Delay (ms)", Type: "number", Required: false},
 }
