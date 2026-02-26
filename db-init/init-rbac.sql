@@ -10,7 +10,7 @@ BEGIN
         CREATE ROLE elec WITH LOGIN PASSWORD 'Elec123';
     END IF;
     IF NOT EXISTS (SELECT FROM pg_catalog.pg_roles WHERE rolname = 'poss') THEN
-        CREATE ROLE poss WITH LOGIN PASSWORD 'pos 123';
+        CREATE ROLE poss WITH LOGIN PASSWORD 'Poss123';
     END IF;
 END
 $$;

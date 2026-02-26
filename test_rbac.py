@@ -13,7 +13,7 @@ DB_NAME = os.getenv("DB_NAME", "servfi")
 USERS = {
     "sani": "Sani123",
     "elec": "Elec123",
-    "poss": "pos 123",
+    "poss": "Poss123",
     "admin": "pPa3PLan" # atau postgres / password root Anda
 }
 
