@@ -8,14 +8,13 @@ import (
 	"forming/lib"
 	"log"
 	"os"
-	"strconv"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
-	"github.com/gofiber/fiber/v2/middleware/session"
-	"github.com/gofiber/template/html/v2"
+	jwt "github.com/golang-jwt/jwt/v5"
 	_ "github.com/lib/pq"
 )
 
@@ -28,12 +27,13 @@ func getEnv(key, fallback string) string {
 
 // Payload structure matching the JSON from IoT device
 type Payload struct {
-	Ts     interface{} `json:"ts"` // Can be string or number (millis)
-	Reg2   int         `json:"reg2"`
-	Reg5   int         `json:"reg5"`
-	Reg114 int         `json:"reg114"`
-	Prefix string      `json:"prefix"`
-	Data   struct {
+	Ts         interface{} `json:"ts"` // Can be string or number (millis)
+	Reg2       int         `json:"reg2"`
+	Reg5       int         `json:"reg5"`
+	Reg114     int         `json:"reg114"`
+	Prefix     string      `json:"prefix"`
+	NodePrefix string      `json:"node_prefix"`
+	Data       struct {
 		Reg2   int `json:"reg2"`
 		Reg5   int `json:"reg5"`
 		Reg114 int `json:"reg114"`
@@ -53,11 +53,36 @@ type Record struct {
 }
 
 var db *sql.DB
-var store = session.New()
 
-type AdminLogin struct {
+const (
+	jwtSecret  = "ppa3-secret-jwt-2025"
+	attendUser = "ppa3"
+	attendPass = "plan3ppa"
+)
+
+type jwtClaims struct {
 	Username string `json:"username"`
-	Password string `json:"password"`
+	jwt.RegisteredClaims
+}
+
+func requireJWT(c *fiber.Ctx) error {
+	token := c.Get("Authorization")
+	if len(token) > 7 && token[:7] == "Bearer " {
+		token = token[7:]
+	}
+	if token == "" {
+		token = c.Cookies("forming_token")
+	}
+	if token == "" {
+		return c.Status(401).JSON(fiber.Map{"error": "unauthorized"})
+	}
+	parsed, err := jwt.ParseWithClaims(token, &jwtClaims{}, func(t *jwt.Token) (interface{}, error) {
+		return []byte(jwtSecret), nil
+	})
+	if err != nil || !parsed.Valid {
+		return c.Status(401).JSON(fiber.Map{"error": "invalid token"})
+	}
+	return c.Next()
 }
 
 func main() {
@@ -139,114 +164,111 @@ func main() {
 	}
 
 	// --- Fiber Setup ---
-	engine := html.New("./views", ".html")
-	engine.Reload(true) // Enable auto-reload for development
-	engine.Debug(true)  // Enable debug mode
-
-	log.Println("Template engine initialized with views directory: ./views")
-
-	app := fiber.New(fiber.Config{
-		Views: engine,
-	})
-
+	app := fiber.New()
 	app.Use(logger.New())
-	app.Static("/public", "./public")
+	app.Use(cors.New(cors.Config{
+		AllowOrigins: "*",
+		AllowHeaders: "Origin, Content-Type, Accept, Authorization",
+		AllowMethods: "GET, POST, PUT, DELETE, OPTIONS",
+	}))
 
-	// Route Halaman Utama
-	app.Get("/", func(c *fiber.Ctx) error {
-		log.Println("Rendering index template...")
-		return c.Render("index", fiber.Map{
-			"Title": "MDCW Production Monitor",
-			"Time":  time.Now().Format("15:04:05"),
-		})
-	})
-
-	// API Endpoint untuk HTMX - Update Time
-	app.Get("/update-time", func(c *fiber.Ctx) error {
-		return c.SendString(time.Now().Format("15:04:05") + " WIB")
-	})
-
-	// API Endpoint untuk HTMX - Data List
-	app.Get("/data-list", func(c *fiber.Ctx) error {
-		status := c.Query("status")
-		sortBy := c.Query("sort")
-
-		records, err := getRecords("", status, sortBy)
-		if err != nil {
-			log.Println("Error fetching records:", err)
-			return c.Status(500).SendString("Error fetching data")
+	// === LOGIN ENDPOINT (public) ===
+	app.Post("/api/login", func(c *fiber.Ctx) error {
+		type Req struct {
+			Username string `json:"username"`
+			Password string `json:"password"`
 		}
-
-		return c.Render("data_list", fiber.Map{
-			"Records": records,
-		})
-	})
-
-	// API Endpoint untuk Summary (Total 1 Jam Terakhir)
-	app.Get("/summary", func(c *fiber.Ctx) error {
-		summaries, err := getSummary()
-		if err != nil {
-			log.Println("Error fetching summary:", err)
-			return c.Status(500).SendString("Error fetching summary")
+		var req Req
+		if err := c.BodyParser(&req); err != nil {
+			return c.Status(400).JSON(fiber.Map{"error": "invalid body"})
 		}
-		return c.Render("summary", fiber.Map{
-			"Summaries": summaries,
+		if req.Username != attendUser || req.Password != attendPass {
+			return c.Status(401).JSON(fiber.Map{"error": "username atau password salah"})
+		}
+		claims := jwtClaims{
+			Username: req.Username,
+			RegisteredClaims: jwt.RegisteredClaims{
+				ExpiresAt: jwt.NewNumericDate(time.Now().Add(12 * time.Hour)),
+			},
+		}
+		token, err := jwt.NewWithClaims(jwt.SigningMethodHS256, claims).SignedString([]byte(jwtSecret))
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": "failed to generate token"})
+		}
+		c.Cookie(&fiber.Cookie{
+			Name:     "forming_token",
+			Value:    token,
+			HTTPOnly: true,
+			SameSite: "Lax",
+			MaxAge:   43200,
 		})
+		return c.JSON(fiber.Map{"token": token, "username": req.Username})
 	})
 
-	// API Endpoint untuk Data berdasarkan Prefix
-	app.Get("/data-by-prefix", func(c *fiber.Ctx) error {
+	app.Post("/api/logout", func(c *fiber.Ctx) error {
+		c.Cookie(&fiber.Cookie{Name: "forming_token", Value: "", MaxAge: -1})
+		return c.JSON(fiber.Map{"status": "ok"})
+	})
+
+	// === PROTECTED JSON API ===
+	api := app.Group("/api", requireJWT)
+
+	// GET /api/data — daftar data produksi
+	api.Get("/data", func(c *fiber.Ctx) error {
 		prefix := c.Query("prefix")
 		status := c.Query("status")
-		sortBy := c.Query("sort")
-
+		sortBy := c.Query("sort", "newest")
+		_ = sortBy
 		records, err := getRecords(prefix, status, sortBy)
 		if err != nil {
-			log.Println("Error fetching records:", err)
-			return c.Status(500).SendString("Error fetching data")
+			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 		}
-
-		return c.Render("data_list", fiber.Map{
-			"Records": records,
-		})
+		return c.JSON(records)
 	})
 
-	// API Endpoint untuk Skip Log
-	app.Get("/skip-log", func(c *fiber.Ctx) error {
+	// GET /api/summary — ringkasan 1 jam terakhir
+	api.Get("/summary", func(c *fiber.Ctx) error {
+		summaries, err := getSummary()
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+		}
+		return c.JSON(summaries)
+	})
+
+	// GET /api/prefixes
+	api.Get("/prefixes", func(c *fiber.Ctx) error {
+		rows, err := db.Query("SELECT DISTINCT UPPER(REPLACE(COALESCE(prefix,''), ' ', '')) FROM production_mdcw WHERE prefix IS NOT NULL ORDER BY 1")
+		if err != nil {
+			return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+		}
+		defer rows.Close()
+		var prefixes []string
+		for rows.Next() {
+			var p string
+			rows.Scan(&p)
+			if p != "" {
+				prefixes = append(prefixes, p)
+			}
+		}
+		return c.JSON(prefixes)
+	})
+
+	// GET /api/skip-log
+	api.Get("/skip-log", func(c *fiber.Ctx) error {
 		skipLogs, err := lib.GetSkipLogs(db)
 		if err != nil {
-			log.Println("Error fetching skip logs:", err)
 			return c.JSON([]map[string]interface{}{})
 		}
 		return c.JSON(skipLogs)
 	})
 
-	// API Endpoint untuk Data dengan Date Range
-	app.Get("/data-by-date", func(c *fiber.Ctx) error {
-		startDate := c.Query("start_date")
-		endDate := c.Query("end_date")
-		status := c.Query("status")
-		sortBy := c.Query("sort")
-
-		records, err := lib.GetRecordsByDateRange(db, startDate, endDate, "", status, sortBy)
-		if err != nil {
-			log.Println("Error fetching records by date:", err)
-			return c.Status(500).SendString("Error fetching data")
-		}
-
-		return c.Render("data_list", fiber.Map{
-			"Records": records,
-		})
-	})
-
-	// API Endpoint untuk Export CSV
-	app.Get("/export-csv", func(c *fiber.Ctx) error {
+	// GET /api/export-csv
+	api.Get("/export-csv", func(c *fiber.Ctx) error {
 		startDate := c.Query("start_date")
 		endDate := c.Query("end_date")
 		status := c.Query("status")
 		prefix := c.Query("prefix")
 
-		// Construct filename
 		filename := fmt.Sprintf("mdcw.%s_%s.csv", startDate, endDate)
 		if startDate == "" || endDate == "" {
 			filename = fmt.Sprintf("mdcw.export_%s.csv", time.Now().Format("20060102_150405"))
@@ -255,142 +277,34 @@ func main() {
 		c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", filename))
 		c.Set("Content-Type", "text/csv")
 
-		// Query Logic (No Limit)
-		query := "SELECT id, ts, reg2, reg5, reg114, prefix, created_at FROM production_mdcw WHERE 1=1"
-		args := []interface{}{}
-		argId := 1
-
-		if startDate != "" {
-			query += fmt.Sprintf(" AND DATE(created_at) >= $%d", argId)
-			args = append(args, startDate)
-			argId++
-		}
-		if endDate != "" {
-			query += fmt.Sprintf(" AND DATE(created_at) <= $%d", argId)
-			args = append(args, endDate)
-			argId++
-		}
-		if prefix != "" && prefix != "all" {
-			query += fmt.Sprintf(" AND UPPER(REPLACE(prefix, ' ', '')) = $%d", argId)
-			args = append(args, prefix)
-			argId++
-		}
-
-		// Status filter matching getRecords
-		if status != "" && status != "all" {
-			switch status {
-			case "ok":
-				query += " AND reg5 IN (41, 521, 553)"
-			case "idle":
-				query += " AND reg5 IN (9, 90)"
-			case "metal":
-				query += fmt.Sprintf(" AND reg5 = $%d", argId)
-				args = append(args, 8201)
-				argId++
-			case "under":
-				query += fmt.Sprintf(" AND reg5 = $%d", argId)
-				args = append(args, 25)
-				argId++
-			case "over":
-				query += fmt.Sprintf(" AND reg5 = $%d", argId)
-				args = append(args, 73)
-				argId++
-			case "mati":
-				query += fmt.Sprintf(" AND reg5 = $%d", argId)
-				args = append(args, 8)
-				argId++
-			case "unknown":
-				query += " AND reg5 NOT IN (8, 9, 90, 41, 521, 553, 8201, 25, 73)"
-			default:
-				if val, err := strconv.Atoi(status); err == nil {
-					query += fmt.Sprintf(" AND reg5 = $%d", argId)
-					args = append(args, val)
-					argId++
-				}
-			}
-		}
-
-		query += " ORDER BY created_at DESC"
-
-		rows, err := db.Query(query, args...)
+		records, err := lib.GetRecordsByDateRange(db, startDate, endDate, prefix, status, "newest")
 		if err != nil {
 			return c.Status(500).SendString(err.Error())
 		}
-		defer rows.Close()
 
 		w := csv.NewWriter(c.Response().BodyWriter())
 		w.Write([]string{"ID", "Timestamp", "Prefix", "Berat (g)", "Pack Count", "Status"})
-
-		for rows.Next() {
-			var r Record
-			var prefixNull sql.NullString
-			var reg2Null, reg5Null, reg114Null sql.NullInt64
-
-			if err := rows.Scan(&r.ID, &r.Ts, &reg2Null, &reg5Null, &reg114Null, &prefixNull, &r.CreatedAt); err != nil {
-				continue
-			}
-
-			p := "-"
-			if prefixNull.Valid {
-				p = prefixNull.String
-			}
-
-			reg114 := 0
-			if reg114Null.Valid {
-				reg114 = int(reg114Null.Int64)
-			}
-			intPart := reg114 / 10
-			decPart := reg114 % 10
-			weight := fmt.Sprintf("%d,%d g", intPart, decPart)
-
-			reg2 := 0
-			if reg2Null.Valid {
-				reg2 = int(reg2Null.Int64)
-			}
-
-			reg5 := 0
-			if reg5Null.Valid {
-				reg5 = int(reg5Null.Int64)
-			}
-
-			// Status mapping
-			statusText := fmt.Sprintf("? (%d)", reg5)
-			switch reg5 {
-			case 8:
-				statusText = "Mati"
-			case 9, 90:
-				statusText = "Idle"
-			case 41, 521, 553:
-				statusText = "OK"
-			case 8201:
-				statusText = "Metal"
-			case 25:
-				statusText = "Under"
-			case 73:
-				statusText = "Over"
-			}
-
-			w.Write([]string{
-				fmt.Sprintf("%d", r.ID),
-				r.Ts,
-				p,
-				weight,
-				fmt.Sprintf("%d", reg2),
-				statusText,
-			})
+		for _, raw := range records {
+			// Convert interface{} → map via JSON
+			b, _ := json.Marshal(raw)
+			var r map[string]interface{}
+			json.Unmarshal(b, &r)
+			id := fmt.Sprintf("%.0f", r["id"])
+			ts, _ := r["ts"].(string)
+			pfx, _ := r["prefix"].(string)
+			wt, _ := r["weight_formatted"].(string)
+			reg2 := fmt.Sprintf("%.0f", r["reg2"])
+			reg5 := fmt.Sprintf("%.0f", r["reg5"])
+			w.Write([]string{id, ts, pfx, wt, reg2, reg5})
 		}
 		w.Flush()
 		return nil
 	})
 
-	// API Endpoint untuk Prefixes (untuk tab dinamis)
-	app.Get("/prefixes", func(c *fiber.Ctx) error {
-		prefixes, err := lib.GetPrefixes(db)
-		if err != nil {
-			log.Println("Error fetching prefixes:", err)
-			return c.JSON([]string{})
-		}
-		return c.JSON(prefixes)
+	// Static files & SPA fallback
+	app.Static("/", "./web")
+	app.Get("/*", func(c *fiber.Ctx) error {
+		return c.SendFile("./web/index.html")
 	})
 
 	log.Fatal(app.Listen(":3000"))
@@ -403,6 +317,11 @@ func messagePubHandler(client mqtt.Client, msg mqtt.Message) {
 	if err := json.Unmarshal(msg.Payload(), &payload); err != nil {
 		log.Println("Error parsing JSON:", err)
 		return
+	}
+
+	// Handle NodePrefix mapping for backward compatibility
+	if payload.Prefix == "" && payload.NodePrefix != "" {
+		payload.Prefix = payload.NodePrefix
 	}
 
 	// Support nested hierarchical structure from new firmware

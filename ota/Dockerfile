@@ -1,63 +1,73 @@
 # ============================================
-# Stage 1: Build
+# OTA Service Dockerfile
+# Build context: servfor/ root (not ota/)
+# Usage: docker build -f ota/Dockerfile .
 # ============================================
+
+# Global ARG — must be before any FROM to be usable in FROM instructions
 ARG GOLANG_VERSION=1.24-alpine
-FROM golang:${GOLANG_VERSION} AS builder
+
+# ============================================
+# Stage 1: Build Svelte Dashboard
+# ============================================
+FROM node:22-alpine AS svelte-builder
+WORKDIR /ui
+COPY dashboard/package*.json ./
+RUN npm ci
+COPY dashboard .
+RUN npm run build
+
+# ============================================
+# Stage 2: Build Go OTA Binary
+# ============================================
+FROM golang:${GOLANG_VERSION} AS go-builder
 
 WORKDIR /build
 
-# Install dependencies
-RUN apk add --no-cache git ca-certificates tzdata
+# Install dependencies (with retry for temporary network errors)
+RUN apk add --no-cache git ca-certificates tzdata || \
+    (sleep 5 && apk add --no-cache git ca-certificates tzdata) || \
+    (sleep 10 && apk add --no-cache git ca-certificates tzdata)
 
-# Copy go mod files
-COPY go.mod go.sum ./
+COPY ota/go.mod ota/go.sum ./
 RUN go mod download
 
-# Copy source code
-COPY . .
+COPY ota/ .
 
-# Build binary
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
     -ldflags='-w -s -extldflags "-static"' \
     -a -installsuffix cgo \
     -o ota-server main.go
 
 # ============================================
-# Stage 2: Runtime
+# Stage 3: Runtime
 # ============================================
 FROM alpine:3.18
 
-# Install runtime dependencies
-RUN apk add --no-cache ca-certificates tzdata
+# Install runtime dependencies (with retry for temporary network errors)
+RUN apk add --no-cache ca-certificates tzdata || \
+    (sleep 5 && apk add --no-cache ca-certificates tzdata) || \
+    (sleep 10 && apk add --no-cache ca-certificates tzdata)
 
-# Set timezone
 ENV TZ=Asia/Jakarta
 
 WORKDIR /app
 
-# Copy binary from builder
-COPY --from=builder /build/ota-server .
+COPY --from=go-builder /build/ota-server .
+COPY --from=go-builder /build/static ./static
+COPY --from=svelte-builder /ui/build ./web
 
-# Copy required directories
-COPY --from=builder /build/views ./views
-COPY --from=builder /build/static ./static
-
-# Create uploads directory
 RUN mkdir -p /app/static/uploads
 
-# Expose port
 EXPOSE 9999
 
-# Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:9999/login || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://localhost:9999/ || exit 1
 
-# Run as non-root user
 RUN addgroup -g 1000 appuser && \
     adduser -D -u 1000 -G appuser appuser && \
     chown -R appuser:appuser /app
 
 USER appuser
 
-# Run the application
 ENTRYPOINT ["/app/ota-server"]

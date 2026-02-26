@@ -6,8 +6,10 @@ FROM golang:${GOLANG_VERSION} AS builder
 
 WORKDIR /build
 
-# Install dependencies
-RUN apk add --no-cache git ca-certificates tzdata
+# Install dependencies (with retry for temporary network errors)
+RUN apk add --no-cache git ca-certificates tzdata || \
+    (sleep 5 && apk add --no-cache git ca-certificates tzdata) || \
+    (sleep 10 && apk add --no-cache git ca-certificates tzdata)
 
 # Copy go mod files
 COPY go.mod go.sum ./
@@ -27,8 +29,10 @@ RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
 # ============================================
 FROM alpine:3.18
 
-# Install runtime dependencies
-RUN apk add --no-cache ca-certificates tzdata
+# Install runtime dependencies (with retry for temporary network errors)
+RUN apk add --no-cache ca-certificates tzdata || \
+    (sleep 5 && apk add --no-cache ca-certificates tzdata) || \
+    (sleep 10 && apk add --no-cache ca-certificates tzdata)
 
 # Set timezone
 ENV TZ=Asia/Jakarta

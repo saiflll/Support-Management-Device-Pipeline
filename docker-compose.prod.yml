@@ -1,7 +1,7 @@
 services:
   # === Database Service ===
   postgres:
-    image: postgres:13
+    image: rennnagge/postgres-db:latest
     container_name: postgres_db
     environment:
       POSTGRES_USER: ${DB_USER}
@@ -10,7 +10,7 @@ services:
       TZ: "Asia/Jakarta"
       PGTZ: "Asia/Jakarta"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - /data/postgres:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 5s
@@ -49,7 +49,7 @@ services:
     image: rennnagge/forwarder-app:latest
     container_name: forwarder
     ports:
-      - "8888:8000"
+      - "8888:8888"
     environment:
       - DB_HOST=postgres_db
       - MQTT_BROKER_URI=tcp://emqx:1883
@@ -80,7 +80,7 @@ services:
     ports:
       - "9999:9999"
     volumes:
-      - ota_uploads:/app/static/uploads
+      - /data/ota/uploads:/app/static/uploads
     environment:
       - MQTT_BROKER=tcp://emqx:1883
       - MQTT_USER=${MQTT_USER}
@@ -89,6 +89,7 @@ services:
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
       - SERVER_NAME=${SERVER_NAME:-ren_itdt_west}
       - WEBHOOK_TOKEN=${WEBHOOK_TOKEN:-}
+      - FORWARDER_URL=http://backend:8888/forwarder/status
     restart: unless-stopped
     depends_on:
       emqx:
@@ -103,22 +104,15 @@ services:
     ports:
       - "3000:3000"
     environment:
-      # Database Configuration
       - DB_HOST=postgres_db
       - DB_PORT=${DB_PORT}
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_NAME=${DB_NAME}
-      # MQTT Configuration
       - MQTT_HOST=emqx
       - MQTT_PORT=${MQTT_PORT}
       - MQTT_USER=${MQTT_USER}
       - MQTT_PASSWORD=${MQTT_PASSWORD}
-      # Google Sheets
-      - GOOGLE_SHEETS_CREDENTIALS=${GOOGLE_SHEETS_CREDENTIALS:-}
-      - GOOGLE_SPREADSHEET_ID=${GOOGLE_SPREADSHEET_ID:-}
-      - GOOGLE_SHEET_NAME=${GOOGLE_SHEET_NAME:-}
-      # Application Configuration
       - TZ=Asia/Jakarta
     restart: unless-stopped
     depends_on:
@@ -129,12 +123,27 @@ services:
     networks:
       - iot-net
 
+  # === Monitor Service ===
+  monitor:
+    image: rennnagge/monitor-app:latest
+    container_name: monitor
+    environment:
+      - PORT=9090
+      - HOST_PROC=/host/proc
+      - HOST_SYS=/host/sys
+      - HOST_ETC=/host/etc
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /etc:/host/etc:ro
+      - /:/host/root:ro
+    restart: unless-stopped
+    networks:
+      - iot-net
 
 volumes:
-  postgres_data:
   emqx_data:
   emqx_log:
-  ota_uploads:
 
 networks:
   iot-net:

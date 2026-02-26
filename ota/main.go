@@ -20,44 +20,54 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/session"
 	"github.com/gofiber/storage/memory/v2"
-	"github.com/gofiber/template/html/v2"
 )
 
 type NodeInfo struct {
-	Status       string   `json:"status,omitempty"`
-	RamFreeBytes int64    `json:"ram_free_bytes,omitempty"`
-	SD_OK        *bool    `json:"sd_ok,omitempty"` // Use pointer to distinguish between false and not set
-	Ck           string   `json:"ck,omitempty"`
-	Area         string   `json:"area,omitempty"`
-	No           string   `json:"no,omitempty"`
-	Min          float64  `json:"min,omitempty"`
-	Max          float64  `json:"max,omitempty"`
-	Min0         float64  `json:"min0,omitempty"`
-	Max0         float64  `json:"max0,omitempty"`
-	Min1         float64  `json:"min1,omitempty"`
-	Max1         float64  `json:"max1,omitempty"`
-	Min2         float64  `json:"min2,omitempty"`
-	Max2         float64  `json:"max2,omitempty"`
-	Min3         float64  `json:"min3,omitempty"`
-	Max3         float64  `json:"max3,omitempty"`
-	Min4         float64  `json:"min4,omitempty"`
-	Max4         float64  `json:"max4,omitempty"`
-	ProxNc0      int      `json:"prox_nc0"`
-	ProxNc1      int      `json:"prox_nc1"`
-	ProxNc2      int      `json:"prox_nc2"`
-	Interval     uint64   `json:"interval,omitempty"`
-	Delay        uint64   `json:"delay,omitempty"`
-	IP           string   `json:"ip,omitempty"`
-	Updated      string   `json:"updated,omitempty"`
-	Model        string   `json:"model,omitempty"`
-	Prefix       string   `json:"prefix,omitempty"`
-	Version      string   `json:"version,omitempty"`
-	AppMode      string   `json:"app_mode,omitempty"`
-	Trans        string   `json:"trans,omitempty"`
-	PassCode     string   `json:"pass_code,omitempty"`
-	MinRH        float64  `json:"min_rh,omitempty"`
-	MaxRH        float64  `json:"max_rh,omitempty"`
-	Logs         []string `json:"logs,omitempty"` // last 3 log lines
+	Status       string                 `json:"status,omitempty"`
+	RamFreeBytes int64                  `json:"ram_free_bytes,omitempty"`
+	SD_OK        *bool                  `json:"sd_ok,omitempty"`
+	Ck           string                 `json:"ck,omitempty"`
+	Area         string                 `json:"area,omitempty"`
+	No           string                 `json:"no,omitempty"`
+	MinT1        float64                `json:"min_t1,omitempty"`
+	MaxT1        float64                `json:"max_t1,omitempty"`
+	MinT2        float64                `json:"min_t2,omitempty"`
+	MaxT2        float64                `json:"max_t2,omitempty"`
+	MinT3        float64                `json:"min_t3,omitempty"`
+	MaxT3        float64                `json:"max_t3,omitempty"`
+	SHTSuhuMin   float64                `json:"sht_suhu_min,omitempty"`
+	SHTSuhuMax   float64                `json:"sht_suhu_max,omitempty"`
+	SHTHumMin    float64                `json:"sht_humidity_min,omitempty"`
+	SHTHumMax    float64                `json:"sht_humidity_max,omitempty"`
+	DoorDelay    uint32                 `json:"door_logic_delay,omitempty"`
+	Reboot       int                    `json:"reboot,omitempty"`
+	Interval     uint64                 `json:"interval,omitempty"`
+	IP           string                 `json:"ip,omitempty"`
+	Updated      string                 `json:"updated,omitempty"`
+	Model        string                 `json:"model,omitempty"`
+	Prefix       string                 `json:"node_prefix,omitempty"`
+	Version      string                 `json:"version,omitempty"`
+	AppMode      string                 `json:"app_mode,omitempty"`
+	Trans        string                 `json:"trans,omitempty"`
+	PassCode     string                 `json:"pass_code,omitempty"`
+	Relay        bool                   `json:"relay"`
+	NoT1         int                    `json:"no_t1"`
+	NoT2         int                    `json:"no_t2"`
+	NoT3         int                    `json:"no_t3"`
+	NoSHT        int                    `json:"no_sht"`
+	NoP1         int                    `json:"no_p1"`
+	NoP2         int                    `json:"no_p2"`
+	NoP3         int                    `json:"no_p3"`
+	CurT1        float64                `json:"cur_t1"`
+	CurT2        float64                `json:"cur_t2"`
+	CurT3        float64                `json:"cur_t3"`
+	CurP1        int                    `json:"cur_p1"`
+	CurP2        int                    `json:"cur_p2"`
+	CurP3        int                    `json:"cur_p3"`
+	CurSHT_T     float64                `json:"cur_sht_t"`
+	CurSHT_H     float64                `json:"cur_sht_h"`
+	Logs         []string               `json:"logs,omitempty"`
+	FullConfig   map[string]interface{} `json:"full_config,omitempty"`
 }
 
 type FileInfo struct {
@@ -90,125 +100,144 @@ type Field struct {
 var commonTempFields = []Field{
 	{Name: "ck", Label: "Central Kitchen", Type: "number", Required: true},
 	{Name: "area", Label: "Area ID", Type: "number", Required: true},
-	{Name: "no", Label: "Node Number (Sensor #)", Type: "number", Required: true},
+	{Name: "no", Label: "Box ID", Type: "number", Required: true},
+	{Name: "no_t1", Label: "No T1", Type: "number", Required: false},
+	{Name: "no_t2", Label: "No T2", Type: "number", Required: false},
+	{Name: "no_t3", Label: "No T3", Type: "number", Required: false},
+	{Name: "no_sht", Label: "No SHT", Type: "number", Required: false},
+	{Name: "no_p1", Label: "No P1", Type: "number", Required: false},
+	{Name: "no_p2", Label: "No P2", Type: "number", Required: false},
+	{Name: "no_p3", Label: "No P3", Type: "number", Required: false},
+	{Name: "node_prefix", Label: "Node Prefix", Type: "text", Required: false, Placeholder: "TEMP"},
 	{Name: "interval", Label: "Interval (ms)", Type: "number", Required: true},
-	{Name: "delay", Label: "Prox Delay (ms)", Type: "number", Required: false},
+	{Name: "door_logic_delay", Label: "Door Alarm Delay (ms)", Type: "number", Required: false},
+}
+
+var commonMdcwFields = []Field{
+	{Name: "node_prefix", Label: "Node Prefix", Type: "text", Required: false, Placeholder: "MDCW"},
+	{Name: "interval", Label: "Interval (ms)", Type: "number", Required: true},
 }
 
 var modelRegistry = map[string]ModelConfig{
 	"TEMP": {
-		Name: "TEMP", DisplayName: "Temperature Sensor (Base)", Command: "set_config",
+		Name: "TEMP", DisplayName: "Temperature Sensor (Universal)", Command: "set_config",
 		Fields: append(commonTempFields, []Field{
-			{Name: "range0", Label: "Range T1", Type: "range", Required: false, Step: floatPtr(0.1), Min: floatPtr(-100), Max: floatPtr(100)},
-			{Name: "range1", Label: "Range T2", Type: "range", Required: false, Step: floatPtr(0.1), Min: floatPtr(-100), Max: floatPtr(100)},
-			{Name: "range_rh", Label: "Range RH (%)", Type: "range", Required: false, Step: floatPtr(1), Min: floatPtr(0), Max: floatPtr(100)},
+			{Name: "min_t1", Label: "Min T1", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "max_t1", Label: "Max T1", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "min_t2", Label: "Min T2", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "max_t2", Label: "Max T2", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "min_t3", Label: "Min T3", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "max_t3", Label: "Max T3", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "sht_suhu_min", Label: "Min SHT Temp", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "sht_suhu_max", Label: "Max SHT Temp", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "sht_humidity_min", Label: "Min SHT Hum", Type: "number", Required: false, Step: floatPtr(1)},
+			{Name: "sht_humidity_max", Label: "Max SHT Hum", Type: "number", Required: false, Step: floatPtr(1)},
 		}...),
 	},
-	"M1": {
+	"TEMP|1": {
 		Name: "M1", DisplayName: "TEMP-M1 (1 DS)", Command: "set_config",
 		Fields: append(commonTempFields, []Field{
-			{Name: "range0", Label: "Range T1", Type: "range", Required: false, Step: floatPtr(0.1), Min: floatPtr(-100), Max: floatPtr(100)},
+			{Name: "min_t1", Label: "Min T1", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "max_t1", Label: "Max T1", Type: "number", Required: false, Step: floatPtr(0.1)},
 		}...),
 	},
-	"M2": {
+	"TEMP|2": {
 		Name: "M2", DisplayName: "TEMP-M2 (Modbus + 1 Prox)", Command: "set_config",
 		Fields: append(commonTempFields, []Field{
-			{Name: "prox_nc0", Label: "Prox 1 (0:NO, 1:NC)", Type: "number", Required: false},
+			{Name: "sht_suhu_min", Label: "Min SHT Temp", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "sht_suhu_max", Label: "Max SHT Temp", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "sht_humidity_min", Label: "Min SHT Hum", Type: "number", Required: false, Step: floatPtr(1)},
+			{Name: "sht_humidity_max", Label: "Max SHT Hum", Type: "number", Required: false, Step: floatPtr(1)},
 		}...),
 	},
-	"M3": {
+	"TEMP|3": {
 		Name: "M3", DisplayName: "TEMP-M3 (2 DS + 2 Prox)", Command: "set_config",
 		Fields: append(commonTempFields, []Field{
-			{Name: "range0", Label: "Range T1", Type: "range", Required: false, Step: floatPtr(0.1), Min: floatPtr(-100), Max: floatPtr(100)},
-			{Name: "range1", Label: "Range T2", Type: "range", Required: false, Step: floatPtr(0.1), Min: floatPtr(-100), Max: floatPtr(100)},
-			{Name: "prox_nc0", Label: "Prox 1 (0:NO, 1:NC)", Type: "number", Required: false},
-			{Name: "prox_nc1", Label: "Prox 2 (0:NO, 1:NC)", Type: "number", Required: false},
+			{Name: "min_t1", Label: "Min T1", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "max_t1", Label: "Max T1", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "min_t2", Label: "Min T2", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "max_t2", Label: "Max T2", Type: "number", Required: false, Step: floatPtr(0.1)},
 		}...),
 	},
-	"M4": {
+	"TEMP|4": {
 		Name: "M4", DisplayName: "TEMP-M4 (3 DS + 1 Prox)", Command: "set_config",
 		Fields: append(commonTempFields, []Field{
-			{Name: "range0", Label: "Range T1", Type: "range", Required: false, Step: floatPtr(0.1), Min: floatPtr(-100), Max: floatPtr(100)},
-			{Name: "range1", Label: "Range T2", Type: "range", Required: false, Step: floatPtr(0.1), Min: floatPtr(-100), Max: floatPtr(100)},
-			{Name: "range2", Label: "Range T3", Type: "range", Required: false, Step: floatPtr(0.1), Min: floatPtr(-100), Max: floatPtr(100)},
-			{Name: "prox_nc0", Label: "Prox 1 (0:NO, 1:NC)", Type: "number", Required: false},
+			{Name: "min_t1", Label: "Min T1", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "max_t1", Label: "Max T1", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "min_t2", Label: "Min T2", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "max_t2", Label: "Max T2", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "min_t3", Label: "Min T3", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "max_t3", Label: "Max T3", Type: "number", Required: false, Step: floatPtr(0.1)},
 		}...),
 	},
-	"M5": {
+	"TEMP|5": {
 		Name: "M5", DisplayName: "TEMP-M5 (1 DS + 2 Prox)", Command: "set_config",
 		Fields: append(commonTempFields, []Field{
-			{Name: "range0", Label: "Range T1", Type: "range", Required: false, Step: floatPtr(0.1), Min: floatPtr(-100), Max: floatPtr(100)},
-			{Name: "prox_nc0", Label: "Prox 1 (0:NO, 1:NC)", Type: "number", Required: false},
-			{Name: "prox_nc1", Label: "Prox 2 (0:NO, 1:NC)", Type: "number", Required: false},
+			{Name: "min_t1", Label: "Min T1", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "max_t1", Label: "Max T1", Type: "number", Required: false, Step: floatPtr(0.1)},
 		}...),
 	},
-	"M6": {
+	"TEMP|6": {
 		Name: "M6", DisplayName: "TEMP-M6 (1 DS + 1 Prox)", Command: "set_config",
 		Fields: append(commonTempFields, []Field{
-			{Name: "range0", Label: "Range T1", Type: "range", Required: false, Step: floatPtr(0.1), Min: floatPtr(-100), Max: floatPtr(100)},
-			{Name: "prox_nc0", Label: "Prox 1 (0:NO, 1:NC)", Type: "number", Required: false},
+			{Name: "min_t1", Label: "Min T1", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "max_t1", Label: "Max T1", Type: "number", Required: false, Step: floatPtr(0.1)},
 		}...),
 	},
-	"M7": {
+	"TEMP|7": {
 		Name: "M7", DisplayName: "TEMP-M7 (1 Prox)", Command: "set_config",
-		Fields: append(commonTempFields, []Field{
-			{Name: "prox_nc0", Label: "Prox 1 (0:NO, 1:NC)", Type: "number", Required: false},
-		}...),
-	},
-	"M8": {
-		Name: "M8", DisplayName: "TEMP-M8 (Modbus Only)", Command: "set_config",
 		Fields: commonTempFields,
 	},
-	"M9": {
+	"TEMP|8": {
+		Name: "M8", DisplayName: "TEMP-M8 (Modbus Only)", Command: "set_config",
+		Fields: append(commonTempFields, []Field{
+			{Name: "sht_suhu_min", Label: "Min SHT Temp", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "sht_suhu_max", Label: "Max SHT Temp", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "sht_humidity_min", Label: "Min SHT Hum", Type: "number", Required: false, Step: floatPtr(1)},
+			{Name: "sht_humidity_max", Label: "Max SHT Hum", Type: "number", Required: false, Step: floatPtr(1)},
+		}...),
+	},
+	"TEMP|9": {
 		Name: "M9", DisplayName: "TEMP-M9 (1 DS Only)", Command: "set_config",
 		Fields: append(commonTempFields, []Field{
-			{Name: "range0", Label: "Range T1", Type: "range", Required: false, Step: floatPtr(0.1), Min: floatPtr(-100), Max: floatPtr(100)},
+			{Name: "min_t1", Label: "Min T1", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "max_t1", Label: "Max T1", Type: "number", Required: false, Step: floatPtr(0.1)},
 		}...),
 	},
-	"M10": {
+	"TEMP|10": {
 		Name: "M10", DisplayName: "TEMP-M10 (2 DS + 1 Prox)", Command: "set_config",
 		Fields: append(commonTempFields, []Field{
-			{Name: "range0", Label: "Range T1", Type: "range", Required: false, Step: floatPtr(0.1), Min: floatPtr(-100), Max: floatPtr(100)},
-			{Name: "range1", Label: "Range T2", Type: "range", Required: false, Step: floatPtr(0.1), Min: floatPtr(-100), Max: floatPtr(100)},
-			{Name: "prox_nc0", Label: "Prox 1 (0:NO, 1:NC)", Type: "number", Required: false},
+			{Name: "min_t1", Label: "Min T1", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "max_t1", Label: "Max T1", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "min_t2", Label: "Min T2", Type: "number", Required: false, Step: floatPtr(0.1)},
+			{Name: "max_t2", Label: "Max T2", Type: "number", Required: false, Step: floatPtr(0.1)},
 		}...),
 	},
-	"M11": {
+	"TEMP|11": {
 		Name: "M11", DisplayName: "TEMP-M11 (2 Prox)", Command: "set_config",
-		Fields: append(commonTempFields, []Field{
-			{Name: "prox_nc0", Label: "Prox 1 (0:NO, 1:NC)", Type: "number", Required: false},
-			{Name: "prox_nc1", Label: "Prox 2 (0:NO, 1:NC)", Type: "number", Required: false},
-		}...),
+		Fields: commonTempFields,
 	},
 	"MDCW": {
 		Name:        "MDCW",
 		DisplayName: "MDCW Weighing",
 		Command:     "set_config",
-		Fields: []Field{
-			{Name: "prefix", Label: "Device Prefix", Type: "text", Required: true, Placeholder: "e.g., MDCW_01"},
-			{Name: "interval", Label: "Interval (ms)", Type: "number", Required: true},
-		},
+		Fields:      commonMdcwFields,
 	},
 	"V1": {
 		Name:        "V1",
 		DisplayName: "MDCW V1 (Standard)",
 		Command:     "set_config",
-		Fields: []Field{
-			{Name: "prefix", Label: "Device Prefix", Type: "text", Required: true, Placeholder: "e.g., MDCW_01"},
-			{Name: "interval", Label: "Interval (ms)", Type: "number", Required: true},
-		},
+		Fields:      commonMdcwFields,
 	},
 	"V2": {
 		Name:        "V2",
 		DisplayName: "MDCW V2 (Prox)",
 		Command:     "set_config",
-		Fields: []Field{
-			{Name: "prefix", Label: "Device Prefix", Type: "text", Required: true, Placeholder: "e.g., MDCW_01"},
-			{Name: "interval", Label: "Interval (ms)", Type: "number", Required: true},
+		Fields: append(commonMdcwFields, []Field{
 			{Name: "prox_nc0", Label: "Prox 1 (0:NO, 1:NC)", Type: "number", Required: false},
 			{Name: "prox_nc1", Label: "Prox 2 (0:NO, 1:NC)", Type: "number", Required: false},
 			{Name: "prox_nc2", Label: "Prox 3 (0:NO, 1:NC)", Type: "number", Required: false},
-		},
+		}...),
 	},
 	"TROLI": {
 		Name:        "TROLI",
@@ -218,6 +247,12 @@ var modelRegistry = map[string]ModelConfig{
 			{Name: "app_mode", Label: "App Mode", Type: "select", Required: true, Options: []string{"A", "B"}},
 			{Name: "trans", Label: "Trans (IN/OUT) - Mode A Only", Type: "select", Required: false, Options: []string{"IN", "OUT"}},
 			{Name: "pass_code", Label: "Target Product Code - Mode B", Type: "text", Required: false, Placeholder: "e.g., 100209"},
+		},
+	},
+	"GENERIC": {
+		Name: "GENERIC", DisplayName: "Unregistered Device", Command: "set_config",
+		Fields: []Field{
+			{Name: "node_prefix", Label: "Node Prefix", Type: "text", Required: false, Placeholder: "NODE-"},
 		},
 	},
 }
@@ -241,6 +276,10 @@ var (
 
 	// Webhook Key (Optional security)
 	webhookToken string
+
+	// Alarm Tracking
+	lastAlarmState = make(map[string]bool)
+	alarmMutex     sync.Mutex
 )
 
 type EMQXWebhook struct {
@@ -292,35 +331,19 @@ func main() {
 
 	// Load existing files on startup
 	loadInitialFiles("static/uploads")
-	engine := html.New("./views", ".html")
 	app := fiber.New(fiber.Config{
-		Views:     engine,
 		BodyLimit: 100 * 1024 * 1024, // 100MB Limit
 	})
 
-	// static assets & files
-	app.Static("/static", "./static")
+	// Serve raw download files
 	app.Static("/files", "./static/uploads")
 
 	// --- Public Routes ---
-	app.Get("/login", handleShowLogin)
-	app.Post("/login", handleLogin)
-	app.Post("/request-code", handleRequestCode)
 	app.Post("/api/webhook/emqx", handleEMQXWebhook)
 
-	// --- Protected Routes ---
-	// Grup ini memerlukan autentikasi
+	// --- Protected Routes (auth disabled) ---
 	protected := app.Group("/")
 	protected.Use(requireAuth)
-
-	protected.Get("/", func(c *fiber.Ctx) error {
-		brokerHost := getEnv("MQTT_BROKER", "")
-		serverName := getEnv("SERVER_NAME", "ren_itdt_west")
-		return c.Render("index", fiber.Map{
-			"broker":     brokerHost,
-			"serverName": serverName,
-		})
-	})
 
 	protected.Post("/logout", handleLogout)
 
@@ -391,7 +414,39 @@ func main() {
 		if config, exists := modelRegistry[modelName]; exists {
 			return c.JSON(config)
 		}
+
+		// Prefix fallback
+		modelPrefix := getEnv("MODEL_PREFIX", "TEMP|")
+		if strings.HasPrefix(modelName, modelPrefix) {
+			if config, exists := modelRegistry["TEMP"]; exists {
+				return c.JSON(config)
+			}
+		}
+
+		// Final fallback to GENERIC
+		if config, exists := modelRegistry["GENERIC"]; exists {
+			return c.JSON(config)
+		}
+
 		return c.Status(404).JSON(fiber.Map{"error": "model not found"})
+	})
+
+	// API: get fresh config from node (request it)
+	api.Get("/nodes/:id/config", func(c *fiber.Ctx) error {
+		id := c.Params("id")
+
+		// Send get_config command
+		payload := map[string]interface{}{"cmd": "get_config"}
+		b, _ := json.Marshal(payload)
+		mqttClient.Publish(fmt.Sprintf("nodes/%s/command", id), 0, false, b)
+
+		// Return the latest FullConfig we have.
+		nodeMutex.RLock()
+		defer nodeMutex.RUnlock()
+		if info, ok := nodeStatus[id]; ok {
+			return c.JSON(info.FullConfig)
+		}
+		return c.Status(404).JSON(fiber.Map{"error": "node not found"})
 	})
 
 	// DELETE node endpoint
@@ -560,36 +615,51 @@ func main() {
 	})
 
 	// Upload OTA (form multipart)
+	// Upload OTA (form multipart) - Multi-file support
 	protected.Post("/upload", func(c *fiber.Ctx) error {
-		f, err := c.FormFile("file")
+		form, err := c.MultipartForm()
 		if err != nil {
 			log.Printf("Upload failed: %v", err)
-			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "file required"})
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "multipart form required"})
 		}
 
-		// Security: Always use Base name to prevent path traversal and ensure consistency
-		baseName := filepath.Base(f.Filename)
-		dst := filepath.Join("static", "uploads", baseName)
-
-		if err := c.SaveFile(f, dst); err != nil {
-			log.Printf("Failed to save file %s: %v", dst, err)
-			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "failed to save to disk"})
+		files := form.File["file"]
+		if len(files) == 0 {
+			return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "no files provided"})
 		}
 
+		var uploadedFiles []string
 		fileMutex.Lock()
 		defer fileMutex.Unlock()
-		fileInfos[baseName] = FileInfo{
-			Name:       baseName,
-			URL:        "/files/" + baseName,
-			UploadTime: time.Now(),
-			Size:       f.Size,
+
+		for _, f := range files {
+			// Security: Always use Base name to prevent path traversal and ensure consistency
+			baseName := filepath.Base(f.Filename)
+			dst := filepath.Join("static", "uploads", baseName)
+
+			if err := c.SaveFile(f, dst); err != nil {
+				log.Printf("Failed to save file %s: %v", dst, err)
+				continue // Skip failed files but continue with others
+			}
+
+			fileInfos[baseName] = FileInfo{
+				Name:       baseName,
+				URL:        "/files/" + baseName,
+				UploadTime: time.Now(),
+				Size:       f.Size,
+			}
+			uploadedFiles = append(uploadedFiles, baseName)
+			log.Printf("Successfully uploaded: %s as %s (%d bytes)", f.Filename, baseName, f.Size)
 		}
 
-		log.Printf("Successfully uploaded: %s as %s (%d bytes)", f.Filename, baseName, f.Size)
-		return c.JSON(fiber.Map{"status": "ok", "filename": baseName})
+		return c.JSON(fiber.Map{
+			"status": "ok",
+			"count":  len(uploadedFiles),
+			"files":  uploadedFiles,
+		})
 	})
 
-	// Config -> publish to nodes/{id}/command (Dynamic model-based)
+	// Config -> publish to nodes/{id}/command (Dynamic config)
 	protected.Post("/config", func(c *fiber.Ctx) error {
 		var req map[string]interface{}
 		if err := c.BodyParser(&req); err != nil {
@@ -601,158 +671,33 @@ func main() {
 			return c.Status(400).JSON(fiber.Map{"error": "node ID required"})
 		}
 
-		// Get model from nodeStatus
-		nodeMutex.RLock()
-		model := ""
-		version := ""
+		// Prepare dynamic payload
+		payload := make(map[string]interface{})
+		for k, v := range req {
+			if k == "node" {
+				continue
+			}
+			payload[k] = v
+		}
+
+		if _, exists := payload["cmd"]; !exists {
+			payload["cmd"] = "set_config"
+		}
+
+		// Update nodeStatus memory map dynamically
+		nodeMutex.Lock()
 		if info, ok := nodeStatus[nodeID]; ok {
-			model = info.Model
-			version = info.Version
-		}
-		nodeMutex.RUnlock()
-
-		// Smart model detection: use variant from version if available
-		activeModel := model
-		if version != "" && strings.Contains(version, "-") {
-			parts := strings.Split(version, "-")
-			variant := parts[len(parts)-1]
-			if _, exists := modelRegistry[variant]; exists {
-				activeModel = variant
+			if info.FullConfig == nil {
+				info.FullConfig = make(map[string]interface{})
 			}
-		}
-
-		// Default to TEMP if no model specified
-		if activeModel == "" {
-			activeModel = "TEMP"
-		}
-
-		// Get model config from registry
-		modelConfig, exists := modelRegistry[activeModel]
-		if !exists {
-			// Second fallback to base model
-			modelConfig, exists = modelRegistry[model]
-			if !exists {
-				return c.Status(400).JSON(fiber.Map{
-					"error": fmt.Sprintf("unknown model: %s", activeModel),
-				})
-			}
-		}
-
-		// Build payload dynamically based on model fields
-		payload := map[string]interface{}{
-			"cmd": modelConfig.Command,
-		}
-
-		// Extract field values from request
-		for _, field := range modelConfig.Fields {
-			if value, ok := req[field.Name]; ok {
-				payload[field.Name] = value
-
-				// Update nodeStatus with new values
-				nodeMutex.Lock()
-				if info, ok := nodeStatus[nodeID]; ok {
-					switch field.Name {
-					case "ck":
-						info.Ck = fmt.Sprint(value)
-					case "area":
-						info.Area = fmt.Sprint(value)
-					case "no":
-						info.No = fmt.Sprint(value)
-					case "prefix":
-						info.Prefix = fmt.Sprint(value)
-					case "interval":
-						if f, ok := value.(float64); ok {
-							info.Interval = uint64(f)
-						}
-					case "delay":
-						if f, ok := value.(float64); ok {
-							info.Delay = uint64(f)
-						}
-					case "prox_nc0":
-						if f, ok := value.(float64); ok {
-							info.ProxNc0 = int(f)
-						}
-					case "prox_nc1":
-						if f, ok := value.(float64); ok {
-							info.ProxNc1 = int(f)
-						}
-					case "prox_nc2":
-						if f, ok := value.(float64); ok {
-							info.ProxNc2 = int(f)
-						}
-					case "app_mode":
-						info.AppMode = fmt.Sprint(value)
-					case "trans":
-						info.Trans = fmt.Sprint(value)
-					case "pass_code":
-						info.PassCode = fmt.Sprint(value)
-					// --- Fix: Added missing threshold fields ---
-					case "min":
-						if f, ok := value.(float64); ok {
-							info.Min = f
-						}
-					case "max":
-						if f, ok := value.(float64); ok {
-							info.Max = f
-						}
-					case "min0":
-						if f, ok := value.(float64); ok {
-							info.Min0 = f
-						}
-					case "max0":
-						if f, ok := value.(float64); ok {
-							info.Max0 = f
-						}
-					case "min1":
-						if f, ok := value.(float64); ok {
-							info.Min1 = f
-						}
-					case "max1":
-						if f, ok := value.(float64); ok {
-							info.Max1 = f
-						}
-					case "min2":
-						if f, ok := value.(float64); ok {
-							info.Min2 = f
-						}
-					case "max2":
-						if f, ok := value.(float64); ok {
-							info.Max2 = f
-						}
-					case "min3":
-						if f, ok := value.(float64); ok {
-							info.Min3 = f
-						}
-					case "max3":
-						if f, ok := value.(float64); ok {
-							info.Max3 = f
-						}
-					case "min4":
-						if f, ok := value.(float64); ok {
-							info.Min4 = f
-						}
-					case "max4":
-						if f, ok := value.(float64); ok {
-							info.Max4 = f
-						}
-					// --- RH Support ---
-					case "min_rh":
-						if f, ok := value.(float64); ok {
-							info.MinRH = f
-						}
-					case "max_rh":
-						if f, ok := value.(float64); ok {
-							info.MaxRH = f
-						}
-					}
+			for k, v := range payload {
+				if k == "cmd" {
+					continue
 				}
-				nodeMutex.Unlock()
-			} else if field.Required {
-				return c.Status(400).JSON(fiber.Map{
-					"error": fmt.Sprintf("required field missing: %s", field.Name),
-				})
+				info.FullConfig[k] = v
 			}
 		}
+		nodeMutex.Unlock()
 
 		// Marshal and publish
 		b, err := json.Marshal(payload)
@@ -767,8 +712,7 @@ func main() {
 		return c.JSON(fiber.Map{
 			"status": "ok",
 			"topic":  topic,
-			"model":  model,
-			"cmd":    modelConfig.Command,
+			"cmd":    payload["cmd"],
 		})
 	})
 
@@ -837,10 +781,23 @@ func main() {
 		return c.Send(body)
 	})
 
+	// Monitor proxy endpoint
+	protected.Get("/monitor/status", func(c *fiber.Ctx) error {
+		monitorURL := getEnv("MONITOR_URL", "http://monitor:9090/status")
+		resp, err := http.Get(monitorURL)
+		if err != nil {
+			return c.Status(http.StatusServiceUnavailable).JSON(fiber.Map{"error": "Monitor service tidak tersedia"})
+		}
+		defer resp.Body.Close()
+		body, _ := io.ReadAll(resp.Body)
+		c.Set("Content-Type", "application/json")
+		return c.Send(body)
+	})
+
 	// Pipeline CRUD proxies
 	protected.Get("/api/pipelines", func(c *fiber.Ctx) error {
-		forwarderURL := getEnv("FORWARDER_API_URL", "http://backend:8888/api/pipelines")
-		resp, err := http.Get(forwarderURL)
+		forwarderBase := getEnv("FORWARDER_API_URL", "http://backend:8888/api")
+		resp, err := http.Get(forwarderBase + "/pipelines")
 		if err != nil {
 			return c.Status(http.StatusServiceUnavailable).JSON(fiber.Map{"error": "Forwarder service tidak tersedia"})
 		}
@@ -851,8 +808,8 @@ func main() {
 	})
 
 	protected.Post("/api/pipelines", func(c *fiber.Ctx) error {
-		forwarderURL := getEnv("FORWARDER_API_URL", "http://backend:8888/api/pipelines")
-		resp, err := http.Post(forwarderURL, "application/json", strings.NewReader(string(c.Body())))
+		forwarderBase := getEnv("FORWARDER_API_URL", "http://backend:8888/api")
+		resp, err := http.Post(forwarderBase+"/pipelines", "application/json", strings.NewReader(string(c.Body())))
 		if err != nil {
 			return c.Status(http.StatusServiceUnavailable).JSON(fiber.Map{"error": "Forwarder service tidak tersedia"})
 		}
@@ -864,8 +821,8 @@ func main() {
 
 	protected.Delete("/api/pipelines/:id", func(c *fiber.Ctx) error {
 		id := c.Params("id")
-		forwarderURL := getEnv("FORWARDER_API_URL", "http://backend:8888/api/pipelines") + "/" + id
-		req, _ := http.NewRequest("DELETE", forwarderURL, nil)
+		forwarderBase := getEnv("FORWARDER_API_URL", "http://backend:8888/api")
+		req, _ := http.NewRequest("DELETE", forwarderBase+"/pipelines/"+id, nil)
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {
 			return c.Status(http.StatusServiceUnavailable).JSON(fiber.Map{"error": "Forwarder service tidak tersedia"})
@@ -876,6 +833,14 @@ func main() {
 
 	// Start MQTT connection (non-blocking)
 	go initMQTT()
+
+	// --- Serve Svelte Dashboard (SPA) ---
+	// The built Svelte app lives in ./web (copied during Docker build from dashboard/build/)
+	app.Static("/", "./web")
+	// SPA fallback – unmatched non-API paths return index.html
+	app.Get("/*", func(c *fiber.Ctx) error {
+		return c.SendFile("./web/index.html")
+	})
 
 	// Start background cleanup for very old offline nodes (e.g., every hour)
 	go func() {
@@ -901,16 +866,21 @@ func main() {
 }
 
 func requireAuth(c *fiber.Ctx) error {
-	sess, err := store.Get(c)
-	if err != nil {
-		return c.Status(http.StatusInternalServerError).SendString("Session error")
-	}
-
-	if sess.Get("authenticated") != true {
-		return c.Redirect("/login")
-	}
-
+	// DEBUG: Auth Tele temporarily disabled
 	return c.Next()
+
+	/*
+		sess, err := store.Get(c)
+		if err != nil {
+			return c.Status(http.StatusInternalServerError).SendString("Session error")
+		}
+
+		if sess.Get("authenticated") != true {
+			return c.Redirect("/login")
+		}
+
+		return c.Next()
+	*/
 }
 
 func handleShowLogin(c *fiber.Ctx) error {
@@ -1162,8 +1132,16 @@ func mqttHandler(client mqtt.Client, msg mqtt.Message) {
 						Ck:           oldInfo.Ck,
 						Area:         oldInfo.Area,
 						No:           oldInfo.No,
-						Min:          oldInfo.Min,
-						Max:          oldInfo.Max,
+						MinT1:        oldInfo.MinT1,
+						MaxT1:        oldInfo.MaxT1,
+						MinT2:        oldInfo.MinT2,
+						MaxT2:        oldInfo.MaxT2,
+						MinT3:        oldInfo.MinT3,
+						MaxT3:        oldInfo.MaxT3,
+						SHTSuhuMin:   oldInfo.SHTSuhuMin,
+						SHTSuhuMax:   oldInfo.SHTSuhuMax,
+						SHTHumMin:    oldInfo.SHTHumMin,
+						SHTHumMax:    oldInfo.SHTHumMax,
 						Interval:     oldInfo.Interval,
 						Prefix:       oldInfo.Prefix,
 						Model:        oldInfo.Model,
@@ -1196,138 +1174,36 @@ func mqttHandler(client mqtt.Client, msg mqtt.Message) {
 		var tmp interface{}
 		if err := json.Unmarshal(raw, &tmp); err == nil {
 			if m, ok := tmp.(map[string]interface{}); ok {
-				if s, ex := m["state"]; ex {
-					info.Status = fmt.Sprintf("%v", s)
-				} else {
-					info.Status = fmt.Sprintf("%v", tmp)
+				// Simpan semua data asli ke FullConfig (Fully Dynamic)
+				info.FullConfig = m
+
+				// Auto-map matching fields ke struct NodeInfo menggunakan json tags
+				// Ini menghemat ratusan baris kode pemetaan manual
+				if err := json.Unmarshal(raw, info); err != nil {
+					log.Printf("[MQTT] Error auto-mapping node info: %v", err)
 				}
-				if mod, ex := m["model"]; ex {
-					info.Model = fmt.Sprintf("%v", mod)
+
+				// Handle mapping khusus untuk field yang mungkin punya nama berbeda di JSON lama
+				if v, ok := m["active_model"]; ok {
+					info.Model = fmt.Sprintf("%v", v)
 				}
-				if v, ex := m["ver"]; ex {
-					info.Version = fmt.Sprintf("%v", v)
-				}
-				if ip, ex := m["ip"]; ex {
-					info.IP = fmt.Sprintf("%v", ip)
-				}
-				if p, ex := m["prefix"]; ex {
-					info.Prefix = fmt.Sprintf("%v", p)
-				}
-				// Handle nested "conf" object if present
-				if conf, ex := m["conf"]; ex {
-					if cm, ok := conf.(map[string]interface{}); ok {
-						if v, ok := cm["ck"]; ok {
-							info.Ck = fmt.Sprintf("%v", v)
-						}
-						if v, ok := cm["area"]; ok {
-							info.Area = fmt.Sprintf("%v", v)
-						}
-						if v, ok := cm["no"]; ok {
-							info.No = fmt.Sprintf("%v", v)
-						}
-						if v, ok := cm["min"]; ok {
-							if f, ok := v.(float64); ok {
-								info.Min = f
+
+				// Handle nested "conf" atau "config" jika ada (backward compatibility)
+				for _, key := range []string{"conf", "config"} {
+					if cfg, ex := m[key]; ex {
+						if cm, ok := cfg.(map[string]interface{}); ok {
+							// Merge nested config ke FullConfig agar muncul di UI
+							for k, v := range cm {
+								info.FullConfig[k] = v
 							}
-						}
-						if v, ok := cm["max"]; ok {
-							if f, ok := v.(float64); ok {
-								info.Max = f
-							}
-						}
-						// Multi-thresholds
-						for i := 0; i < 5; i++ {
-							minKey := fmt.Sprintf("min%d", i)
-							maxKey := fmt.Sprintf("max%d", i)
-							if v, ok := cm[minKey]; ok {
-								if f, ok := v.(float64); ok {
-									switch i {
-									case 0:
-										info.Min0 = f
-									case 1:
-										info.Min1 = f
-									case 2:
-										info.Min2 = f
-									case 3:
-										info.Min3 = f
-									case 4:
-										info.Min4 = f
-									}
-								}
-							}
-							if v, ok := cm[maxKey]; ok {
-								if f, ok := v.(float64); ok {
-									switch i {
-									case 0:
-										info.Max0 = f
-									case 1:
-										info.Max1 = f
-									case 2:
-										info.Max2 = f
-									case 3:
-										info.Max3 = f
-									case 4:
-										info.Max4 = f
-									}
-								}
-							}
-						}
-						if v, ok := cm["prefix"]; ok {
-							info.Prefix = fmt.Sprintf("%v", v)
-						}
-						if v, ok := cm["interval"]; ok {
-							if f, ok := v.(float64); ok {
-								info.Interval = uint64(f)
-							}
-						}
-						if v, ok := cm["delay"]; ok {
-							if f, ok := v.(float64); ok {
-								info.Delay = uint64(f)
-							}
-						}
-						// Proximity NC/NO
-						for i := 0; i < 3; i++ {
-							key := fmt.Sprintf("prox_nc%d", i)
-							if v, ok := cm[key]; ok {
-								if f, ok := v.(float64); ok {
-									switch i {
-									case 0:
-										info.ProxNc0 = int(f)
-									case 1:
-										info.ProxNc1 = int(f)
-									case 2:
-										info.ProxNc2 = int(f)
-									}
-								}
-							}
-							// Troli specific fields
-							if v, ok := cm["app_mode"]; ok {
-								info.AppMode = fmt.Sprintf("%v", v)
-							}
-							if v, ok := cm["trans"]; ok {
-								info.Trans = fmt.Sprintf("%v", v)
-							}
-							if v, ok := cm["pass_code"]; ok {
-								info.PassCode = fmt.Sprintf("%v", v)
-							}
-						}
-						// RH specific parsing
-						if v, ok := cm["min_rh"]; ok {
-							if f, ok := v.(float64); ok {
-								info.MinRH = f
-							}
-						}
-						if v, ok := cm["max_rh"]; ok {
-							if f, ok := v.(float64); ok {
-								info.MaxRH = f
-							}
+							// Re-unmarshal nested content untuk mengisi field struct yang cocok
+							cfgRaw, _ := json.Marshal(cm)
+							json.Unmarshal(cfgRaw, info)
 						}
 					}
-				} else {
-					info.Status = fmt.Sprintf("%v", tmp)
 				}
 			} else {
-				info.Status = string(raw)
+				info.Status = fmt.Sprintf("%v", tmp)
 			}
 			info.Updated = now
 		}
@@ -1342,7 +1218,13 @@ func mqttHandler(client mqtt.Client, msg mqtt.Message) {
 
 		var m map[string]interface{}
 		if err := json.Unmarshal(raw, &m); err == nil {
+			info.FullConfig = m
 			if v, ok := m["ram"]; ok {
+				if val, ok := v.(float64); ok {
+					info.RamFreeBytes = int64(val)
+				}
+			}
+			if v, ok := m["ram_free"]; ok {
 				if val, ok := v.(float64); ok {
 					info.RamFreeBytes = int64(val)
 				}
@@ -1355,6 +1237,50 @@ func mqttHandler(client mqtt.Client, msg mqtt.Message) {
 			if v, ok := m["ip"]; ok {
 				info.IP = fmt.Sprintf("%v", v)
 			}
+			if v, ok := m["ck"]; ok {
+				info.Ck = fmt.Sprintf("%v", v)
+			}
+			if v, ok := m["area"]; ok {
+				info.Area = fmt.Sprintf("%v", v)
+			}
+			if v, ok := m["no"]; ok {
+				info.No = fmt.Sprintf("%v", v)
+			}
+			if v, ok := m["no_t1"]; ok {
+				if f, ok := v.(float64); ok {
+					info.NoT1 = int(f)
+				}
+			}
+			if v, ok := m["no_t2"]; ok {
+				if f, ok := v.(float64); ok {
+					info.NoT2 = int(f)
+				}
+			}
+			if v, ok := m["no_t3"]; ok {
+				if f, ok := v.(float64); ok {
+					info.NoT3 = int(f)
+				}
+			}
+			if v, ok := m["no_sht"]; ok {
+				if f, ok := v.(float64); ok {
+					info.NoSHT = int(f)
+				}
+			}
+			if v, ok := m["no_p1"]; ok {
+				if f, ok := v.(float64); ok {
+					info.NoP1 = int(f)
+				}
+			}
+			if v, ok := m["no_p2"]; ok {
+				if f, ok := v.(float64); ok {
+					info.NoP2 = int(f)
+				}
+			}
+			if v, ok := m["no_p3"]; ok {
+				if f, ok := v.(float64); ok {
+					info.NoP3 = int(f)
+				}
+			}
 			if v, ok := m["sd_ok"]; ok {
 				if b, ok := v.(bool); ok {
 					info.SD_OK = &b
@@ -1363,8 +1289,64 @@ func mqttHandler(client mqtt.Client, msg mqtt.Message) {
 			if v, ok := m["model"]; ok {
 				info.Model = fmt.Sprintf("%v", v)
 			}
-			if v, ok := m["prefix"]; ok {
+			if v, ok := m["version"]; ok {
+				info.Version = fmt.Sprintf("%v", v)
+			}
+			if v, ok := m["node_prefix"]; ok {
 				info.Prefix = fmt.Sprintf("%v", v)
+			}
+			if data, ok := m["data"]; ok {
+				if dm, ok := data.(map[string]interface{}); ok {
+					if t1, ok := dm["t1"].(float64); ok {
+						info.CurT1 = t1
+					}
+					if t2, ok := dm["t2"].(float64); ok {
+						info.CurT2 = t2
+					}
+					if t3, ok := dm["t3"].(float64); ok {
+						info.CurT3 = t3
+					}
+					if p1, ok := dm["p1"].(float64); ok {
+						info.CurP1 = int(p1)
+					}
+					if p2, ok := dm["p2"].(float64); ok {
+						info.CurP2 = int(p2)
+					}
+					if p3, ok := dm["p3"].(float64); ok {
+						info.CurP3 = int(p3)
+					}
+					if st, ok := dm["sht_t"].(float64); ok {
+						info.CurSHT_T = st
+					}
+					if sh, ok := dm["sht_h"].(float64); ok {
+						info.CurSHT_H = sh
+					}
+				}
+			}
+			if v, ok := m["relay"]; ok {
+				relayOn := false
+				switch val := v.(type) {
+				case bool:
+					relayOn = val
+				case float64:
+					relayOn = val > 0
+				case string:
+					relayOn = val == "ON" || val == "1" || val == "true"
+				}
+
+				if relayOn != info.Relay {
+					info.Relay = relayOn
+					alarmMutex.Lock()
+					prev, exists := lastAlarmState[nodeID]
+					if relayOn && (!exists || !prev) {
+						lastAlarmState[nodeID] = true
+						go sendRelayTelegram(nodeID, info, true)
+					} else if !relayOn && exists && prev {
+						lastAlarmState[nodeID] = false
+						go sendRelayTelegram(nodeID, info, false)
+					}
+					alarmMutex.Unlock()
+				}
 			}
 		}
 		info.Updated = now
@@ -1440,4 +1422,60 @@ func handleEMQXWebhook(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(fiber.Map{"status": "ok"})
+}
+
+func sendRelayTelegram(nodeID string, info *NodeInfo, isActive bool) {
+	statusStr := "🚨 *ALARM ACTIVE*"
+	if !isActive {
+		statusStr = "✅ *ALARM CLEARED*"
+	}
+
+	emoji := "🔋"
+	if isActive {
+		emoji = "⚠️"
+	}
+
+	message := fmt.Sprintf("%s\n", statusStr)
+	message += fmt.Sprintf("*Device:* `%s` (%s)\n", nodeID, info.Model)
+	message += fmt.Sprintf("*Site:* CK %s - Area %s (Node #%s)\n", info.Ck, info.Area, info.No)
+	message += "----------------------------\n"
+
+	// Sensor Readings
+	message += "*TEMPERATURES:*\n"
+	if info.CurT1 > -100 {
+		message += fmt.Sprintf("• T1: `%.1f°C` (Limit: %.1f - %.1f)\n", info.CurT1, info.MinT1, info.MaxT1)
+	}
+	if info.CurT2 > -100 {
+		message += fmt.Sprintf("• T2: `%.1f°C` (Limit: %.1f - %.1f)\n", info.CurT2, info.MinT2, info.MaxT2)
+	}
+	if info.CurT3 > -100 {
+		message += fmt.Sprintf("• T3: `%.1f°C` (Limit: %.1f - %.1f)\n", info.CurT3, info.MinT3, info.MaxT3)
+	}
+
+	if info.CurSHT_T > -40 {
+		message += fmt.Sprintf("• SHT: `%.1f°C` / `%.1f%%`RH\n", info.CurSHT_T, info.CurSHT_H)
+	}
+
+	message += "\n*DOOR STATUS:*\n"
+	message += fmt.Sprintf("• P1: %s\n", formatDoor(info.CurP1))
+	message += fmt.Sprintf("• P2: %s\n", formatDoor(info.CurP2))
+	message += fmt.Sprintf("• P3: %s\n", formatDoor(info.CurP3))
+
+	message += "----------------------------\n"
+	if isActive {
+		message += fmt.Sprintf("%s *RELAY STATUS: ON*\n", emoji)
+		message += "_Immediately check the storage area!_"
+	} else {
+		message += "🔋 *RELAY STATUS: OFF*\n"
+		message += "_System normalized._"
+	}
+
+	sendTelegramMessage(message)
+}
+
+func formatDoor(val int) string {
+	if val == 0 {
+		return "🟢 CLOSED"
+	}
+	return "🔴 OPEN"
 }

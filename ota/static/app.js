@@ -2,6 +2,39 @@
 // Megdev IoT Core - Runtime Logic
 console.log("App.js loaded v3");
 
+window.showToast = function (message, type = 'info', duration = 3000) {
+  const container = document.getElementById('toast-container');
+  if (!container) return;
+
+  const toast = document.createElement('div');
+  toast.className = `toast ${type}`;
+
+  const icon = type === 'success' ? '✓' : (type === 'failed' ? '✗' : 'ℹ');
+
+  toast.innerHTML = `
+    <span class="text-xs">${icon}</span>
+    <span class="toast-msg uppercase">${message}</span>
+    <div class="toast-progress"><div class="toast-bar" style="transition-duration: ${duration}ms; width: 100%; background: currentColor"></div></div>
+  `;
+
+  container.appendChild(toast);
+
+  // Trigger animation
+  setTimeout(() => toast.classList.add('show'), 10);
+
+  // Progress bar animation
+  setTimeout(() => {
+    const bar = toast.querySelector('.toast-bar');
+    if (bar) bar.style.width = '0%';
+  }, 50);
+
+  // Remove toast
+  setTimeout(() => {
+    toast.classList.remove('show');
+    setTimeout(() => toast.remove(), 400);
+  }, duration);
+};
+
 window.handleBtnClick = function (btn) {
   const action = btn.dataset.action;
   const node = btn.dataset.node || '';
@@ -48,26 +81,26 @@ async function fetchFiles() {
 
     files.sort((a, b) => new Date(b.upload_time) - new Date(a.upload_time)).forEach(f => {
       const el = document.createElement('div');
-      el.className = 'group relative glass-panel border border-gray-800 p-3 rounded hover:border-indigo-500/50 transition-all animate-fade-in flex flex-col justify-between h-[100px] bg-black/40';
+      el.className = 'group relative glass-panel border border-gray-800 p-2 rounded hover:border-emerald-500/50 transition-all bg-black/40 flex flex-col justify-between';
       const fileUrl = `${location.origin}/files/${f.name}`;
       const uploadDate = new Date(f.upload_time).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' });
 
       el.innerHTML = `
-        <div class="flex justify-between items-start">
-            <div class="flex items-center gap-2">
-                <svg class="w-4 h-4 text-indigo-400 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
-                <div class="truncate pr-2">
-                    <div class="text-[10px] font-bold text-gray-200 truncate" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</div>
-                    <div class="text-[9px] text-gray-500 font-mono mt-0.5 uppercase tracking-tighter">${uploadDate} • ${formatBytes(f.size || 0)}</div>
-                </div>
+        <div class="flex justify-between items-start mb-2">
+            <div class="truncate pr-2">
+                <div class="text-[9px] font-bold text-gray-200 truncate uppercase" title="${escapeHtml(f.name)}">${escapeHtml(f.name)}</div>
+                <div class="text-[8px] text-gray-600 font-mono mt-0.5">${uploadDate} • ${formatBytes(f.size || 0)}</div>
             </div>
-            <button data-action="delete-file" data-name="${escapeHtml(f.name)}" class="p-1.5 text-gray-600 hover:text-red-500 hover:bg-red-500/10 rounded transition-all">
-                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+            <button data-action="delete-file" data-name="${escapeHtml(f.name)}" class="p-1 text-gray-700 hover:text-red-500 transition-all">
+                <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
             </button>
         </div>
         
-        <div class="mt-auto">
-            <button onclick="copyToClipboard('${fileUrl}', this)" class="w-full text-[9px] font-bold text-indigo-400/70 hover:text-indigo-300 bg-indigo-500/5 py-1 rounded border border-indigo-500/10 hover:border-indigo-500/30 transition-all font-mono">
+        <div class="grid grid-cols-2 gap-1 mt-2">
+            <button onclick="selectFirmware('${fileUrl}')" class="text-[8px] font-bold text-emerald-400 bg-emerald-500/5 py-1 rounded border border-emerald-500/10 hover:bg-emerald-500/10 transition-all uppercase">
+                SELECT
+            </button>
+            <button onclick="copyToClipboard('${fileUrl}', this)" class="text-[8px] font-bold text-indigo-400/70 bg-indigo-500/5 py-1 rounded border border-indigo-500/10 hover:bg-indigo-500/10 transition-all uppercase">
                 COPY_URL
             </button>
         </div>
@@ -124,7 +157,7 @@ function renderNodes(nodes) {
                 </div>
                 <div>
                     <div class="text-xs font-bold text-gray-200 leading-none tracking-wide">${info.model || 'UNKNOWN'}</div>
-                    ${info.version ? `<div class="text-[9px] text-gray-500 font-mono mt-0.5">v${info.version}</div>` : ''}
+                    ${info.version ? `<div class="text-[9px] text-gray-500 font-mono mt-0.5">v${info.version} ${info.relay ? '<span class="text-red-500 font-bold ml-1 animate-pulse">[ALARM]</span>' : ''}</div>` : ''}
                 </div>
             </div>
             ${!isOnline ? `
@@ -132,7 +165,9 @@ function renderNodes(nodes) {
               <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-3.5 h-3.5">
                 <path fill-rule="evenodd" d="M8.75 1A2.75 2.75 0 006 3.75v.443c-.795.077-1.584.176-2.365.298a.75.75 0 10.23 1.482l.149-.022.841 10.518A2.75 2.75 0 007.596 19h4.807a2.75 2.75 0 002.742-2.53l.841-10.52.149.023a.75.75 0 00.23-1.482A41.03 41.03 0 0014 4.193V3.75A2.75 2.75 0 0011.25 1h-2.5zM10 4c.84 0 1.673.025 2.5.075V3.75c0-.69-.56-1.25-1.25-1.25h-2.5c-.69 0-1.25.56-1.25 1.25v.325C8.327 4.025 9.16 4 10 4zM8.58 7.72a.75.75 0 00-1.5.06l.3 7.5a.75.75 0 101.5-.06l-.3-7.5zm4.34.06a.75.75 0 10-1.5-.06l-.3 7.5a.75.75 0 101.5.06l.3-7.5z" clip-rule="evenodd" />
               </svg>
-            </button>` : ''}
+            </button>` : `<div class="${info.relay ? 'text-red-500 animate-pulse' : 'text-gray-400 opacity-20'}">
+                <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+            </div>`}
         </div>
 
         <!-- Info Grid -->
@@ -156,11 +191,16 @@ function renderNodes(nodes) {
             </div>
             
             <!-- Config Context Row -->
-            <div class="flex items-center gap-2 pt-2 border-t border-gray-800/30 mt-2">
-                 <svg class="w-3.5 h-3.5 text-teal-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>
-                 <span class="text-[10px] font-mono text-teal-500/80 truncate">
-                    ${info.model?.startsWith('MDCW') ? `PREFIX: ${info.prefix || '-'}` : `CK: ${info.ck || '-'}`}
-                 </span>
+            <div class="flex items-center gap-2 pt-2 border-t border-gray-800/30 mt-2 justify-between">
+                 <div class="flex items-center gap-2 truncate">
+                    <svg class="w-3.5 h-3.5 text-teal-600 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z"></path></svg>
+                    <span class="text-[10px] font-mono text-teal-500/80 truncate">
+                        ${info.model?.startsWith('MDCW') ? `PREFIX: ${info.prefix || '-'}` : `CK: ${info.ck || '-'}`}
+                    </span>
+                 </div>
+                 <div class="text-[9px] font-mono ${info.relay ? 'text-red-500 font-bold' : 'text-gray-600'}">
+                    RELAY: ${info.relay ? 'ON' : 'OFF'}
+                 </div>
             </div>
         </div>
 
@@ -254,39 +294,53 @@ document.addEventListener('DOMContentLoaded', () => {
   if (uploadForm) {
     uploadForm.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const file = fileInput.files[0];
-      if (!file) {
-        document.getElementById('uploadMsg').textContent = 'SELECT FILE FIRST.';
+      const files = fileInput.files;
+      if (!files || files.length === 0) {
+        document.getElementById('uploadMsg').textContent = 'SELECT FILES FIRST.';
         return;
       }
+
       const fd = new FormData();
-      fd.append('file', file);
-      document.getElementById('uploadMsg').textContent = 'TRANSMITTING ASSET...';
+      // Append all files to the same key 'file' as expected by fiber MultipartForm
+      for (let i = 0; i < files.length; i++) {
+        fd.append('file', files[i]);
+      }
+
+      document.getElementById('uploadMsg').textContent = `UPLOADING ${files.length} ASSETS...`;
       try {
         const res = await fetch('/upload', { method: 'POST', body: fd });
         if (res.ok) {
-          document.getElementById('uploadMsg').textContent = 'PACKET SAVED.';
+          const result = await res.json();
+          document.getElementById('uploadMsg').textContent = `SUCCESS: ${result.count} ASSETS SAVED.`;
           uploadForm.reset();
-          if (fileNameLabel) fileNameLabel.textContent = "SELECT_FIRMWARE";
+          if (fileNameLabel) fileNameLabel.textContent = "DROP_FILES_OR_CLICK_TO_SELECT";
+
+          // Reset dropzone style if local UI script exists
+          const dz = document.getElementById('dropZone');
+          if (dz) {
+            dz.classList.add('border-gray-800');
+            dz.classList.remove('border-indigo-500', 'bg-indigo-500/5');
+          }
+          const cd = document.getElementById('fileCountDisplay');
+          if (cd) cd.classList.add('hidden');
+
           setTimeout(() => {
             document.getElementById('uploadMsg').textContent = '';
-            document.getElementById('uploadFormContainer').classList.add('hidden');
             fetchFiles();
-          }, 1500);
+          }, 2000);
         } else {
-          let errorMsg = 'SERVER ERROR.';
+          let errorMsg = 'SERVER REJECTED PACKET.';
           try {
             const errData = await res.json();
             errorMsg = errData.error || errorMsg;
           } catch (e) {
-            if (res.status === 401 || res.status === 403) errorMsg = 'AUTH REQUIRED.';
-            if (res.status === 413) errorMsg = 'FILE TOO LARGE.';
+            if (res.status === 401 || res.status === 403) errorMsg = 'AUTH_REQUIRED.';
+            if (res.status === 413) errorMsg = 'PAYLOAD_TOO_LARGE.';
           }
           document.getElementById('uploadMsg').textContent = `FAIL: ${errorMsg}`;
-          console.error('Upload failed:', res.status, errorMsg);
         }
       } catch (err) {
-        document.getElementById('uploadMsg').textContent = 'NETWORK FAILURE.';
+        document.getElementById('uploadMsg').textContent = 'UPLINK_FAILURE.';
         console.error('Network error during upload:', err);
       }
     });
@@ -340,17 +394,41 @@ async function openLogs(node) {
       let color = 'text-emerald-500';
       if (l.startsWith('[MON]')) color = 'text-blue-400';
       if (l.startsWith('[LOG]')) color = 'text-emerald-500';
-      return `<div class="${color} break-all">> ${escapeHtml(l)}</div>`;
+
+      // Linkify URLs
+      const escaped = escapeHtml(l);
+      const urlRegex = /(https?:\/\/[^\s]+)/g;
+      const linkedLog = escaped.replace(urlRegex, (url) => `<a href="${url}" target="_blank" class="underline hover:text-white" onclick="event.stopPropagation()">${url}</a>`);
+
+      return `<div class="log-line ${color} break-all" onclick="copyLogLine(this)">> ${linkedLog}</div>`;
     }).join('') || '[NO_LOGS_AVAILABLE]';
     // Auto scroll to bottom
     body.scrollTop = body.scrollHeight;
   } catch (err) { body.innerHTML = 'LOG_FETCH_ERROR'; }
 }
 
+window.selectFirmware = function (url) {
+  const input = document.getElementById('otaUrlInput');
+  if (input) {
+    input.value = url;
+    showToast('ASSET_SELECTED', 'info');
+  }
+};
+
+window.copyLogLine = function (el) {
+  const text = el.innerText.replace(/^> /, '');
+  navigator.clipboard.writeText(text).then(() => {
+    const original = el.innerHTML;
+    el.innerHTML = `<span class="text-white bg-indigo-600 px-1 rounded">[COPIED]</span> ${original}`;
+    setTimeout(() => { el.innerHTML = original; }, 800);
+  });
+};
+
 function openOta(node) {
   window.currentOtaNode = node;
   document.getElementById('otaModal').classList.remove('hidden');
   document.getElementById('otaModal').classList.add('flex');
+  fetchFiles(); // Refresh list inside modal
 }
 
 async function sendOta() {
@@ -362,14 +440,14 @@ async function sendOta() {
     url = 'http://' + url;
   }
 
-  // Deteksi localhost/127.0.0.1 - Masalah umum yang Anda alami
+  // Gabungkan ke konfirmasi final
+  let warning = "";
   if (url.includes('localhost') || url.includes('127.0.0.1')) {
-    const serverIp = location.hostname === 'localhost' || location.hostname === '127.0.0.1' ?
-      'MASUKKAN_IP_KOMPUTER_ANDA' : location.hostname;
+    warning = "\n\n⚠️ WARNING: LOCALHOST DETECTED.\nESP32 cannot download from 127.0.0.1!";
+  }
 
-    if (!confirm(`PERINGATAN: URL mengandung 'localhost'. ESP32 TIDAK BISA mendownload dari localhost.\n\nGanti dengan IP: ${serverIp}?\n\nKlik OK untuk melanjutkan apa adanya (mungkin gagal), atau Cancel untuk memperbaiki.`)) {
-      return;
-    }
+  if (!confirm(`INITIATE FIRMWARE FLASH?\nTarget: ${window.currentOtaNode}${warning}`)) {
+    return;
   }
 
   const res = await fetch('/ota', {
@@ -378,253 +456,102 @@ async function sendOta() {
     body: JSON.stringify({ node: window.currentOtaNode, url })
   });
   if (res.ok) {
-    alert('OTA_COMMAND_DISPATCHED');
+    showToast('SUCCESS', 'success');
     document.getElementById('otaModal').classList.add('hidden');
+  } else {
+    showToast('FAILED', 'failed');
   }
 }
 
 async function openConfig(node) {
   window.currentConfigNode = node;
   const modal = document.getElementById('configModal');
-  const fieldsContainer = document.getElementById('dynamicConfigFields');
-  fieldsContainer.innerHTML = '<div class="text-center py-4">[LOADING_MODEL_DEF]</div>';
+  const jsonArea = document.getElementById('configJsonArea');
+  jsonArea.value = "// FETCHING_NODE_CONFIG...";
   modal.classList.remove('hidden');
   modal.classList.add('flex');
 
   try {
-    const nodesRes = await fetch('/api/nodes');
-    const nodes = await nodesRes.json();
-    const info = nodes[node] || {};
+    const res = await fetch(`/api/nodes/${encodeURIComponent(node)}/config`);
+    if (!res.ok) throw new Error('Failed to fetch node config');
+    const config = await res.json();
 
-    // Extract variant from version (e.g., "1.0.0-M4" -> "M4")
-    let specificModel = info.model || 'TEMP';
-    if (info.version && info.version.includes('-')) {
-      const parts = info.version.split('-');
-      const variant = parts[parts.length - 1];
-      if (variant) specificModel = variant;
-    }
+    // Skip status-related internal fields that shouldn't be edited normally
+    const sysFields = ['status', 'ip', 'ram', 'ram_free', 'ram_free_bytes', 'updated', 'last_seen', 'id', 'model', 'version', 'ver', 'state', 'relay', 'cur_t1', 'cur_t2', 'cur_t3', 'cur_p1', 'cur_p2', 'cur_p3', 'cur_sht_t', 'cur_sht_h', 'logs', 'wifi', 'mqtt', 'sd_ok'];
 
-    let modelDef;
-    try {
-      const modelRes = await fetch(`/api/models/${specificModel}`);
-      if (!modelRes.ok) throw new Error('Specific model not found');
-      modelDef = await modelRes.json();
-    } catch (e) {
-      // Fallback to base model
-      const baseModel = info.model || 'TEMP';
-      const modelRes = await fetch(`/api/models/${baseModel}`);
-      if (!modelRes.ok) throw new Error('Model definition not found');
-      modelDef = await modelRes.json();
-    }
-
-    window.currentModelDef = modelDef;
-
-    fieldsContainer.innerHTML = '';
-    modelDef.fields.forEach(f => {
-      const fieldDiv = document.createElement('div');
-      fieldDiv.className = 'grid grid-cols-2 items-center gap-2 py-1 border-b border-gray-800/50';
-
-      const label = document.createElement('label');
-      label.className = 'text-[10px] text-gray-400 font-mono uppercase truncate';
-      label.textContent = f.label;
-
-      let input;
-
-      if (f.type === 'range') {
-        // Dual Slider Logic (Min + Max)
-        const wrapper = document.createElement('div');
-        wrapper.className = 'w-full flexflex-col gap-1';
-
-        const valuesDiv = document.createElement('div');
-        valuesDiv.className = 'flex justify-between text-[9px] text-emerald-500 font-mono mb-1';
-        const valMin = document.createElement('span');
-        const valMax = document.createElement('span');
-        valuesDiv.appendChild(valMin);
-        valuesDiv.appendChild(valMax);
-
-        const inputMin = document.createElement('input');
-        inputMin.type = 'range';
-        inputMin.min = f.min !== undefined ? f.min : -100;
-        inputMin.max = f.max !== undefined ? f.max : 100;
-        inputMin.step = f.step !== undefined ? f.step : 0.1;
-        inputMin.className = 'w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer mb-1';
-
-        const inputMax = document.createElement('input');
-        inputMax.type = 'range';
-        inputMax.min = f.min !== undefined ? f.min : -100;
-        inputMax.max = f.max !== undefined ? f.max : 100;
-        inputMax.step = f.step !== undefined ? f.step : 0.1;
-        inputMax.className = 'w-full h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer';
-
-        // IDs for retrieval
-        // Name format: range0 -> min0, max0
-        const baseName = f.name.replace('range', ''); // "0"
-        inputMin.id = `input-min${baseName}`;
-        inputMax.id = `input-max${baseName}`;
-        inputMin.dataset.group = f.name; // Tag for grouping
-        inputMax.dataset.group = f.name;
-
-        // Initial Values
-        const currentMin = info[`min${baseName}`] !== undefined ? info[`min${baseName}`] : 0;
-        const currentMax = info[`max${baseName}`] !== undefined ? info[`max${baseName}`] : 0;
-        inputMin.value = currentMin;
-        inputMax.value = currentMax;
-
-        const updateLabels = () => {
-          // Enforce Min <= Max
-          if (parseFloat(inputMin.value) > parseFloat(inputMax.value)) {
-            inputMin.value = inputMax.value;
-          }
-          valMin.textContent = `MIN: ${inputMin.value}`;
-          valMax.textContent = `MAX: ${inputMax.value}`;
-        };
-
-        inputMin.addEventListener('input', updateLabels);
-        inputMax.addEventListener('input', () => {
-          if (parseFloat(inputMax.value) < parseFloat(inputMin.value)) {
-            inputMax.value = inputMin.value;
-          }
-          updateLabels();
-        });
-
-        updateLabels();
-
-        wrapper.appendChild(valuesDiv);
-        wrapper.appendChild(inputMin);
-        wrapper.appendChild(inputMax);
-
-        fieldDiv.appendChild(label);
-        fieldDiv.appendChild(wrapper);
-        fieldsContainer.appendChild(fieldDiv);
-        return;
+    const cleanConfig = {};
+    Object.keys(config).sort().forEach(key => {
+      if (!sysFields.includes(key.toLowerCase())) {
+        cleanConfig[key] = config[key];
       }
-
-      if (f.type === 'slider') {
-        // Wrapper for slider + value display
-        const wrapper = document.createElement('div');
-        wrapper.className = 'flex items-center gap-2 w-full';
-
-        input = document.createElement('input');
-        input.type = 'range';
-        input.min = f.min !== undefined ? f.min : 0;
-        input.max = f.max !== undefined ? f.max : 100;
-        input.step = f.step !== undefined ? f.step : 1;
-        input.className = 'flex-1 h-1 bg-gray-700 rounded-lg appearance-none cursor-pointer'; // Tailwind slider style
-
-        const valDisplay = document.createElement('span');
-        valDisplay.className = 'text-[10px] text-emerald-500 font-mono w-8 text-right';
-        valDisplay.textContent = '0';
-
-        input.addEventListener('input', () => {
-          valDisplay.textContent = input.value;
-        });
-
-        wrapper.appendChild(input);
-        wrapper.appendChild(valDisplay);
-
-        // We attach the input to wrapper so we can find it later easily or just append wrapper
-        input.id = `input-${f.name}`; // ID goes to input
-        input.name = f.name;
-
-        // Fill initial value
-        let initialVal = 0;
-        if (info[f.name] !== undefined) {
-          initialVal = info[f.name];
-        }
-        input.value = initialVal;
-        valDisplay.textContent = initialVal;
-
-        fieldDiv.appendChild(label);
-        fieldDiv.appendChild(wrapper);
-        fieldsContainer.appendChild(fieldDiv);
-        return; // Skip default input appending
-      }
-
-      input = document.createElement('input');
-      input.id = `input-${f.name}`;
-      input.name = f.name;
-      input.type = f.type || 'text';
-      input.placeholder = f.placeholder || f.label;
-      input.className = 'w-full text-[11px] h-7 px-2';
-      if (f.step) input.step = f.step;
-
-      // Fill current value
-      if (info[f.name] !== undefined) {
-        input.value = info[f.name];
-      } else if (f.name === 'prefix' && info.prefix) {
-        input.value = info.prefix;
-      }
-
-      fieldDiv.appendChild(label);
-      fieldDiv.appendChild(input);
-      fieldsContainer.appendChild(fieldDiv);
     });
+
+    jsonArea.value = JSON.stringify(cleanConfig, null, 4);
+
   } catch (err) {
-    fieldsContainer.innerHTML = `<div class="text-red-500 text-center py-4">[ERROR: ${err.message}]</div>`;
+    jsonArea.value = `// ERROR: ${err.message}`;
   }
 }
 
 async function sendConfig() {
-  if (!window.currentModelDef) return;
+  if (!confirm("DEPLOY NEW CONFIGURATION?")) return;
 
-  const payload = { node: window.currentConfigNode };
-  window.currentModelDef.fields.forEach(f => {
-    // Handle standard inputs
-    const input = document.getElementById(`input-${f.name}`);
-    if (input) {
-      let val = input.value;
-      if (f.type === 'number') val = parseFloat(val);
-      payload[f.name] = val;
-    }
+  const node = window.currentConfigNode;
+  const jsonArea = document.getElementById('configJsonArea');
 
-    // Handle range inputs (split back to min/max)
-    if (f.type === 'range') {
-      const baseName = f.name.replace('range', '');
-      const minInput = document.getElementById(`input-min${baseName}`);
-      const maxInput = document.getElementById(`input-max${baseName}`);
-      if (minInput && maxInput) {
-        payload[`min${baseName}`] = parseFloat(minInput.value);
-        payload[`max${baseName}`] = parseFloat(maxInput.value);
-      }
-    }
-  });
+  let payload;
+  try {
+    payload = JSON.parse(jsonArea.value);
+  } catch (e) {
+    showToast('INVALID_JSON_SYNTAX', 'failed');
+    return;
+  }
+
+  payload.node = node;
 
   const res = await fetch('/config', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
   });
+
   if (res.ok) {
-    alert('CONFIG_DISPATCHED');
+    showToast('SUCCESS', 'success');
     document.getElementById('configModal').classList.add('hidden');
     fetchNodes();
   } else {
     const err = await res.json();
-    alert('CONFIG_FAILED: ' + (err.error || 'Unknown'));
+    showToast(`FAILED: ${err.error || 'UNKNOWN'}`, 'failed');
   }
 }
 
 async function confirmDeleteFile(name) {
   if (!name) return;
-  if (confirm(`DELETE ${name}?`)) {
+  if (confirm(`PURGE ${name}?`)) {
     try {
       const res = await fetch(`/api/files/${encodeURIComponent(name)}`, { method: 'DELETE' });
       if (res.ok) {
+        showToast('SUCCESS', 'success');
         fetchFiles();
       } else {
         const err = await res.json();
-        alert('DELETE_FAILED: ' + (err.error || 'Unknown error'));
+        showToast('FAILED', 'failed');
       }
     } catch (e) {
-      alert('NETWORK_ERROR: ' + e.message);
+      showToast('UPLINK_FAILURE', 'failed');
     }
   }
 }
 
 async function confirmDeleteNode(node) {
-  if (confirm('DISCARD DEVICE REGISTRY?')) {
-    await fetch(`/api/nodes/${encodeURIComponent(node)}`, { method: 'DELETE' });
-    fetchNodes();
+  if (confirm('DISCARD DEVICE?')) {
+    const res = await fetch(`/api/nodes/${encodeURIComponent(node)}`, { method: 'DELETE' });
+    if (res.ok) {
+      showToast('PURGED', 'success');
+      fetchNodes();
+    } else {
+      showToast('FAILED', 'failed');
+    }
   }
 }
 
@@ -637,11 +564,11 @@ async function requestReboot(node) {
       body: JSON.stringify({ node })
     });
     if (res.ok) {
-      alert('REBOOT_COMMAND_SENT');
+      showToast('REBOOT_SENT', 'success');
     } else {
-      alert('REBOOT_FAILED');
+      showToast('FAILED', 'failed');
     }
-  } catch (e) { alert('NETWORK_ERROR'); }
+  } catch (e) { showToast('UPLINK_FAILURE', 'failed'); }
 }
 
 function escapeHtml(str) {
@@ -723,7 +650,7 @@ window.renderForwarderBuffer = function () {
 
 function exportForwarderCSV() {
   if (!window.currentBufferData || window.currentBufferData.length === 0) {
-    alert('NO_DATA_TO_EXPORT');
+    showToast('NO_DATA_TO_EXPORT', 'failed');
     return;
   }
 

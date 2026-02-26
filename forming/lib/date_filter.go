@@ -38,9 +38,35 @@ func GetRecordsByDateRange(db *sql.DB, startDate, endDate, prefixFilter, statusF
 
 	// Status filter
 	if statusFilter != "" && statusFilter != "all" {
-		query += fmt.Sprintf(" AND reg5 = $%d", argId)
-		args = append(args, statusFilter)
-		argId++
+		switch statusFilter {
+		case "ok":
+			query += " AND reg5 IN (41, 521, 553)"
+		case "idle":
+			query += " AND reg5 IN (9, 90)"
+		case "metal":
+			query += fmt.Sprintf(" AND reg5 = $%d", argId)
+			args = append(args, 8201)
+			argId++
+		case "under":
+			query += fmt.Sprintf(" AND reg5 = $%d", argId)
+			args = append(args, 25)
+			argId++
+		case "over":
+			query += fmt.Sprintf(" AND reg5 = $%d", argId)
+			args = append(args, 73)
+			argId++
+		case "mati":
+			query += fmt.Sprintf(" AND reg5 = $%d", argId)
+			args = append(args, 8)
+			argId++
+		case "unknown":
+			query += " AND reg5 NOT IN (8, 9, 90, 41, 521, 553, 8201, 25, 73)"
+		default:
+			// Fallback for specific reg5 value (for backward compatibility)
+			query += fmt.Sprintf(" AND reg5 = $%d", argId)
+			args = append(args, statusFilter)
+			argId++
+		}
 	}
 
 	// Sorting
@@ -51,8 +77,6 @@ func GetRecordsByDateRange(db *sql.DB, startDate, endDate, prefixFilter, statusF
 	} else {
 		query += " ORDER BY created_at DESC"
 	}
-
-	query += " LIMIT 100"
 
 	rows, err := db.Query(query, args...)
 	if err != nil {

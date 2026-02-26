@@ -106,32 +106,29 @@ Dashboard mengirim JSON ini ke toplik `nodes/{NODE_ID}/command`.
 ### 1. Set Configuration (`set_config`)
 Mengubah parameter device secara remote. Field yang dikirim tergantung Model device.
 
-**Model: TEMP (Umum), M1-M11**
+**Model: TEMP (Universal), TEMP|1 - TEMP|11**
 ```json
 {
   "cmd": "set_config",      // [REQUIRED] Command ID
   "ck": 5,                  // [OPTIONAL] Set CK ID
   "area": 20,               // [OPTIONAL] Set Area ID
   "no": 1,                  // [OPTIONAL] Set Node Number
+  "node_prefix": "TEMP",    // [OPTIONAL] Set Node Prefix
   "interval": 1000,         // [OPTIONAL] Interval kirim data (ms)
-  "delay": 500,             // [OPTIONAL] Delay baca sensor (ms)
+  "door_logic_delay": 480000, // [OPTIONAL] Delay alarm pintu (ms)
   
-  // Calibration / Offsets
-  "min": -2.0,              // Offset/Min Temp Value
-  "max": 2.0,               // Offset/Max Temp Value
-  
-  // Specific Ranges (M10, M11, etc)
-  "min0": 0.0, "max0": 0.0, // Range T1
-  "min1": 0.0, "max1": 0.0, // Range T2
-  "min2": 0.0, "max2": 0.0, // Range T3
-  
-  // Proximity Logic
-  "prox_nc0": 1,            // 1=NC (Normally Closed), 0=NO
-  "prox_nc1": 0,
+  // Thresholds / limits
+  "min_t1": -2.0, "max_t1": 32.0, // Range T1
+  "min_t2": -2.0, "max_t2": 32.0, // Range T2
+  "min_t3": -2.0, "max_t3": 32.0, // Range T3
   
   // Humidity
-  "min_rh": 0.0, 
-  "max_rh": 100.0
+  "sht_suhu_min": -40.0, 
+  "sht_suhu_max": 60.0,
+  "sht_humidity_min": 30.0, 
+  "sht_humidity_max": 90.0,
+
+  "reboot": 0               // [OPTIONAL] Set 1 to trigger reboot after save
 }
 ```
 
@@ -184,29 +181,33 @@ Dikirim saat boot atau saat konfigurasi berubah (Retained Message).
 {
   "status": "online",
   "ip": "192.168.1.50",
-  "model": "M1",
-  "version": "1.0.2-M1",
+  "model": "TEMP",
+  "version": "2.0",
   "updated": "2026-02-11 13:00:00", // Waktu terakhir update
   "ram_free_bytes": 145000,
   "sd_ok": true,                    // Status SD Card
   
   // Current Config Values (Mirror dari setting)
-  "ck": "5",
-  "area": "20",
-  "no": "1",
-  "interval": 1000,
-  "prox_nc0": 1,
-  "min0": 0.5
+  "ck": 5,
+  "area": 20,
+  "no": 1,
+  "interval": 5000
 }
 ```
 
 ### 2. Live Monitor (`nodes/{NODE_ID}/monitor`)
-Dikirim secara periodik untuk update data live di dashboard (mirip Status tapi lebih ringan/sering).
+Dikirim secara periodik (setiap `interval`). Dashboard menggunakan data ini untuk real-time update.
 ```json
 {
-  "ram_free_bytes": 144500,
-  "status": "online"
-  // Bisa ditambahkan data sensor live jika diperlukan dashboard
+  "status": "online",
+  "ram_free": 144500,
+  "relay": true,            // true: Alarm Aktif, false: Normal
+  "ck": 5, "area": 20, "no": 1,
+  "data": {                 // Live Sensor Values
+    "t1": 25.5, "t2": 26.1, "t3": 24.8,
+    "p1": 1, "p2": 0, "p3": 1,
+    "sht_t": 27.5, "sht_h": 65.2
+  }
 }
 ```
 

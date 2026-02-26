@@ -1,7 +1,10 @@
 services:
   # === Database Service ===
   postgres:
-    image: postgres:13
+    build:
+      context: ./db-init
+      dockerfile: Dockerfile
+    image: rennnagge/postgres-db:latest
     container_name: postgres_db
     environment:
       POSTGRES_USER: ${DB_USER}
@@ -11,12 +14,30 @@ services:
       PGTZ: "Asia/Jakarta"
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./db-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 5s
       timeout: 5s
       retries: 5
+    ports:
+      - "5432:5432"
     restart: unless-stopped
+    networks:
+      - iot-net
+
+  # === Web UI for Database ===
+  pgadmin:
+    image: dpage/pgadmin4
+    container_name: pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    restart: unless-stopped
+    depends_on:
+      - postgres
     networks:
       - iot-net
 
@@ -80,20 +101,17 @@ services:
       
   # === OTA Update Service ===
   ota:
-    image: rennn/ota-app:latest
+    image: rennnagge/ota-app:latest
     container_name: ota-app
     build:
-      context: ./ota
-      dockerfile: Dockerfile
-      args:
-        GOLANG_VERSION: 1.24-alpine
+      context: .
+      dockerfile: ota/Dockerfile
     ports:
       - "9999:9999"
     volumes:
       - ota_uploads:/app/static/uploads
     environment:
       - MQTT_BROKER=tcp://emqx:1883
-      # OTA service script calls for MQTT_USER (not USERNAME)
       - MQTT_USER=${MQTT_USER}
       - MQTT_PASS=${MQTT_PASS}
       - TELE_BOT_OTA=${TELE_BOT_OTA}
@@ -101,6 +119,8 @@ services:
       - SERVER_NAME=${SERVER_NAME:-ren_itdt_west}
       - WEBHOOK_TOKEN=${WEBHOOK_TOKEN:-}
       - FORWARDER_URL=http://backend:8888/forwarder/status
+      - FORWARDER_API_URL=http://backend:8888/api
+      - MONITOR_URL=http://monitor:9090/status
     restart: unless-stopped
     depends_on:
       emqx:
@@ -110,30 +130,26 @@ services:
 
   # === Forming/Production Monitoring Service ===
   forming:
-    image: rennn/forming-app:latest
+    image: rennnagge/forming-app:latest
     container_name: forming-app
     build:
-      context: ./forming
-      dockerfile: Dockerfile
+      context: .
+      dockerfile: forming/Dockerfile
     ports:
       - "3000:3000"
     environment:
-      # Database Configuration
       - DB_HOST=postgres_db
-      - DB_PORT=${DB_PORT}
+      - DB_PORT=${DB_PORT:-5432}
       - DB_USER=${DB_USER}
       - DB_PASSWORD=${DB_PASSWORD}
       - DB_NAME=${DB_NAME}
-      # MQTT Configuration
       - MQTT_HOST=emqx
-      - MQTT_PORT=${MQTT_PORT}
+      - MQTT_PORT=${MQTT_PORT:-1883}
       - MQTT_USER=${MQTT_USER}
       - MQTT_PASSWORD=${MQTT_PASSWORD}
-      # Google Sheets
       - GOOGLE_SHEETS_CREDENTIALS=${GOOGLE_SHEETS_CREDENTIALS:-}
       - GOOGLE_SPREADSHEET_ID=${GOOGLE_SPREADSHEET_ID:-}
       - GOOGLE_SHEET_NAME=${GOOGLE_SHEET_NAME:-}
-      # Application Configuration
       - TZ=Asia/Jakarta
     restart: unless-stopped
     depends_on:
@@ -141,6 +157,27 @@ services:
         condition: service_healthy
       emqx:
         condition: service_healthy
+    networks:
+      - iot-net
+
+  # === Monitor Service ===
+  monitor:
+    build:
+      context: ./monitor
+      dockerfile: Dockerfile
+    image: rennnagge/monitor-app:latest
+    container_name: monitor
+    environment:
+      - PORT=9090
+      - HOST_PROC=/host/proc
+      - HOST_SYS=/host/sys
+      - HOST_ETC=/host/etc
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /etc:/host/etc:ro
+      - /:/host/root:ro
+    restart: unless-stopped
     networks:
       - iot-net
 
