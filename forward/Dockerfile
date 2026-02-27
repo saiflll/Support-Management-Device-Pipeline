@@ -50,7 +50,7 @@ EXPOSE 8888
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8888/login || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://127.0.0.1:8888/forwarder/status || exit 1
 
 # Run as non-root user
 RUN addgroup -g 1000 appuser && \

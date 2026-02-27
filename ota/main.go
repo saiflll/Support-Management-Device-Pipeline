@@ -770,7 +770,7 @@ func main() {
 
 	// Forwarder proxy endpoint
 	protected.Get("/forwarder/status", func(c *fiber.Ctx) error {
-		forwarderURL := getEnv("FORWARDER_URL", "http://backend:8888/forwarder/status")
+		forwarderURL := getEnv("FORWARDER_URL", "http://forwarder:8888/forwarder/status")
 		resp, err := http.Get(forwarderURL)
 		if err != nil {
 			return c.Status(http.StatusServiceUnavailable).JSON(fiber.Map{"error": "Forwarder service tidak tersedia"})
@@ -796,7 +796,7 @@ func main() {
 
 	// Pipeline CRUD proxies
 	protected.Get("/api/pipelines", func(c *fiber.Ctx) error {
-		forwarderBase := getEnv("FORWARDER_API_URL", "http://backend:8888/api")
+		forwarderBase := getEnv("FORWARDER_API_URL", "http://forwarder:8888/api")
 		resp, err := http.Get(forwarderBase + "/pipelines")
 		if err != nil {
 			return c.Status(http.StatusServiceUnavailable).JSON(fiber.Map{"error": "Forwarder service tidak tersedia"})
@@ -808,7 +808,7 @@ func main() {
 	})
 
 	protected.Post("/api/pipelines", func(c *fiber.Ctx) error {
-		forwarderBase := getEnv("FORWARDER_API_URL", "http://backend:8888/api")
+		forwarderBase := getEnv("FORWARDER_API_URL", "http://forwarder:8888/api")
 		resp, err := http.Post(forwarderBase+"/pipelines", "application/json", strings.NewReader(string(c.Body())))
 		if err != nil {
 			return c.Status(http.StatusServiceUnavailable).JSON(fiber.Map{"error": "Forwarder service tidak tersedia"})
@@ -821,7 +821,7 @@ func main() {
 
 	protected.Delete("/api/pipelines/:id", func(c *fiber.Ctx) error {
 		id := c.Params("id")
-		forwarderBase := getEnv("FORWARDER_API_URL", "http://backend:8888/api")
+		forwarderBase := getEnv("FORWARDER_API_URL", "http://forwarder:8888/api")
 		req, _ := http.NewRequest("DELETE", forwarderBase+"/pipelines/"+id, nil)
 		resp, err := http.DefaultClient.Do(req)
 		if err != nil {

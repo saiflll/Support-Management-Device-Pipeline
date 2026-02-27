@@ -2,6 +2,7 @@ package forwarder
 
 import (
 	"crypto/rand"
+	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -136,8 +137,19 @@ func syncPipelines() {
 	foundIDs := make(map[int]bool)
 	for rows.Next() {
 		var p Pipeline
-		if err := rows.Scan(&p.ID, &p.Name, &p.SourceTopic, &p.BrokerURL, &p.DestTopic, &p.Username, &p.Password, &p.IntervalMinutes, &p.IsActive); err != nil {
+		var name, username, password sql.NullString
+		if err := rows.Scan(&p.ID, &name, &p.SourceTopic, &p.BrokerURL, &p.DestTopic, &username, &password, &p.IntervalMinutes, &p.IsActive); err != nil {
+			log.Printf("Error scanning pipeline rows: %v", err)
 			continue
+		}
+		if name.Valid {
+			p.Name = name.String
+		}
+		if username.Valid {
+			p.Username = username.String
+		}
+		if password.Valid {
+			p.Password = password.String
 		}
 		foundIDs[p.ID] = true
 
@@ -350,7 +362,17 @@ func RegisterForwarderHandlers(app *fiber.App) {
 		var res []Pipeline
 		for rows.Next() {
 			var p Pipeline
-			rows.Scan(&p.ID, &p.Name, &p.SourceTopic, &p.BrokerURL, &p.DestTopic, &p.Username, &p.Password, &p.IntervalMinutes, &p.IsActive)
+			var name, username, password sql.NullString
+			rows.Scan(&p.ID, &name, &p.SourceTopic, &p.BrokerURL, &p.DestTopic, &username, &password, &p.IntervalMinutes, &p.IsActive)
+			if name.Valid {
+				p.Name = name.String
+			}
+			if username.Valid {
+				p.Username = username.String
+			}
+			if password.Valid {
+				p.Password = password.String
+			}
 			res = append(res, p)
 		}
 		return c.JSON(res)

@@ -89,7 +89,8 @@ services:
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
       - SERVER_NAME=${SERVER_NAME:-ren_itdt_west}
       - WEBHOOK_TOKEN=${WEBHOOK_TOKEN:-}
-      - FORWARDER_URL=http://backend:8888/forwarder/status
+      - FORWARDER_URL=http://forwarder:8888/forwarder/status
+      - FORWARDER_API_URL=http://forwarder:8888/api
     restart: unless-stopped
     depends_on:
       emqx:
