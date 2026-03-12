@@ -1,7 +1,10 @@
 # === Ketergantungan (Dependencies) ===
 # Abaikan semua direktori vendor yang dikelola oleh 'go mod vendor'
 # Aturan ini akan berlaku untuk 'forward/vendor/', 'ota/vendor/', dll.
-#vendor/
+vendor/
+
+# Node modules untuk frontend
+node_modules/
 
 # Abaikan cache dan virtual environment dari Python
 __pycache__/
@@ -17,6 +20,11 @@ venv/
 *.so
 *.dylib
 
+# Build frontend output
+dist/
+build/
+.svelte-kit/
+
 # === Berkas Log & Uji Coba ===
 *.log
 *.out
@@ -28,6 +36,14 @@ venv/
 # === Lingkungan & Konfigurasi ===
 # Abaikan berkas environment yang berisi data sensitif
 *.env
+*.envi
+envi.txt
+
+# Editor / IDE
+.vscode/
+
+# OS generated files
+.DS_Store
 
 # listmac.txt
 # docs

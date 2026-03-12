@@ -35,28 +35,23 @@ REM Build and push each service
 echo %INFO%Building and pushing services...%RESET%
 echo.
 
-REM 1. OTA Service (build from root context — needs access to ota/ AND dashboard/)
-call :BuildAndPushRoot "OTA Service" "." "ota/Dockerfile" "ota-app"
+REM 1. OTA Service
+call :BuildAndPushRoot "OTA Service" "." "core/ota/Dockerfile" "ota-app"
 if errorlevel 1 exit /b 1
 echo.
 
 REM 2. Forwarder Service
-call :BuildAndPush "Forwarder Service" ".\forward" "forwarder-app"
+call :BuildAndPush "Forwarder Service" "util\forward" "forwarder-app"
 if errorlevel 1 exit /b 1
 echo.
 
-REM 3. Forming Service (build from root context — needs access to forming/ AND dashboard/)
-call :BuildAndPushRoot "Forming Service" "." "forming/Dockerfile" "forming-app"
+REM 3. Forming Service
+call :BuildAndPushRoot "Forming Service" "." "core/forming/Dockerfile" "forming-app"
 if errorlevel 1 exit /b 1
 echo.
 
-REM 4. Database Service (with RBAC)
-call :BuildAndPush "Database Service" ".\db-init" "postgres-db"
-if errorlevel 1 exit /b 1
-echo.
-
-REM 5. Monitor Service
-call :BuildAndPush "Monitor Service" ".\monitor" "monitor-app"
+REM 4. Database Service
+call :BuildAndPush "Database Service" "util\db" "postgres-db"
 if errorlevel 1 exit /b 1
 echo.
 
@@ -70,7 +65,6 @@ echo   - %DOCKER_USERNAME%/ota-app:%VERSION%
 echo   - %DOCKER_USERNAME%/forwarder-app:%VERSION%
 echo   - %DOCKER_USERNAME%/forming-app:%VERSION%
 echo   - %DOCKER_USERNAME%/postgres-db:%VERSION%
-echo   - %DOCKER_USERNAME%/monitor-app:%VERSION%
 echo.
 echo %INFO%To use these images, update docker-compose.yml:%RESET%
 echo   image: %DOCKER_USERNAME%/ota-app:%VERSION%

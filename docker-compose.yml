@@ -2,7 +2,7 @@ services:
   # === Database Service ===
   postgres:
     build:
-      context: ./db-init
+      context: ./util/db
       dockerfile: Dockerfile
     image: rennnagge/postgres-db:latest
     container_name: postgres_db
@@ -14,7 +14,7 @@ services:
       PGTZ: "Asia/Jakarta"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./db-init:/docker-entrypoint-initdb.d:ro
+      - ./util/db:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 5s
@@ -70,7 +70,7 @@ services:
     image: rennn/forwarder-app:latest
     container_name: forwarder
     build:
-      context: ./forward
+      context: ./util/forward
       dockerfile: Dockerfile
       args:
         GOLANG_VERSION: 1.24-alpine
@@ -88,8 +88,16 @@ services:
       - TELE_BOT_ALRT=${TELE_BOT_ALRT}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
       - TZ=Asia/Jakarta
+      - HOST_PROC=/host/proc
+      - HOST_SYS=/host/sys
+      - HOST_ETC=/host/etc
     env_file:
       - .env
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /etc:/host/etc:ro
+      - /:/host/root:ro
     restart: unless-stopped
     depends_on:
       postgres:
@@ -105,7 +113,7 @@ services:
     container_name: ota-app
     build:
       context: .
-      dockerfile: ota/Dockerfile
+      dockerfile: core/ota/Dockerfile
     ports:
       - "9999:9999"
     volumes:
@@ -120,7 +128,7 @@ services:
       - WEBHOOK_TOKEN=${WEBHOOK_TOKEN:-}
       - FORWARDER_URL=http://forwarder:8888/forwarder/status
       - FORWARDER_API_URL=http://forwarder:8888/api
-      - MONITOR_URL=http://monitor:9090/status
+      - MONITOR_URL=http://forwarder:8888/monitor/status
     restart: unless-stopped
     depends_on:
       emqx:
@@ -134,7 +142,7 @@ services:
     container_name: forming-app
     build:
       context: .
-      dockerfile: forming/Dockerfile
+      dockerfile: core/forming/Dockerfile
     ports:
       - "3000:3000"
     environment:
@@ -157,27 +165,6 @@ services:
         condition: service_healthy
       emqx:
         condition: service_healthy
-    networks:
-      - iot-net
-
-  # === Monitor Service ===
-  monitor:
-    build:
-      context: ./monitor
-      dockerfile: Dockerfile
-    image: rennnagge/monitor-app:latest
-    container_name: monitor
-    environment:
-      - PORT=9090
-      - HOST_PROC=/host/proc
-      - HOST_SYS=/host/sys
-      - HOST_ETC=/host/etc
-    volumes:
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /etc:/host/etc:ro
-      - /:/host/root:ro
-    restart: unless-stopped
     networks:
       - iot-net
 

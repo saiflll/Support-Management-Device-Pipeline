@@ -62,8 +62,16 @@ services:
       - TELE_BOT_ALRT=${TELE_BOT_ALRT}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
       - TZ=Asia/Jakarta
+      - HOST_PROC=/host/proc
+      - HOST_SYS=/host/sys
+      - HOST_ETC=/host/etc
     env_file:
       - .env
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /etc:/host/etc:ro
+      - /:/host/root:ro
     restart: unless-stopped
     depends_on:
       postgres:
@@ -91,6 +99,7 @@ services:
       - WEBHOOK_TOKEN=${WEBHOOK_TOKEN:-}
       - FORWARDER_URL=http://forwarder:8888/forwarder/status
       - FORWARDER_API_URL=http://forwarder:8888/api
+      - MONITOR_URL=http://forwarder:8888/monitor/status
     restart: unless-stopped
     depends_on:
       emqx:
@@ -121,24 +130,6 @@ services:
         condition: service_healthy
       emqx:
         condition: service_healthy
-    networks:
-      - iot-net
-
-  # === Monitor Service ===
-  monitor:
-    image: rennnagge/monitor-app:latest
-    container_name: monitor
-    environment:
-      - PORT=9090
-      - HOST_PROC=/host/proc
-      - HOST_SYS=/host/sys
-      - HOST_ETC=/host/etc
-    volumes:
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /etc:/host/etc:ro
-      - /:/host/root:ro
-    restart: unless-stopped
     networks:
       - iot-net
 
