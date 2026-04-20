@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Servfor Architecture Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/svg-pan-zoom/dist/svg-pan-zoom.min.js"></script>
+    <style>
+        :root {
+            --bg: #0d1117;
+            --surface: #161b22;
+            --surface-hover: #21262d;
+            --border: #30363d;
+            --text: #c9d1d9;
+            --text-muted: #8b949e;
+            --accent: #58a6ff;
+            --accent-alt: #3fb950;
+            --accent-purp: #8957e5;
+            --accent-warn: #d29922;
+            --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Consolas, "Liberation Mono", monospace;
+        }
+        * { box-sizing: border-box; }
+        body {
+            background-color: var(--bg);
+            color: var(--text);
+            font-family: var(--font-mono);
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            overflow: hidden;
+            font-size: 13px;
+        }
+        
+        /* SIDEBAR */
+        #sidebar {
+            width: 280px;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            padding: 20px 0;
+            z-index: 10;
+        }
+        .logo {
+            padding: 0 20px 20px;
+            font-weight: bold;
+            color: var(--accent);
+            border-bottom: 1px solid var(--border);
+            margin-bottom: 10px;
+            text-transform: uppercase;
+        }
+        .nav-item {
+            padding: 12px 20px;
+            cursor: pointer;
+            transition: background 0.2s, color 0.2s;
+            color: var(--text-muted);
+            border-left: 3px solid transparent;
+        }
+        .nav-item:hover { background: var(--surface-hover); color: var(--text); }
+        .nav-item.active {
+            background: rgba(88, 166, 255, 0.1);
+            color: var(--accent);
+            border-left-color: var(--accent);
+            font-weight: bold;
+        }
+
+        /* MAIN CONTENT */
+        #content {
+            flex-grow: 1;
+            position: relative;
+            display: flex;
+            background: #010409;
+        }
+        .panel { 
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            visibility: hidden;
+            opacity: 0;
+            pointer-events: none;
+            display: flex;
+            flex-direction: column;
+            padding: 25px;
+            transition: opacity 0.2s;
+            z-index: 1;
+        }
+        .panel.active { 
+            visibility: visible;
+            opacity: 1;
+            pointer-events: auto;
+            z-index: 2;
+        }
+        h2 { margin: 0 0 15px 0; border-bottom: 1px solid var(--border); padding-bottom: 10px; font-size: 1.1rem; text-transform: uppercase; color: var(--text); }
+
+        /* DATA SIMULATION PANEL */
+        .sim-grid { display: flex; flex-direction: column; gap: 20px; height: 100%; }
+        .sim-stage {
+            flex-grow: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+            display: flex; align-items: center; justify-content: space-around; position: relative; padding: 20px;
+        }
+        .sim-node {
+            width: 120px; height: 120px; background: var(--bg); border: 2px solid var(--border);
+            border-radius: 50%; display: flex; flex-direction: column; justify-content: center; align-items: center;
+            text-align: center; z-index: 3; transition: 0.3s;
+        }
+        .sim-node.active { border-color: var(--accent); box-shadow: 0 0 20px rgba(88,166,255,0.2); }
+        .sim-node .title { font-weight: bold; margin-bottom: 5px; color: var(--accent); }
+        .sim-node .desc { font-size: 10px; color: var(--text-muted); }
+        .sim-line { position: absolute; height: 2px; background: var(--border); z-index: 1; }
+        .packet {
+            position: absolute; padding: 5px 10px; background: var(--accent); color: #000; font-weight: bold; font-size: 11px;
+            border-radius: 4px; z-index: 4; opacity: 0; transition: left 1.5s ease-in-out, background 0.3s;
+        }
+        
+        .log-box { height: 200px; background: #010409; border: 1px solid var(--border); border-radius: 8px; padding: 15px; overflow-y: auto; font-size: 11px; color: var(--text-muted); }
+        .log-box div { margin-bottom: 6px; }
+        .time { color: var(--accent-alt); margin-right: 10px; }
+        
+        .controls { display: flex; gap: 10px; flex-wrap: wrap; }
+        .btn { background: var(--surface); color: var(--text); border: 1px solid var(--border); border-radius: 4px; padding: 8px 15px; cursor: pointer; font-family: var(--font-mono); }
+        .btn:hover { background: var(--border); }
+        .btn.hl-blue { color: var(--accent); border-color: var(--accent); }
+        .btn.hl-purp { color: var(--accent-purp); border-color: var(--accent-purp); }
+        .btn.hl-green { color: var(--accent-alt); border-color: var(--accent-alt); }
+
+        /* LIVE NETWORK TOPOLOGY (CSS ANIMATED) */
+        .net-container {
+            flex-grow: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 8px;
+            position: relative; overflow: hidden;
+        }
+        .net-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
+        .c-box {
+            position: absolute; border: 1px solid; border-radius: 6px; background: rgba(0,0,0,0.5);
+            padding: 10px; color: #fff; text-align: center;
+        }
+        .c-box.docker { border-color: var(--accent); width: 600px; height: 400px; left: 50%; top: 50%; transform: translate(-50%, -50%); border-style: dashed; }
+        .c-node {
+            position: absolute; width: 140px; height: 50px; border: 1px solid var(--border); border-radius: 4px;
+            background: var(--surface-hover); display: flex; flex-direction: column; justify-content: center; align-items: center; z-index: 10;
+        }
+        .c-node b { color: var(--accent); font-size: 12px; }
+        .c-node span { font-size: 9px; color: var(--text-muted); }
+
+        /* Topology Positioning inside Docker */
+        #c-emqx { top: 40px; left: 40px; border-color: var(--accent-warn); }
+        #c-postgres { bottom: 40px; left: 230px; border-color: var(--danger); width: 140px; }
+        #c-forming { top: 40px; left: 230px; border-color: var(--accent); }
+        #c-forwarder { top: 160px; right: 40px; border-color: var(--accent-alt); }
+        #c-ota { bottom: 40px; left: 40px; border-color: var(--accent-purp); }
+        #c-pgadmin { bottom: 40px; right: 40px; border-color: var(--text-muted); }
+
+        /* External Nodes */
+        #e-esp { top: 100px; left: 40px; background: transparent; border: 1px dotted var(--text-muted); }
+        #e-web { top: 250px; right: 40px; background: transparent; border: 1px dotted var(--text-muted); }
+
+        /* Animated Particles */
+        .particle { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #fff; z-index: 5; opacity: 0; box-shadow: 0 0 8px #fff; }
+        @keyframes pulseTravel { 0% { offset-distance: 0%; opacity: 1; } 80% { opacity: 1; } 100% { offset-distance: 100%; opacity: 0; } }
+        .path-line { fill: none; stroke: var(--border); stroke-width: 2; stroke-dasharray: 4 4; }
+
+        /* DB SCHEMA VIEWER */
+        #mermaid-db-container { flex-grow: 1; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; cursor: grab; overflow: hidden; }
+        #mermaid-db-container:active { cursor: grabbing; }
+
+    </style>
+</head>
+<body>
+
+    <!-- SIDEBAR -->
+    <div id="sidebar">
+        <div class="logo">Servfor_Core</div>
+        <div class="nav-item active" onclick="switchTab('sim')">> simulasi_logic_flow</div>
+        <div class="nav-item" onclick="switchTab('net')">> topologi_network_live</div>
+        <div class="nav-item" onclick="switchTab('db')">> database_schema_zoom</div>
+        <div class="nav-item" onclick="switchTab('guide')">> dev_guide_&_context</div>
+    </div>
+
+    <!-- MAIN -->
+    <div id="content">
+
+        <!-- PANEL 1: DATA SIMULATION -->
+        <div id="panel-sim" class="panel active">
+            <h2>> Logika & Data Flow</h2>
+            <div class="sim-grid">
+                
+                <div class="sim-stage">
+                    <div class="sim-line" style="left: 60px; right: 60px; top: 50%;"></div>
+                    <div class="sim-node" id="sn-1"><div class="title">Sumber</div><div class="desc">Hardware/Sensor</div></div>
+                    <div class="sim-node" id="sn-2"><div class="title">Entry</div><div class="desc">Port/Broker</div></div>
+                    <div class="sim-node" id="sn-3"><div class="title">Logic App</div><div class="desc">Container Service</div></div>
+                    <div class="sim-node" id="sn-4"><div class="title">Storage</div><div class="desc">Postgres DB</div></div>
+                    <div id="spacket" class="packet">DATA</div>
+                </div>
+
+                <div class="controls">
+                    <button class="btn hl-blue" onclick="playSim('prod')">Trigger: Form/Produksi</button>
+                    <button class="btn hl-purp" onclick="playSim('ota')">Trigger: OTA Update</button>
+                    <button class="btn hl-green" onclick="playSim('env')">Trigger: Env/Temp</button>
+                </div>
+
+                <div class="log-box" id="sim-log">
+                    <div><span class="time">[SYS]</span> Menunggu aksi user...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PANEL 2: NETWORK TOPOLOGY (LIVE) -->
+        <div id="panel-net" class="panel">
+            <h2>> Network Topology (Live Architecture)</h2>
+            <div class="net-container">
+                <svg class="net-canvas" id="net-canvas">
+                    <!-- Connections -->
+                    <path class="path-line" id="path-esp-emqx" d="M 180 125 L 340 125" /> 
+                    <path class="path-line" id="path-emqx-form" d="M 480 125 L 530 125" />
+                    <path class="path-line" id="path-emqx-fwd" d="M 410 150 L 410 325 L 530 325" />
+                    <path class="path-line" id="path-form-db" d="M 600 150 L 600 480" />
+                    <path class="path-line" id="path-fwd-db" d="M 600 350 L 600 480" />
+                    <path class="path-line" id="path-ota-db" d="M 410 480 L 530 480" />
+                    <path class="path-line" id="path-db-pg" d="M 670 505 L 800 505" />
+                    
+                    <!-- Animated Particles -->
+                    <circle class="particle" style="background:#58a6ff; box-shadow:0 0 8px #58a6ff; offset-path: path('M 180 125 L 340 125'); animation: pulseTravel 2s infinite linear;"></circle>
+                    <circle class="particle" style="background:#58a6ff; box-shadow:0 0 8px #58a6ff; offset-path: path('M 480 125 L 530 125'); animation: pulseTravel 2s infinite linear 1s;"></circle>
+                    <circle class="particle" style="background:#f85149; box-shadow:0 0 8px #f85149; offset-path: path('M 600 150 L 600 480'); animation: pulseTravel 2s infinite linear 2s;"></circle>
+                    
+                    <circle class="particle" style="background:#3fb950; box-shadow:0 0 8px #3fb950; offset-path: path('M 410 150 L 410 325 L 530 325'); animation: pulseTravel 3s infinite linear 0.5s;"></circle>
+                    <circle class="particle" style="background:#f85149; box-shadow:0 0 8px #f85149; offset-path: path('M 600 350 L 600 480'); animation: pulseTravel 2s infinite linear 2.5s;"></circle>
+                </svg>
+
+                <div class="c-box docker">
+                    <div style="color: var(--text-muted); font-weight: bold; position: absolute; top: -10px; background: var(--bg); padding: 0 10px; left: 20px;">Docker Network: iot-net</div>
+
+                    <div class="c-node" id="c-emqx"><b>emqx</b><span>Port: 1883, 8083</span></div>
+                    <div class="c-node" id="c-forming"><b>forming-app</b><span>Port: 3000</span></div>
+                    <div class="c-node" id="c-forwarder"><b>forwarder-app</b><span>Internal Port: 8888</span></div>
+                    <div class="c-node" id="c-ota"><b>ota-app</b><span>Port: 9999</span></div>
+                    <div class="c-node" id="c-postgres"><b>postgres-db</b><span>Port: 5432</span></div>
+                    <div class="c-node" id="c-pgadmin"><b>pgadmin</b><span>Port: 5050</span></div>
+                </div>
+
+                <div class="c-node" id="e-esp" style="left: 40px; top: 100px; color: var(--text);"><b>IoT Devices</b><span>ESP32 / Sensors</span></div>
+                <div class="c-node" id="e-web" style="right: 40px; top: 250px; color: var(--text);"><b>Operators</b><span>Web Browsers</span></div>
+            </div>
+        </div>
+
+        <!-- PANEL 3: DATABASE ZOOM -->
+        <div id="panel-db" class="panel">
+            <h2>> Database Schema (Pan & Zoom Aktif)</h2>
+            <div id="mermaid-db-container">
+                <div class="mermaid" id="er-diagram">
+                    erDiagram
+                        production_mdcw { int id PK int reg114 "Weight" string prefix "MDCW1-6" string data_type "VALID/SPAM" }
+                        skip_log { int id PK int reg114 string prefix string reason }
+                        otastates { string prefix PK int target_version int current_version string status }
+                        users { int user_id PK string username string password }
+                        ck { int ck_id PK string name }
+                        area { int area_id PK string name int ck_id FK }
+                        door { int door_id PK string name int area_id FK }
+                        temp { int temp_id PK real value int area_id FK }
+                        rh { int rh_id PK real value int area_id FK }
+                        prox { int prox_id PK int value int door_id FK }
+                        pipelines { int pipeline_id PK string source_topic string dest_topic }
+
+                        production_mdcw ||--o{ skip_log : "Filtered Logs"
+                        ck ||--o{ area : "Contains Area"
+                        area ||--o{ door : "Has Doors"
+                        area ||--o{ temp : "Sensor Temp"
+                        area ||--o{ rh : "Sensor RH"
+                        door ||--o{ prox : "Proximity Data"
+                </div>
+            </div>
+        </div>
+
+        <!-- PANEL 4: DEV GUIDE & CONTEXT -->
+        <div id="panel-guide" class="panel">
+            <h2>> System Guide & Pendidikan Makna Bersama</h2>
+            <div style="overflow-y: auto; padding-right: 15px; font-size: 14px; line-height: 1.6;">
+                <h3 style="color: var(--accent);">[1] Makna Bersama (Core Philosophy)</h3>
+                <p>Ekosistem <b>Servfor</b> dibangun untuk menjadi <i>single source of truth</i> di lini manufaktur/produksi. Mulai dari menimbang berat pack otomatis (MDCW Forming), memonitor parameter suhu lingkungan & keamanan akses (Door Prox Forwarder), hingga memperbarui firmware hardware di lapangan secara kolektif (OTA Dashboard). Semuanya terajut dalam jala <b>iot-net</b> yang sepenuhnya tertutup, mengandalkan <b>EMQX Broker</b> sebagai sumsum tulang lalu litas datanya.</p>
+
+                <h3 style="color: var(--accent-alt);">[2] Pendidikan Flow / Peran Tiap Service</h3>
+                <ul>
+                    <li style="margin-bottom: 10px;"><b>forming-app (Port 3000):</b> Bertugas memakan ribuan log MQTT setiap detiknya dari timbangan. Disini tertanam <i>Welford ML Algorithm</i> mandiri yang meraba statistik deviasi berat/waktu untuk secara gaib memisahkan data <b>VALID</b> dari data <b>SPAM / ISENG</b> mekanik, sehingga database PostgreSQL Anda tetap bersih tanpa ampas.</li>
+                    <li style="margin-bottom: 10px;"><b>forwarder-app (Internal Port 8888):</b> Si satpam pintu masuk. Menjalin jembatan dengan Node sensor (Suhu, RH, Akses Pintu). Bahkan ini digunakan murni untuk memblokir Adminer DB UI dari ancaman publik. Jika engineer mau masuk panel DB, forwarder mewajibkannya menebus <b>Kode OTP Telegram</b> terlebih dahulu! <i>Zero-Trust</i> sungguhan.</li>
+                    <li style="margin-bottom: 10px;"><b>ota-app (Port 9999):</b> Penjaga armada MCU. Ribuan ESP32 tidak perlu lagi di-<i>flash</i> berdarah-darah pakai kabel. Cukup *upload* firmware ke Dashboard, MCU yang rutin menyapa via Port 9999 akan di-intercept. Jika versinya lawas, *binary stream* akan ditembakkan langsung ke hardware di lokasi.</li>
+                </ul>
+
+                <h3 style="color: var(--accent-purp);">[3] Panduan Eksekusi Lengkap (Deployment)</h3>
+                <pre style="background: #010409; padding: 15px; border: 1px solid var(--border); border-radius: 6px; overflow-x: auto; color: var(--text-muted); font-family: var(--font-mono); font-size: 12px;">
+# 1. Pastikan Anda punya variabel konfidensial dari envi.txt
+$ cp envi.txt .env
+
+# 2. Build semua microservice secara simultan menjadi container
+$ ./dev/build-and-push.bat
+
+# 3. Jalankan Orkestrasi Database & App 
+$ docker compose up -d
+
+# 4. Monitoring Sistem Berjalan
+$ docker ps | grep iot-net
+$ docker logs -f forming-app
+$ docker logs -f forwarder</pre>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        let pz; // panzoom instance
+
+        function switchTab(t) {
+            document.querySelectorAll('.nav-item').forEach(e => e.classList.remove('active'));
+            document.querySelectorAll('.panel').forEach(e => e.classList.remove('active'));
+            event.currentTarget.classList.add('active');
+            let panel = document.getElementById('panel-' + t);
+            panel.classList.add('active');
+
+            // Init SVG Pan Zoom ONLY when DB tab is opened and SVG is rendered
+            if (t === 'db' && !pz) {
+                setTimeout(() => {
+                    const svg = document.querySelector('#mermaid-db-container svg');
+                    if (svg) {
+                        svg.removeAttribute('max-width');
+                        svg.style.maxWidth = 'none';
+                        svg.style.width = '100%'; 
+                        svg.style.height = '100%';
+                        pz = svgPanZoom(svg, {
+                            zoomEnabled: true,
+                            controlIconsEnabled: true,
+                            fit: true,
+                            center: true,
+                            maxZoom: 15
+                        });
+                        pz.resize();
+                        pz.fit();
+                        pz.center();
+                    }
+                }, 800); // give mermaid time to render
+            }
+        }
+
+        // Mermaid Initialize (Render all svgs)
+        mermaid.initialize({ startOnLoad: true, theme: 'dark', fontFamily: 'var(--font-mono)' });
+
+        // LOGIC SIMULATION
+        const spacket = document.getElementById('spacket');
+        const slog = document.getElementById('sim-log');
+        let running = false;
+        
+        function alog(msg, col) {
+            const tm = new Date().toISOString().substring(11, 19);
+            slog.innerHTML += `<div><span class="time">[${tm}]</span> <span style="color:var(--${col})">${msg}</span></div>`;
+            slog.scrollTop = slog.scrollHeight;
+        }
+
+        function resetAll() {
+            document.querySelectorAll('.sim-node').forEach(n => { n.classList.remove('active'); n.style.borderColor = 'var(--border)'; });
+        }
+
+        async function playSim(type) {
+            if(running) return;
+            running = true;
+            resetAll();
+
+            const n = [document.getElementById('sn-1'), document.getElementById('sn-2'), document.getElementById('sn-3'), document.getElementById('sn-4')];
+            let c, txt;
+
+            if (type === 'prod') {
+                n[0].querySelector('.title').textContent = "MDCW ESP32"; c = "accent"; txt = "WEIGHT: 200g";
+            } else if (type === 'ota') {
+                n[0].querySelector('.title').textContent = "ESP32 Target"; c = "accent-purp"; txt = "REQ Ota";
+            } else {
+                n[0].querySelector('.title').textContent = "Env Sensor"; c = "accent-alt"; txt = "TEMP: 26C";
+            }
+
+            // config nodes text
+            if(type==='prod'){n[1].querySelector('.title').textContent="EMQX (1883)"; n[2].querySelector('.title').textContent="Forming Filter";}
+            if(type==='ota'){n[1].querySelector('.title').textContent="Port 9999"; n[2].querySelector('.title').textContent="OTA App";}
+            if(type==='env'){n[1].querySelector('.title').textContent="MQTT Topic"; n[2].querySelector('.title').textContent="Forwarder App";}
+
+            spacket.style.transition = 'none'; spacket.style.left = '5%'; spacket.style.opacity = '0'; spacket.textContent = txt; spacket.style.background = `var(--${c})`;
+            await new Promise(r => setTimeout(r, 50));
+            spacket.style.transition = 'left 1s ease-in-out, opacity 0.3s';
+            spacket.style.opacity = '1';
+
+            // STAGE 1
+            n[0].classList.add('active'); n[0].style.borderColor = `var(--${c})`;
+            if(type==='prod') alog("ESP32 MDCW mendeteksi pack barang, transmit ke broker.", c);
+            else if(type==='ota') alog("ESP booting, mengecek manifest versi ke host port 9999.", c);
+            else alog("Sensor Suhu membaca 26C, transmit ke MQTT.", c);
+
+            spacket.style.left = '30%';
+            await new Promise(r => setTimeout(r, 1000));
+            
+            // STAGE 2
+            n[0].classList.remove('active'); n[1].classList.add('active'); n[1].style.borderColor = `var(--${c})`;
+            if(type==='prod') alog("Broker EMQX merunning topik, forming-app terpanggil.", 'text');
+            else if(type==='ota') alog("Tunnel host Nginx/Router mengalirkan ke Node.js OTA.", 'text');
+            else alog("MQTT mendispatch payload JSON ke backend forwarder.", 'text');
+
+            spacket.style.left = '55%';
+            await new Promise(r => setTimeout(r, 1000));
+
+            // STAGE 3
+            n[1].classList.remove('active'); n[2].classList.add('active'); n[2].style.borderColor = `var(--${c})`;
+            if(type==='prod') alog("ML Engine memfilter delay dan variance. Status: VALID.", c);
+            else if(type==='ota') alog("Merespon dengan binary firmware batch 1.0.1.", c);
+            else alog("Data diparsing, divalidasi ke area dan checkpoint DB.", c);
+
+            spacket.style.left = '80%';
+            await new Promise(r => setTimeout(r, 1000));
+
+            // STAGE 4
+            n[2].classList.remove('active'); n[3].classList.add('active'); n[3].style.borderColor = `var(--danger)`;
+            if(type==='prod') alog("INSERT ke tabel production_mdcw.", c);
+            else if(type==='ota') alog("UPDATE kolom status di otastates ke 'UPDATING'.", c);
+            else alog("INSERT record baru ke tabel temp.", c);
+
+            spacket.style.opacity = '0';
+            setTimeout(() => { running = false; resetAll(); }, 1000);
+        }
+    </script>
+</body>
+</html>
