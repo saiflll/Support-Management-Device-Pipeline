@@ -139,7 +139,7 @@ func handleExportCsv(c *fiber.Ctx) error {
 	if err != nil { return c.Status(500).SendString(err.Error()) }
 
 	w := csv.NewWriter(c.Response().BodyWriter())
-	w.Write([]string{"ID", "Timestamp", "Prefix", "Berat (g)", "Pack Count", "Status"})
+	w.Write([]string{"ID", "Timestamp", "Prefix", "Berat (g)", "Pack Count", "Status", "DataType", "Confidence"})
 	
 	for _, r := range records {
 		st := ""
@@ -154,6 +154,7 @@ func handleExportCsv(c *fiber.Ctx) error {
 		}
 		w.Write([]string{
 			fmt.Sprintf("%d", r.ID), r.Ts, r.Prefix, r.WeightFormatted, fmt.Sprintf("%d", r.Reg2), st,
+			r.DataType, fmt.Sprintf("%.2f", r.Confidence),
 		})
 	}
 	w.Flush()

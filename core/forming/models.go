@@ -33,6 +33,8 @@ type Record struct {
 	Reg114          int       `json:"reg114"`           // Weight
 	WeightFormatted string    `json:"weight_formatted"` // Formatted weight with comma
 	Prefix          string    `json:"prefix"`
+	DataType        string    `json:"data_type"`  // VALID, ISEN, SPAM, TEST
+	Confidence      float64   `json:"confidence"` // 0.0 - 1.0
 	CreatedAt       time.Time `json:"created_at"`
 }
 

@@ -30,6 +30,7 @@ func initDB() {
 	} else {
 		log.Println("Connected to PostgreSQL")
 		createTable()
+		ensureColumns()
 	}
 }
 
@@ -48,6 +49,8 @@ func createTable() {
 		reg5 INTEGER,
 		reg114 INTEGER,
 		prefix VARCHAR(50),
+		data_type VARCHAR(20) DEFAULT 'VALID',
+		confidence REAL DEFAULT 1.0,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	)`
 	if _, err := db.Exec(query); err != nil {
@@ -71,6 +74,24 @@ func createTable() {
 		log.Println("Error creating skip_log table:", err)
 	} else {
 		log.Println("Table 'skip_log' ensured")
+	}
+}
+
+func ensureColumns() {
+	// Add data_type column if not exists
+	_, err := db.Exec("ALTER TABLE production_mdcw ADD COLUMN IF NOT EXISTS data_type VARCHAR(20) DEFAULT 'VALID'")
+	if err != nil {
+		log.Println("Note: Error adding data_type column (may already exist):", err)
+	} else {
+		log.Println("Column 'data_type' ensured")
+	}
+
+	// Add confidence column if not exists
+	_, err = db.Exec("ALTER TABLE production_mdcw ADD COLUMN IF NOT EXISTS confidence REAL DEFAULT 1.0")
+	if err != nil {
+		log.Println("Note: Error adding confidence column (may already exist):", err)
+	} else {
+		log.Println("Column 'confidence' ensured")
 	}
 }
 
@@ -114,31 +135,35 @@ func insertData(p Payload) {
 		return
 	}
 
-	if p.Reg114 == 0 {
-		log.Printf("[SKIP] Data with weight=0 from %s at %s (reg2=%d, reg5=%d)", p.Prefix, tsStr, p.Reg2, p.Reg5)
+	// ML Filtering
+	dataType, confidence := AnalyzeRecord(p.Prefix, p.Reg114)
+	
+	// If it's definitely SPAM, we might want to skip or just label it
+	if dataType == DataTypeSpam && confidence > 0.8 {
+		log.Printf("[FILTER] Spam detected from %s (delay too low)", p.Prefix)
 		skipQuery := `INSERT INTO skip_log (ts, reg2, reg5, reg114, prefix, reason) VALUES ($1, $2, $3, $4, $5, $6)`
-		if _, err := db.Exec(skipQuery, tsStr, p.Reg2, p.Reg5, p.Reg114, p.Prefix, "Weight is zero"); err != nil {
+		if _, err := db.Exec(skipQuery, tsStr, p.Reg2, p.Reg5, p.Reg114, p.Prefix, "Spam detection (ML)"); err != nil {
 			log.Println("Error logging skipped data:", err)
 		}
 		return
 	}
 
-	query := `INSERT INTO production_mdcw (ts, reg2, reg5, reg114, prefix) VALUES ($1, $2, $3, $4, $5)`
-	if _, err := db.Exec(query, tsStr, p.Reg2, p.Reg5, p.Reg114, p.Prefix); err != nil {
+	query := `INSERT INTO production_mdcw (ts, reg2, reg5, reg114, prefix, data_type, confidence) VALUES ($1, $2, $3, $4, $5, $6, $7)`
+	if _, err := db.Exec(query, tsStr, p.Reg2, p.Reg5, p.Reg114, p.Prefix, dataType, confidence); err != nil {
 		log.Println("Error inserting data:", err)
 	} else {
-		log.Println("Data inserted successfully")
-		go func(p Payload) {
+		log.Printf("Data inserted successfully (Type: %s, Conf: %.2f)", dataType, confidence)
+		go func(p Payload, dType string) {
 			if err := lib.AppendToSheet(lib.Payload{
 				Ts:     fmt.Sprintf("%v", p.Ts),
 				Reg2:   p.Reg2,
 				Reg5:   p.Reg5,
 				Reg114: p.Reg114,
-				Prefix: p.Prefix,
+				Prefix: p.Prefix + " [" + dType + "]",
 			}); err != nil {
 				log.Printf("Warning: Failed to export to Sheets: %v", err)
 			}
-		}(p)
+		}(p, dataType)
 	}
 }
 
@@ -147,7 +172,7 @@ func getRecords(prefixFilter, statusFilter, sortBy, startDate, endDate string) (
 		return []Record{}, nil
 	}
 
-	query := "SELECT id, ts, reg2, reg5, reg114, prefix, created_at FROM production_mdcw WHERE 1=1"
+	query := "SELECT id, ts, reg2, reg5, reg114, prefix, data_type, confidence, created_at FROM production_mdcw WHERE 1=1"
 	var args []interface{}
 	argId := 1
 
@@ -192,10 +217,16 @@ func getRecords(prefixFilter, statusFilter, sortBy, startDate, endDate string) (
 		var r Record
 		var p sql.NullString
 		var r2, r5, r114 sql.NullInt64
+		var dType sql.NullString
+		var conf sql.NullFloat64
 
-		if err := rows.Scan(&r.ID, &r.Ts, &r2, &r5, &r114, &p, &r.CreatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.Ts, &r2, &r5, &r114, &p, &dType, &conf, &r.CreatedAt); err != nil {
 			return nil, err
 		}
+		
+		r.DataType = DataTypeValid
+		if dType.Valid { r.DataType = dType.String }
+		if conf.Valid { r.Confidence = conf.Float64 }
 
 		r.Prefix = "-"
 		if p.Valid { r.Prefix = p.String }

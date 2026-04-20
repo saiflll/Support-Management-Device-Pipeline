@@ -135,6 +135,8 @@ type Record struct {
 	Reg114          int       `json:"reg114"`
 	WeightFormatted string    `json:"weight_formatted"`
 	Prefix          string    `json:"prefix"`
+	DataType        string    `json:"data_type"`
+	Confidence      float64   `json:"confidence"`
 	CreatedAt       time.Time `json:"created_at"`
 }
 
@@ -143,7 +145,7 @@ func GetRecordsByDateRange(db *sql.DB, startDate, endDate, prefixFilter, statusF
 		return []Record{}, nil
 	}
 
-	query := "SELECT id, ts, reg2, reg5, reg114, prefix, created_at FROM production_mdcw WHERE 1=1"
+	query := "SELECT id, ts, reg2, reg5, reg114, prefix, data_type, confidence, created_at FROM production_mdcw WHERE 1=1"
 	args := []interface{}{}
 	argId := 1
 
@@ -181,10 +183,15 @@ func GetRecordsByDateRange(db *sql.DB, startDate, endDate, prefixFilter, statusF
 		var r Record
 		var prefix sql.NullString
 		var reg2, reg5, reg114 sql.NullInt64
+		var dType sql.NullString
+		var conf sql.NullFloat64
 
-		if err := rows.Scan(&r.ID, &r.Ts, &reg2, &reg5, &reg114, &prefix, &r.CreatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.Ts, &reg2, &reg5, &reg114, &prefix, &dType, &conf, &r.CreatedAt); err != nil {
 			return nil, err
 		}
+
+		if dType.Valid { r.DataType = dType.String } else { r.DataType = "VALID" }
+		if conf.Valid { r.Confidence = conf.Float64 } else { r.Confidence = 1.0 }
 
 		if prefix.Valid {
 			r.Prefix = prefix.String

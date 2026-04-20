@@ -166,6 +166,34 @@
     if (entry) return { label: entry[0], cls: entry[1] };
     return { label: `? (${reg5})`, cls: "badge-red" };
   }
+
+  // ── ML Insights Metrics ──────────────────────────────────
+  let mlStats = $derived.by(() => {
+    if (records.length === 0) {
+      return {
+        validity: 0,
+        testCount: 0,
+        isenCount: 0,
+        spamCount: 0,
+        accuracy: 0,
+      };
+    }
+    const total = records.length;
+    const valid = records.filter((r) => r.data_type === "VALID").length;
+    const test = records.filter((r) => r.data_type === "TEST").length;
+    const isen = records.filter((r) => r.data_type === "ISEN").length;
+    const spam = records.filter((r) => r.data_type === "SPAM").length;
+    const avgConf =
+      records.reduce((acc, r) => acc + (r.confidence || 0), 0) / total;
+
+    return {
+      validity: (valid / total) * 100,
+      testCount: test,
+      isenCount: isen,
+      spamCount: spam,
+      accuracy: avgConf * 100,
+    };
+  });
 </script>
 
 <svelte:head><title>MDCW Production Monitor</title></svelte:head>
@@ -430,6 +458,118 @@
               >
             </div>
           </div>
+
+          <!-- ML Wisdom Block: Analytics -->
+          <div
+            style="border: 1px solid var(--border); border-radius: 8px; padding: 16px; background: var(--surface); display: flex; flex-direction: column; gap: 16px; border-top: 3px solid var(--accent-3);"
+          >
+            <div
+              style="font-family: var(--font-mono); font-size: 11px; color: var(--accent-3); font-weight: 700; text-transform: uppercase; display: flex; align-items: center; gap: 8px;"
+            >
+              <svg
+                width="16"
+                height="16"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                ><path
+                  d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41-1.41"
+                /></svg
+              >
+              --|Suport Prediksi data |--
+            </div>
+
+            <!-- Gauge UI -->
+            <div
+              style="position: relative; width: 100%; height: 100px; display: flex; flex-direction: column; align-items: center; justify-content: flex-end;"
+            >
+              <svg viewBox="0 0 100 50" style="width: 150px; height: 75px;">
+                <path
+                  d="M 10 50 A 40 40 0 0 1 90 50"
+                  fill="none"
+                  stroke="var(--border)"
+                  stroke-width="8"
+                  stroke-linecap="round"
+                />
+                <path
+                  d="M 10 50 A 40 40 0 0 1 90 50"
+                  fill="none"
+                  stroke="var(--accent-3)"
+                  stroke-width="8"
+                  stroke-linecap="round"
+                  stroke-dasharray="125.66"
+                  stroke-dashoffset={125.66 - 125.66 * (mlStats.validity / 100)}
+                  style="transition: stroke-dashoffset 0.8s ease-out;"
+                />
+              </svg>
+              <div style="position: absolute; bottom: 0; text-align: center;">
+                <div
+                  style="font-size: 20px; font-weight: 800; color: var(--text);"
+                >
+                  {mlStats.validity.toFixed(0)}%
+                </div>
+                <div
+                  style="font-size: 9px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px;"
+                >
+                  Kebenaran Data
+                </div>
+              </div>
+            </div>
+
+            <!-- Stats Table -->
+            <table
+              style="width: 100%; border-top: 1px solid var(--border); padding-top: 10px; font-family: var(--font-mono); font-size: 10px;"
+            >
+              <tbody>
+                <tr>
+                  <td style="padding: 4px 0; color: var(--text-muted);"
+                    >Nilai Test</td
+                  >
+                  <td
+                    style="padding: 4px 0; text-align: right; color: var(--accent-1);"
+                    >{mlStats.testCount} pts</td
+                  >
+                </tr>
+                <tr>
+                  <td style="padding: 4px 0; color: var(--text-muted);"
+                    >Akurasi Filter</td
+                  >
+                  <td
+                    style="padding: 4px 0; text-align: right; color: var(--green);"
+                    >{mlStats.accuracy.toFixed(1)}%</td
+                  >
+                </tr>
+                <tr>
+                  <td style="padding: 4px 0; color: var(--text-muted);"
+                    >Data Abu"</td
+                  >
+                  <td
+                    style="padding: 4px 0; text-align: right; color: var(--yellow);"
+                    >{mlStats.isenCount}</td
+                  >
+                </tr>
+                <tr>
+                  <td style="padding: 4px 0; color: var(--text-muted);"
+                    >Spam Block</td
+                  >
+                  <td
+                    style="padding: 4px 0; text-align: right; color: var(--red);"
+                    >{mlStats.spamCount}</td
+                  >
+                </tr>
+              </tbody>
+            </table>
+
+            <div
+              style="font-size: 9px; color: var(--text-muted); font-style: italic; text-align: center;"
+            >
+              *Analisis berbasis pelatihan dari ({records.length} data , ini test
+              model dulu :v)
+            </div>
+          </div>
         </div>
       </div>
 
@@ -440,7 +580,7 @@
             <table style="width:100%;border-collapse:collapse;">
               <thead>
                 <tr style="border-bottom:1px solid var(--border);">
-                  {#each ["ID", "TS", "PREFIX", "BERAT", "PCK_CNT", "ST"] as h}
+                  {#each ["ID", "TS", "PREFIX", "BERAT", "PCK_CNT", "ST", "DT", "CONF"] as h}
                     <th
                       style="text-align:left;padding:8px 12px;font-family:var(--font-mono);font-size:9px;font-weight:700;color:var(--text-muted);text-transform:uppercase;"
                       >{h}</th
@@ -451,6 +591,14 @@
               <tbody>
                 {#each records as r}
                   {@const st = statusLabel(r.reg5)}
+                  {@const dtCls =
+                    r.data_type === "VALID"
+                      ? "badge-green"
+                      : r.data_type === "TEST"
+                        ? "badge-blue"
+                        : r.data_type === "SPAM"
+                          ? "badge-red"
+                          : "badge-yellow"}
                   <tr
                     style="border-bottom:1px solid var(--border);transition:background 0.1s;"
                     onmouseenter={(e: any) =>
@@ -479,6 +627,13 @@
                     >
                     <td style="padding:8px 12px;"
                       ><span class="badge {st.cls}">{st.label}</span></td
+                    >
+                    <td style="padding:8px 12px;"
+                      ><span class="badge {dtCls}">{r.data_type}</span></td
+                    >
+                    <td
+                      style="padding:8px 12px;font-family:var(--font-mono);font-size:9px;color:var(--text-muted);"
+                      >{(r.confidence * 100).toFixed(0)}%</td
                     >
                   </tr>
                 {:else}

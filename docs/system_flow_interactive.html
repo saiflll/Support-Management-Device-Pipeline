@@ -1,0 +1,488 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Servfor System Architecture Overview</title>
+    <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0f172a;
+            --container-bg: rgba(30, 41, 59, 0.7);
+            --accent-color: #38bdf8;
+            --accent-glow: rgba(56, 189, 248, 0.3);
+            --text-primary: #f8fafc;
+            --text-secondary: #94a3b8;
+            --border-color: rgba(148, 163, 184, 0.2);
+            --success: #10b981;
+            --warning: #f59e0b;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(circle at 50% 0%, rgba(56, 189, 248, 0.1), transparent),
+                radial-gradient(circle at 0% 100%, rgba(16, 185, 129, 0.05), transparent);
+            color: var(--text-primary);
+            line-height: 1.6;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        header {
+            padding: 2rem 5%;
+            border-bottom: 1px solid var(--border-color);
+            background: rgba(15, 23, 42, 0.8);
+            backdrop-filter: blur(10px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-weight: 700;
+            font-size: 1.5rem;
+            color: var(--accent-color);
+            letter-spacing: -0.025em;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .logo::before {
+            content: '';
+            display: block;
+            width: 12px;
+            height: 12px;
+            background: var(--accent-color);
+            border-radius: 2px;
+            box-shadow: 0 0 10px var(--accent-glow);
+        }
+
+        .status-badge {
+            font-size: 0.8rem;
+            padding: 0.25rem 0.75rem;
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid var(--success);
+            color: var(--success);
+            border-radius: 99px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .status-badge::before {
+            content: '';
+            display: block;
+            width: 6px;
+            height: 6px;
+            background: var(--success);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(1.2); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        main {
+            padding: 2rem 5%;
+            max-width: 1400px;
+            margin: 0 auto;
+        }
+
+        .controls {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+
+        .tab-btn {
+            background: var(--container-bg);
+            border: 1px solid var(--border-color);
+            color: var(--text-secondary);
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            font-family: inherit;
+        }
+
+        .tab-btn:hover {
+            border-color: var(--accent-color);
+            color: var(--text-primary);
+            background: rgba(56, 189, 248, 0.1);
+        }
+
+        .tab-btn.active {
+            background: var(--accent-color);
+            color: var(--bg-color);
+            border-color: var(--accent-color);
+            box-shadow: 0 4px 14px var(--accent-glow);
+        }
+
+        .diagram-container {
+            background: var(--container-bg);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 2rem;
+            min-height: 500px;
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            position: relative;
+            overflow: auto;
+            backdrop-filter: blur(5px);
+        }
+
+        .tab-content {
+            display: none;
+            width: 100%;
+            animation: fadeIn 0.5s ease;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .description {
+            margin-top: 2rem;
+            background: rgba(30, 41, 59, 0.4);
+            border-left: 4px solid var(--accent-color);
+            padding: 1.5rem;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .description h3 {
+            margin-bottom: 0.5rem;
+            color: var(--accent-color);
+        }
+
+        .description p {
+            color: var(--text-secondary);
+            font-size: 0.95rem;
+        }
+
+        .legend {
+            display: flex;
+            gap: 1.5rem;
+            margin-top: 1rem;
+            font-size: 0.85rem;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            color: var(--text-secondary);
+        }
+
+        .dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 2px;
+        }
+
+        footer {
+            text-align: center;
+            padding: 2rem;
+            color: var(--text-secondary);
+            font-size: 0.8rem;
+            border-top: 1px solid var(--border-color);
+            margin-top: 4rem;
+        }
+
+        /* Mermaid Overrides */
+        .mermaid {
+            background: transparent !important;
+        }
+        
+        /* Custom styles for mermaid nodes in dark mode */
+        .node rect, .node circle, .node ellipse, .node polygon, .node path {
+            fill: #1e293b !important;
+            stroke: #38bdf8 !important;
+            stroke-width: 2px !important;
+        }
+        .node .label {
+            color: #f8fafc !important;
+        }
+        .edgePath .path {
+            stroke: #94a3b8 !important;
+            stroke-width: 1.5px !important;
+        }
+        .marker {
+            fill: #94a3b8 !important;
+            stroke: none !important;
+        }
+        .cluster rect {
+            fill: rgba(30, 41, 59, 0.3) !important;
+            stroke: rgba(148, 163, 184, 0.4) !important;
+            stroke-dasharray: 5,5 !important;
+        }
+        .label {
+            font-family: 'Inter', sans-serif !important;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="logo">SERVFOR SYSTEM FLOW</div>
+        <div class="status-badge">System Live</div>
+    </header>
+
+    <main>
+        <div class="controls">
+            <button class="tab-btn active" onclick="showTab('overview')">Macro Overview</button>
+            <button class="tab-btn" onclick="showTab('security')">Auth & Security</button>
+            <button class="tab-btn" onclick="showTab('network')">Network Topology</button>
+            <button class="tab-btn" onclick="showTab('ota')">OTA Flow</button>
+        </div>
+
+        <div class="diagram-container">
+            <!-- OVERVIEW -->
+            <div id="overview" class="tab-content active">
+                <div class="mermaid">
+graph TD
+    subgraph "External World"
+        USER[User Browser]
+        IOT[IoT Devices<br/>ESP32 / nRF51]
+        TELEGRAM[Telegram Bot]
+    end
+
+    subgraph "Servfor Ecosystem (Docker)"
+        EMQX{EMQX Broker<br/>:1883}
+        FORWARDER[Forwarder App<br/>:8888]
+        OTA[OTA Update App<br/>:9999]
+        FORMING[Forming App<br/>:3000]
+        DB[(PostgreSQL)]
+        ADMINER_PROXY[Adminer Proxy<br/>:8080]
+        ADMINER[Adminer]
+    end
+
+    %% Communication Flows
+    IOT -- MQTT Publish/Sub --> EMQX
+    EMQX -- Telemetry --> FORWARDER
+    EMQX -- Control/Status --> OTA
+    EMQX -- Process Data --> FORMING
+    
+    FORWARDER -- Write Logs/State --> DB
+    FORMING -- Read/Write Production --> DB
+    
+    OTA -- API Calls --> FORWARDER
+    
+    USER -- HTTPS --> OTA
+    USER -- HTTPS --> FORWARDER
+    USER -- HTTPS --> FORMING
+    USER -- HTTPS / 2FA --> ADMINER_PROXY
+    
+    ADMINER_PROXY -- Session Check --> ADMINER
+    ADMINER -- SQL Admin --> DB
+    
+    FORWARDER -- Notifications --> TELEGRAM
+    OTA -- Auth Codes --> TELEGRAM
+    TELEGRAM -- User Interactions --> OTA
+
+    %% Styling
+    classDef highlight fill:#38bdf8,stroke:#38bdf8,color:#0f172a;
+    classDef database fill:#1e293b,stroke:#a855f7,stroke-width:2px;
+    classDef broker fill:#1e293b,stroke:#fbbf24,stroke-width:2px;
+    
+    class DB database;
+    class EMQX broker;
+    class ADMINER highlight;
+                </div>
+                <div class="description">
+                    <h3>🚀 Macro Architecture</h3>
+                    <p>Sistem ini dirancang dengan arsitektur mikroservis berbasis kontainer. <b>EMQX</b> bertindak sebagai pusat saraf (backbone) untuk semua komunikasi perangkat IoT, sementara <b>Forwarder</b>, <b>OTA</b>, dan <b>Forming</b> menangani logika bisnis, manajemen firmware, dan monitoring produksi secara real-time.</p>
+                </div>
+            </div>
+
+            <!-- SECURITY -->
+            <div id="security" class="tab-content">
+                <div class="mermaid">
+sequenceDiagram
+    participant U as User Browser
+    participant A as Dashboard (OTA/Fwd)
+    participant T as Telegram Bot
+    participant P as Adminer Proxy
+    participant AD as Adminer UI
+
+    U->>A: Akses Halaman Login
+    U->>A: Klik "Minta Kode"
+    A->>A: Generate 6-Digit OTP
+    A->>T: Kirim Kode ke Chat ID
+    T-->>U: Notifikasi Kode (di Telegram App)
+    U->>A: Masukkan Kode OTP
+    A->>A: Validasi Kode
+    A-->>U: Set Session Cookie (HTTPOnly)
+    
+    Note over U,P: User Terautentikasi
+    
+    U->>P: Klik Tombol "Database"
+    P->>P: Validasi HTTP Cookie
+    alt Cookie Valid
+        P->>AD: Proxy ke Adminer Internal
+        AD-->>U: Tampilkan Dashboard Query
+    else Cookie Invalid / Expired
+        P-->>U: Redirect ke Login
+    end
+                </div>
+                <div class="description">
+                    <h3>🔐 Multi-Layer Security (Telegram 2FA)</h3>
+                    <p>Keamanan database dijamin melalui 4 lapis perlindungan: <b>Telegram Out-of-band 2FA</b>, <b>HTTPOnly Session Cookies</b>, <b>Adminer Reverse Proxy</b>, dan <b>Network Isolation</b> (Adminer & DB tidak memiliki port yang terekspos langsung ke publik).</p>
+                </div>
+            </div>
+
+            <!-- NETWORK -->
+            <div id="network" class="tab-content">
+                <div class="mermaid">
+graph LR
+    subgraph "Public Internet"
+        P9999[Port 9999 - OTA]
+        P8888[Port 8888 - Forwarder]
+        P3000[Port 3000 - Forming]
+        P8080[Port 8080 - Manager]
+        P1883[Port 1883 - MQTT]
+    end
+
+    subgraph "Docker Network: iot-net (192.168.200.0/24)"
+        OTA_S[OTA App]
+        FWD_S[Forwarder]
+        FRM_S[Forming]
+        PRX_S[Adminer Proxy]
+        EMX_S[EMQX Broker]
+        
+        subgraph "Internal Only (Hidden)"
+            ADM_S[Adminer]
+            PGS_S[(PostgreSQL)]
+        end
+    end
+
+    P9999 --- OTA_S
+    P8888 --- FWD_S
+    P3000 --- FRM_S
+    P8080 --- PRX_S
+    P1883 --- EMX_S
+    
+    OTA_S --- FWD_S
+    FWD_S --- PGS_S
+    FRM_S --- PGS_S
+    PRX_S --- ADM_S
+    ADM_S --- PGS_S
+    OTA_S --- EMX_S
+                </div>
+                <div class="description">
+                    <h3>🌐 Network Topology & Isolation</h3>
+                    <p>Semua servis berjalan di dalam subnet Docker <code>192.168.200.0/24</code>. Hanya servis dashboard yang mengekspos port ke <i>host</i>, sementara <b>PostgreSQL</b> dan <b>Adminer</b> terisolasi total di dalam jaringan internal untuk mencegah akses ilegal.</p>
+                </div>
+            </div>
+
+            <!-- OTA -->
+            <div id="ota" class="tab-content">
+                <div class="mermaid">
+graph TD
+    subgraph "Admin Workflow"
+        FILE[Binary Firmware .bin] --> UPLOAD[OTA Dashboard]
+        UPLOAD --> STORAGE[Static Storage]
+    end
+
+    subgraph "Device Update Loop"
+        EMQX_O{EMQX}
+        DEV[IoT Device]
+        
+        UPLOAD -. MQTT Notification .-> EMQX_O
+        EMQX_O -. Topic: /ota/update .-> DEV
+        DEV -- HTTP GET Request --> STORAGE
+        STORAGE -- Binary Stream --> DEV
+        DEV -- Flash Progress --> EMQX_O
+        EMQX_O -- Progress Update --> UPLOAD
+    end
+                </div>
+                <div class="description">
+                    <h3>update 📦 OTA Update Workflow</h3>
+                    <p>Alur update firmware: Admin mengunggah file binary ke <b>OTA Dashboard</b>, sistem mengirim notifikasi via <b>MQTT</b> ke perangkat target. Perangkat kemudian mengunduh file secara aman via <b>HTTP Stream</b> dan melaporkan progres kembali ke dashboard secara real-time.</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="legend">
+            <div class="legend-item"><div class="dot" style="background: var(--accent-color);"></div> Frontend / Dashboard</div>
+            <div class="legend-item"><div class="dot" style="background: #fbbf24;"></div> MQTT Messaging</div>
+            <div class="legend-item"><div class="dot" style="background: #a855f7;"></div> Database Persistence</div>
+            <div class="legend-item"><div class="dot" style="background: #10b981;"></div> External Service</div>
+        </div>
+    </main>
+
+    <footer>
+        &copy; 2026 Servfor Ecosystem Infrastructure - Antigravity Visualization
+    </footer>
+
+    <script>
+        // Initialize Mermaid
+        mermaid.initialize({
+            startOnLoad: true,
+            theme: 'dark',
+            securityLevel: 'loose',
+            flowchart: {
+                useMaxWidth: true,
+                htmlLabels: true,
+                curve: 'basis'
+            },
+            sequence: {
+                diagramMarginX: 50,
+                diagramMarginY: 10,
+                actorMargin: 50,
+                width: 150,
+                height: 65,
+                boxMargin: 10,
+                boxTextMargin: 5,
+                noteMargin: 10,
+                messageMargin: 35,
+                mirrorActors: true,
+                addMessagesNumbers: false,
+                useMaxWidth: true
+            }
+        });
+
+        function showTab(tabId) {
+            // Hide all contents
+            document.querySelectorAll('.tab-content').forEach(tab => {
+                tab.classList.remove('active');
+            });
+            
+            // Deactivate all buttons
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // Show selected
+            document.getElementById(tabId).classList.add('active');
+            event.currentTarget.classList.add('active');
+            
+            // Re-render mermaid for hidden elements if needed
+            window.dispatchEvent(new Event('resize'));
+        }
+    </script>
+</body>
+</html>
