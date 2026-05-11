@@ -1,0 +1,115 @@
+{
+  "project_identity": {
+    "name": "Servfor-IoT-Gateway-OTA",
+    "stack": "Golang, Fiber, MQTT, PostgreSQL",
+    "role": "Local Bridge, Data Aggregator, and Firmware Manager"
+  },
+  "technical_map": {
+    "core_logic_paths": {
+      "forwarder_engine": "util/forward/internal/forwarder/forwarder.go (Aggregation & Flush logic)",
+      "csv_parser": "util/forward/internal/mqtt/client.go (parseCSVtoAreaData function)",
+      "pipeline_seed": "util/forward/internal/seed/seed.go (Seeds default pipeline config to DB)",
+      "ota_server": "core/ota/main.go (Node Status, Monitoring, and File Uploads)",
+      "ota_ui": "core/ota/web/ (Svelte dashboard build)",
+      "forming_logic": "core/forming/ (Production monitoring & Google Sheets sync)",
+      "simulator": "simulate_live_node.py (Full HW simulator - sends CSV to sensor/data/ingest)"
+    },
+    "database_schema": {
+      "pipelines": "Table in Postgres - CRITICAL: broker_url determines where forwarded data goes",
+      "nodes": "In-memory map in ota/main.go for real-time status"
+    }
+  },
+  "data_flow_architecture": {
+    "correct_flow": "simulator/HW -> sensor/data/ingest (CSV) -> Forwarder(servfor) -> sensor/data/forwarded (JSON) -> iot-suhu-be -> PostgreSQL -> FE",
+    "forwarder_mechanism": "Pipeline config dari tabel 'pipelines' di DB menentukan: source_topic, broker_url (dest), dest_topic, interval_minutes",
+    "critical_rule": "broker_url di tabel pipelines HARUS mengarah ke broker yang sama dengan yang di-subscribe iot-suhu-be"
+  },
+  "integration_rules": {
+    "buffering": {
+      "interval": "Dikonfigurasi per-pipeline di tabel 'pipelines' (kolom interval_minutes). Default 8 menit, untuk dev gunakan 1 menit.",
+      "max_buffer_kb": 50,
+      "logic": "Collect CSV, parse ke JSON (AreaData struct), agregasi di buffer, flush setiap interval ke dest broker."
+    },
+    "hardware_compatibility": {
+      "csv_tags": "CK (Complex), AREA, TS (Timestamp), M (Combined Temp/RH), D (Door)",
+      "ntp_sync": "UTC dari hardware. Simulator pakai time.gmtime() = UTC."
+    }
+  },
+  "mqtt_bridge": {
+    "source_topic": "sensor/data/ingest (CSV format dari HW/simulator)",
+    "destination_topic": "sensor/data/forwarded (JSON AreaData array, setelah aggregasi)",
+    "broker_dest": "Dikonfigurasi di tabel pipelines.broker_url - HARUS sama dengan MQTT_BROKER_URI di iot-suhu-be .env"
+  },
+  "known_bugs_and_fixes": {
+    "bug_01": {
+      "title": "KRITIS: Tabel pipelines tidak ada seed data default",
+      "severity": "CRITICAL",
+      "symptom": "Jika DB fresh/baru, tidak ada pipeline → forwarder tidak subscribe & tidak forward apapun",
+      "root_cause": "seed.go tidak menyertakan INSERT untuk tabel pipelines. Pipeline harus di-insert manual atau via UI forwarder.",
+      "fix": "Tambahkan seed pipeline default di util/forward/internal/seed/seed.go dengan broker_url dari env MQTT_BROKER_PUB dan interval_minutes=1 untuk dev",
+      "files_changed": ["util/forward/internal/seed/seed.go"],
+      "date_fixed": "2026-05-07"
+    },
+    "bug_02": {
+      "title": "KRITIS: Pipeline mengarah ke EMQX cloud, bukan broker lokal",
+      "severity": "CRITICAL",
+      "symptom": "Log forwarder: '✅ (Forwarder) Berhasil terhubung ke Broker EMQX Publik' → data dikirim ke cloud. BE lokal tidak menerima.",
+      "root_cause": "Pipeline yang tersimpan di DB memiliki broker_url = cloud EMQX (misal tcp://emqx.miegacoan.id:1883). iot-suhu-be subscribe ke tcp://localhost:1883 (local). Keduanya berbeda broker → data tidak sampai.",
+      "fix": "Update pipeline di DB: SET broker_url = 'tcp://emqx:1883' (docker) atau 'tcp://localhost:1883' (host). Script SQL tersedia di dev/fix_pipeline_local.sql",
+      "manual_action": "Jalankan dev/fix_pipeline_local.sql via pgAdmin atau psql",
+      "date_fixed": "2026-05-07"
+    },
+    "bug_03": {
+      "title": "GetSensorStatuses: timezone mismatch dalam perbandingan waktu",
+      "severity": "HIGH",
+      "symptom": "WARN: Tidak ada status sensor yang diproses - data ada di DB tapi dianggap expired",
+      "root_cause": "timed.Now() tidak di-normalize ke UTC sebelum dibandingkan dengan tempTS.Time dari PostgreSQL. Selisih bisa +7 jam akibat timezone Jakarta.",
+      "fix": "Gunakan timed.Now().UTC() dan tempTS.Time.UTC() untuk perbandingan konsisten. timeLimit diperlebar ke 20 menit.",
+      "files_changed": ["iot-suhu-be/app/handler/handler.go, func GetSensorStatuses"],
+      "date_fixed": "2026-05-07"
+    },
+    "bug_04": {
+      "title": "sensor_no mismatch: Area 11 simulator kirim no=2 tapi config daftarkan no=1",
+      "severity": "HIGH",
+      "symptom": "Log: Peringatan: Menerima data untuk sensor suhu tidak terdaftar (Area: 11, No: 2). Data diabaikan.",
+      "root_cause": "NODES di simulate_live_node.py mendefinisikan ESP32_DEV_002 dengan sensor_no=2 untuk area 11. TempThresholds di config.go hanya mendaftarkan {AreaID: 11, SensorNo: 1}.",
+      "fix": "Ganti sensor_no dari 2 ke 1 untuk node ESP32_DEV_002 di simulate_live_node.py",
+      "files_changed": ["simulate_live_node.py"],
+      "date_fixed": "2026-05-07"
+    },
+    "bug_05": {
+      "title": "MQTT auth credentials tidak diset di simulator",
+      "severity": "MEDIUM",
+      "symptom": "Koneksi simulator ditolak jika broker pakai auth (EMQX_ALLOW_ANONYMOUS=false)",
+      "root_cause": "simulate_live_node.py tidak memanggil client.username_pw_set() sebelum connect()",
+      "fix": "Tambahkan username_pw_set(MQTT_USERNAME, MQTT_PASSWORD) dari environment variable",
+      "files_changed": ["simulate_live_node.py"],
+      "date_fixed": "2026-05-07"
+    }
+  },
+  "action_checklist": {
+    "untuk_dev_lokal_sepenuhnya_otomatis": [
+      "1. docker-compose up --build -d   ← cukup ini saja, semua pipeline sudah di-seed otomatis",
+      "2. Jalankan simulate_live_node.py di luar docker (python simulate_live_node.py)",
+      "   Simulator kirim CSV ke sensor/data/ingest setiap 10 detik",
+      "3. Tunggu ±1 menit (interval_minutes=1 di pipeline seed)",
+      "   → Forwarder flush JSON ke sensor/data/forwarded @ emqx lokal",
+      "   → iot-suhu-be terima, simpan ke DB",
+      "4. FE request GET /api/sensors/statuses → data tampil"
+    ],
+    "yang_terjadi_otomatis_saat_build": [
+      "seed.go insert/update pipeline_id=1 dengan broker_url dari MQTT_BROKER_PUB (.env)",
+      "MQTT_BROKER_PUB = tcp://emqx:1883 → sama dengan broker lokal yang dipakai BE",
+      "Jika sebelumnya pipeline mengarah ke cloud, DO UPDATE akan mengkoreksinya"
+    ],
+    "verifikasi_cepat": "docker exec -it postgres_db psql -U postgres -d servfi -c 'SELECT pipeline_id, name, broker_url, interval_minutes, is_active FROM pipelines;'"
+  },
+  "registered_sensors": {
+    "note": "Sensor harus terdaftar di config.go TempThresholds/RhThresholds agar data tidak dibuang oleh processor.go",
+    "temp_sensors_valid_for_simulation": [
+      {"area_id": 10, "sensor_no": 1, "area_name": "Chilled Room"},
+      {"area_id": 11, "sensor_no": 1, "area_name": "Metos Room"}
+    ],
+    "valid_door_ids_for_simulation": [101, 102, 104]
+  }
+}

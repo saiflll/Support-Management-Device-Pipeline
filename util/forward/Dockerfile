@@ -13,13 +13,13 @@ RUN apk add --no-cache git ca-certificates tzdata || \
 
 # Copy go mod files
 COPY go.mod go.sum ./
-RUN go mod download
+COPY vendor ./vendor
 
 # Copy source code
 COPY . .
 
 # Build binary
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod=vendor \
     -ldflags='-w -s -extldflags "-static"' \
     -a -installsuffix cgo \
     -o forwarder-server main.go

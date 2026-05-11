@@ -1,10 +1,4 @@
-# ============================================
-# OTA Service Dockerfile
-# Build context: servfor/ root (not ota/)
-# Usage: docker build -f ota/Dockerfile .
-# ============================================
 
-# Global ARG — must be before any FROM to be usable in FROM instructions
 ARG GOLANG_VERSION=1.24-alpine
 
 # ============================================
@@ -30,11 +24,11 @@ RUN apk add --no-cache git ca-certificates tzdata || \
     (sleep 10 && apk add --no-cache git ca-certificates tzdata)
 
 COPY core/ota/go.mod core/ota/go.sum ./
-RUN go mod download
+COPY core/ota/vendor ./vendor
 
 COPY core/ota/ .
 
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod=vendor \
     -ldflags='-w -s -extldflags "-static"' \
     -a -installsuffix cgo \
     -o ota-server main.go

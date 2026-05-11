@@ -30,11 +30,11 @@ RUN apk add --no-cache git ca-certificates tzdata || \
     (sleep 10 && apk add --no-cache git ca-certificates tzdata)
 
 COPY core/forming/go.mod core/forming/go.sum ./
-RUN go mod download
+COPY core/forming/vendor ./vendor
 
 COPY core/forming/ .
 
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod=vendor \
     -ldflags='-w -s -extldflags "-static"' \
     -a -installsuffix cgo \
     -o forming-server .

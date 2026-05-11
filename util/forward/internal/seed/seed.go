@@ -4,7 +4,9 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"os"
 )
+
 
 func SeedData(DB *sql.DB) {
 
@@ -73,6 +75,54 @@ func SeedData(DB *sql.DB) {
 		fmt.Sprintf("INSERT INTO users (user_id, username, password_hash) VALUES (1, 'admin', '%s') ON CONFLICT (username) DO UPDATE SET password_hash = EXCLUDED.password_hash;", adminPasswordHash),
 	}
 
+	// =====================================================================
+	// Pipeline seed: pastikan ada pipeline lokal yang forward
+	// sensor/data/ingest (CSV) → sensor/data/forwarded (JSON) di broker LOKAL
+	//
+	// PENTING:
+	// - broker_url diambil dari MQTT_BROKER_PUB (.env) = tcp://emqx:1883 di docker
+	// - credentials pakai MQTT_USERNAME / MQTT_PASSWORD (bukan _FOR yang untuk cloud)
+	//   karena docker-compose EMQX hanya daftarkan user dari MQTT_USERNAME/MQTT_PASSWORD
+	// - ON CONFLICT DO UPDATE → pipeline otomatis dikoreksi setiap docker-compose up --build
+	//   meski DB sudah punya pipeline lama yang mengarah ke cloud
+	// =====================================================================
+	localBrokerURL := os.Getenv("MQTT_BROKER_PUB")
+	if localBrokerURL == "" {
+		localBrokerURL = "tcp://localhost:1883"
+	}
+	// Gunakan kredensial broker LOKAL (bukan _FOR yang untuk cloud destination)
+	localUsername := os.Getenv("MQTT_USERNAME")
+	if localUsername == "" {
+		localUsername = "apps"
+	}
+	localPassword := os.Getenv("MQTT_PASSWORD")
+	if localPassword == "" {
+		localPassword = "apps"
+	}
+
+	pipelineSeedCommands := []string{
+		// Pipeline 1: Lokal
+		fmt.Sprintf(
+			`INSERT INTO pipelines (pipeline_id, name, source_topic, broker_url, dest_topic, username, password, interval_minutes, is_active)
+			VALUES (1, 'Local-to-Local Forward', 'sensor/data/ingest', '%s', 'sensor/data/forwarded', '%s', '%s', 1, TRUE)
+			ON CONFLICT (pipeline_id) DO UPDATE SET
+				broker_url       = EXCLUDED.broker_url,
+				username         = EXCLUDED.username,
+				password         = EXCLUDED.password,
+				interval_minutes = EXCLUDED.interval_minutes,
+				is_active        = EXCLUDED.is_active;`,
+			localBrokerURL, localUsername, localPassword,
+		),
+		// Pipeline 2: Cloud (Miegacoan)
+		fmt.Sprintf(
+			`INSERT INTO pipelines (pipeline_id, name, source_topic, broker_url, dest_topic, username, password, interval_minutes, is_active)
+			VALUES (2, 'Cloud Forward (Miegacoan)', 'sensor/data/ingest', 'tcp://emqx.miegacoan.id:1883', 'sensor/data/forwarded', 'saiful', 'saiful123', 8, TRUE)
+			ON CONFLICT (pipeline_id) DO NOTHING;`,
+		),
+	}
+
+
+
 	seedCommandList := []struct {
 		name     string
 		commands []string
@@ -81,7 +131,9 @@ func SeedData(DB *sql.DB) {
 		{"Area", areaSeedCommands},
 		{"Door", doorSeedCommands},
 		{"User", userSeedCommands},
+		{"Pipeline", pipelineSeedCommands},
 	}
+
 
 	for _, seedGroup := range seedCommandList {
 

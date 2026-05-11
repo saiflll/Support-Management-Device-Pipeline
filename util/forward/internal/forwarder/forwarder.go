@@ -83,7 +83,15 @@ var (
 	store            *session.Store
 	telegramBotToken string
 	telegramChatID   string
+
+	// [FIX] Deadband State Tracking
+	// Key format: "ck-area-sensorNo"
+	lastSensorValues = make(map[string]float64)
+	lastDoorStatus   = make(map[string]int)
+	lastSentTime     = make(map[string]time.Time)
+	deltaMutex       = &sync.Mutex{}
 )
+
 
 // Start initializes the forwarder component.
 func Start() {
@@ -224,7 +232,11 @@ func startPipeline(p Pipeline) *PipelineInstance {
 		log.Printf("❌ Failed to connect pipeline %d: %v", p.ID, token.Error())
 		inst.Status.LastForwardError = token.Error().Error()
 		inst.Status.LastForwardStatus = "Connection Failed"
+	} else {
+		// [FIX] Langsung set Sukses jika koneksi berhasil
+		inst.Status.LastForwardStatus = "Sukses"
 	}
+
 
 	inst.Ticker = time.NewTicker(interval)
 	go func() {
@@ -295,7 +307,7 @@ func (inst *PipelineInstance) Flush(force bool) {
 }
 
 func AddToBufferAndAggregate(data []models.AreaData) {
-	// 1. Update global Log Buffer
+	// 1. Update global Log Buffer untuk dashboard UI (biar tetap update tiap 10s)
 	statusMutex.Lock()
 	status.ReceivedDataBuffer = append(status.ReceivedDataBuffer, data...)
 	if len(status.ReceivedDataBuffer) > 100 {
@@ -303,28 +315,65 @@ func AddToBufferAndAggregate(data []models.AreaData) {
 	}
 	statusMutex.Unlock()
 
-	// 2. Distribute to Pipeline Buffers
-	pipelinesMutex.Lock()
-	defer pipelinesMutex.Unlock()
+	// 2. Filter data untuk Pipeline (Deadband Logic)
+	deltaMutex.Lock()
+	defer deltaMutex.Unlock()
 
-	for _, inst := range pipelineInstances {
-		inst.Mutex.Lock()
-		for _, d := range data {
-			// SIMPLE TOPIC MATCHING
-			if inst.Config.SourceTopic == "ALL" || d.Topic == inst.Config.SourceTopic {
-				if len(inst.Buffer) < 2000 {
-					// Create copy and strip topic for clean forwarding (Format 4)
-					cleanData := d
-					cleanData.Topic = ""
-					inst.Buffer = append(inst.Buffer, cleanData)
-				}
+	for _, areaData := range data {
+		filteredData := models.AreaData{
+			CK:    areaData.CK,
+			Area:  areaData.Area,
+			Topic: "",
+			Temp:  []models.TempData{},
+			Door:  []models.DoorData{},
+		}
+
+		// --- Filter Temp ---
+		for _, t := range areaData.Temp {
+			key := fmt.Sprintf("%d-%d-%d", areaData.CK, areaData.Area, t.No)
+			lastVal, exists := lastSensorValues[key]
+			lastTs := lastSentTime[key]
+			delta := 0.0
+			if t.Temp > lastVal {
+				delta = t.Temp - lastVal
+			} else {
+				delta = lastVal - t.Temp
+			}
+
+			// Kirim jika: Baru pertama, atau delta > 2.0, atau > 10 menit (heartbeat)
+			if !exists || delta >= 2.0 || time.Since(lastTs) > 10*time.Minute {
+				filteredData.Temp = append(filteredData.Temp, t)
+				lastSensorValues[key] = t.Temp
+				lastSentTime[key] = time.Now()
 			}
 		}
-		inst.Mutex.Unlock()
-		inst.Flush(false) // Check if size limit reached
+
+		// --- Filter Door ---
+		for _, d := range areaData.Door {
+			key := fmt.Sprintf("door-%d-%d-%d", areaData.CK, areaData.Area, d.DoorID)
+			lastVal, exists := lastDoorStatus[key]
+			if !exists || d.Value != lastVal {
+				filteredData.Door = append(filteredData.Door, d)
+				lastDoorStatus[key] = d.Value
+			}
+		}
+
+		// Jika ada data yang lolos filter, masukkan ke pipeline
+		if len(filteredData.Temp) > 0 || len(filteredData.Door) > 0 {
+			pipelinesMutex.Lock()
+			for _, inst := range pipelineInstances {
+				if inst.Config.IsActive && (inst.Config.SourceTopic == "ALL" || areaData.Topic == inst.Config.SourceTopic) {
+					inst.Mutex.Lock()
+					if len(inst.Buffer) < 2000 {
+						inst.Buffer = append(inst.Buffer, filteredData)
+					}
+					inst.Mutex.Unlock()
+				}
+			}
+			pipelinesMutex.Unlock()
+		}
 	}
 }
-
 // RegisterForwarderHandlers mendaftarkan rute HTTP untuk dashboard.
 func RegisterForwarderHandlers(app *fiber.App) {
 	// Public routes - Login
@@ -396,7 +445,11 @@ func RegisterForwarderHandlers(app *fiber.App) {
 		id := c.Params("id")
 		importDB := database.DB
 		importDB.Exec("DELETE FROM pipelines WHERE pipeline_id = $1", id)
-		return c.SendStatus(204)
+		return c.JSON(fiber.Map{
+			"status":  "success",
+			"message": "Pipeline deleted successfully",
+		})
+
 	})
 
 	// Rute untuk redirect ke Database (protected)

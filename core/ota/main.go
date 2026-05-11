@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -441,8 +442,7 @@ func main() {
 		id := c.Params("id")
 
 		// Send get_config command
-		payload := map[string]interface{}{"cmd": "get_config"}
-		b, _ := json.Marshal(payload)
+		b := []byte("cmd=get_config")
 		mqttClient.Publish(fmt.Sprintf("nodes/%s/command", id), 0, false, b)
 
 		// Return the latest FullConfig we have.
@@ -704,11 +704,12 @@ func main() {
 		}
 		nodeMutex.Unlock()
 
-		// Marshal and publish
-		b, err := json.Marshal(payload)
-		if err != nil {
-			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create payload"})
+		// Use KV format for config payload
+		values := url.Values{}
+		for k, v := range payload {
+			values.Set(k, fmt.Sprintf("%v", v))
 		}
+		b := []byte(values.Encode())
 
 		topic := fmt.Sprintf("nodes/%s/command", nodeID)
 		token := mqttClient.Publish(topic, 0, false, b)
@@ -731,11 +732,7 @@ func main() {
 		if err := c.BodyParser(&o); err != nil {
 			return c.Status(400).JSON(fiber.Map{"error": "invalid body"})
 		}
-		payload := map[string]interface{}{"cmd": "ota", "url": o.URL}
-		b, err := json.Marshal(payload)
-		if err != nil {
-			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create payload"})
-		}
+		b := []byte(fmt.Sprintf("cmd=ota&url=%s", url.QueryEscape(o.URL)))
 		topic := fmt.Sprintf("nodes/%s/command", o.Node)
 		token := mqttClient.Publish(topic, 0, false, b)
 		token.Wait()
@@ -751,11 +748,7 @@ func main() {
 		if err := c.BodyParser(&r); err != nil {
 			return c.Status(400).JSON(fiber.Map{"error": "invalid body"})
 		}
-		payload := map[string]interface{}{"cmd": "reboot"}
-		b, err := json.Marshal(payload)
-		if err != nil {
-			return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"error": "failed to create payload"})
-		}
+		b := []byte("cmd=reboot")
 		topic := fmt.Sprintf("nodes/%s/command", r.Node)
 		token := mqttClient.Publish(topic, 0, false, b)
 		token.Wait()
@@ -1301,14 +1294,51 @@ func mqttHandler(client mqtt.Client, msg mqtt.Message) {
 	}
 
 	if _, ok := nodeStatus[nodeID]; !ok {
+		if len(nodeStatus) >= 1000 {
+			log.Printf("[MQTT] Node limit reached, dropping %s", nodeID)
+			return
+		}
 		nodeStatus[nodeID] = &NodeInfo{}
 	}
 	info := nodeStatus[nodeID]
 
 	switch sub {
 	case "status":
-		var tmp interface{}
-		if err := json.Unmarshal(raw, &tmp); err == nil {
+		rawStr := string(raw)
+		if strings.HasPrefix(rawStr, "state=") || strings.HasPrefix(rawStr, "cmd=") {
+			values, err := url.ParseQuery(rawStr)
+			if err != nil {
+				log.Printf("[MQTT] Warning: URL decode failed for %s, parsing anyway: %v", nodeID, err)
+			}
+			// Bool fields that must NOT be parsed as float
+			boolFields := map[string]bool{"alarm_enabled": true, "sd_ok": true, "relay": true}
+			if values != nil {
+				m := make(map[string]interface{})
+				for k, v := range values {
+					if len(v) > 0 {
+						if boolFields[k] {
+							m[k] = v[0] == "true" || v[0] == "1"
+						} else if f, err := strconv.ParseFloat(v[0], 64); err == nil {
+							m[k] = f
+						} else {
+							m[k] = v[0]
+						}
+					}
+				}
+				info.FullConfig = m
+				b, _ := json.Marshal(m)
+				json.Unmarshal(b, info)
+				if v, ok := m["state"]; ok {
+					info.Status = fmt.Sprintf("%v", v)
+				}
+				if v, ok := m["active_model"]; ok {
+					info.Model = fmt.Sprintf("%v", v)
+				}
+				info.Updated = now
+			}
+		} else {
+			var tmp interface{}
+			if err := json.Unmarshal(raw, &tmp); err == nil {
 			if m, ok := tmp.(map[string]interface{}); ok {
 				// Simpan semua data asli ke FullConfig (Fully Dynamic)
 				info.FullConfig = m
@@ -1343,6 +1373,7 @@ func mqttHandler(client mqtt.Client, msg mqtt.Message) {
 			}
 			info.Updated = now
 		}
+		}
 	case "monitor":
 		// User: "serial monitor dari /monitor"
 		// Append monitor payload to logs as well
@@ -1352,9 +1383,24 @@ func mqttHandler(client mqtt.Client, msg mqtt.Message) {
 			info.Logs = info.Logs[len(info.Logs)-10:]
 		}
 
-		var m map[string]interface{}
-		if err := json.Unmarshal(raw, &m); err == nil {
-			info.FullConfig = m
+		if strings.HasPrefix(monStr, "M,") {
+			parts := strings.Split(monStr, ",")
+			if len(parts) >= 3 {
+				if ram, err := strconv.ParseInt(parts[1], 10, 64); err == nil {
+					info.RamFreeBytes = ram
+				}
+				if parts[2] == "1" || strings.ToLower(parts[2]) == "true" {
+					t := true
+					info.SD_OK = &t
+				} else {
+					f := false
+					info.SD_OK = &f
+				}
+			}
+		} else {
+			var m map[string]interface{}
+			if err := json.Unmarshal(raw, &m); err == nil {
+				info.FullConfig = m
 			if v, ok := m["ram"]; ok {
 				if val, ok := v.(float64); ok {
 					info.RamFreeBytes = int64(val)
@@ -1484,6 +1530,7 @@ func mqttHandler(client mqtt.Client, msg mqtt.Message) {
 					alarmMutex.Unlock()
 				}
 			}
+		}
 		}
 		info.Updated = now
 
