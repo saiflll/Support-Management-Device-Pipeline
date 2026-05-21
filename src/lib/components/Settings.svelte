@@ -1,141 +1,109 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import type { Agent } from "../stores.svelte";
-  // ─── Agent state ──────────────────────────────
+  // ─── Agent state (JSON-based editor) ──────────
   let agents = $state<Agent[]>([]);
-  let editingId = $state<string | null>(null);
-  let showForm = $state(false);
-  let newId = $state("");
-  let newName = $state("");
-  let newProvider = $state("openai");
-  let newApiKey = $state("");
-  let newModel = $state("");
-  let newBaseUrl = $state("");
+  let agentConfigJson = $state("");
+  let saveStatus = $state("");
+  let validating = $state(false);
+  let validationResults = $state<Record<string, { valid: boolean; error?: string }>>({});
 
-  // Tidy dynamic model selector state
-  let newModelSelect = $state("gpt-4o");
-  let customModelValue = $state("");
-
-  const PROVIDER_MODELS: Record<string, { id: string; label: string }[]> = {
-    openai: [
-      { id: "gpt-4o", label: "gpt-4o (Recommended)" },
-      { id: "gpt-4o-mini", label: "gpt-4o-mini" },
-      { id: "gpt-4-turbo", label: "gpt-4-turbo" },
-      { id: "o1-mini", label: "o1-mini" },
-      { id: "custom", label: "Custom Write-In..." },
-    ],
-    anthropic: [
-      { id: "claude-3-5-sonnet-latest", label: "claude-3.5-sonnet (Recommended)" },
-      { id: "claude-3-opus-latest", label: "claude-3.5-opus" },
-      { id: "claude-3-haiku-latest", label: "claude-3.5-haiku" },
-      { id: "custom", label: "Custom Write-In..." },
-    ],
-    google: [
-      { id: "gemini-1.5-pro", label: "gemini-1.5-pro (Recommended)" },
-      { id: "gemini-1.5-flash", label: "gemini-1.5-flash" },
-      { id: "custom", label: "Custom Write-In..." },
-    ],
-    ollama: [
-      { id: "llama3", label: "llama3" },
-      { id: "mistral", label: "mistral" },
-      { id: "deepseek-coder", label: "deepseek-coder" },
-      { id: "codegemma", label: "codegemma" },
-      { id: "custom", label: "Custom Write-In..." },
-    ],
-  };
-
-  function onProviderChange() {
-    const list = PROVIDER_MODELS[newProvider] || [];
-    if (list.length > 0) {
-      newModelSelect = list[0].id;
-      newModel = list[0].id;
-    } else {
-      newModelSelect = "custom";
-      newModel = "";
-    }
-    customModelValue = "";
+  function getDefaultAgentsJson(): string {
+    return JSON.stringify([
+      {
+        id: "coder",
+        name: "Coder",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key: null,
+        base_url: null,
+        temperature: 0.2,
+        system_prompt: "You are an expert software engineer. Write clean, efficient code.",
+        capabilities: ["code", "debug", "refactor"]
+      },
+      {
+        id: "shell",
+        name: "Shell",
+        provider: "openai",
+        model: "gpt-4o",
+        api_key: null,
+        base_url: null,
+        temperature: 0.1,
+        system_prompt: "You are a shell expert. Provide precise terminal commands.",
+        capabilities: ["shell", "terminal", "automation"]
+      },
+      {
+        id: "architect",
+        name: "Architect",
+        provider: "anthropic",
+        model: "claude-sonnet-4-20250514",
+        api_key: null,
+        base_url: null,
+        temperature: 0.4,
+        system_prompt: "You are a software architect. Design robust, scalable systems.",
+        capabilities: ["design", "planning", "architecture"]
+      }
+    ], null, 2);
   }
 
   async function loadAgents() {
     try {
       agents = await invoke<Agent[]>("ai_list_agents");
+      agentConfigJson = JSON.stringify(agents, null, 2);
     } catch (e) {
       console.error("Failed to load agents:", e);
     }
   }
 
-  const PROVIDERS = [
-    { id: "openai", label: "OpenAI" },
-    { id: "anthropic", label: "Anthropic" },
-    { id: "google", label: "Google" },
-    { id: "ollama", label: "Ollama" },
-  ];
-
-  function startAdd() {
-    editingId = null;
-    showForm = true;
-    newId = ""; newName = ""; newProvider = "openai"; newApiKey = ""; newBaseUrl = "";
-    newModelSelect = "gpt-4o";
-    newModel = "gpt-4o";
-    customModelValue = "";
-  }
-  function startEdit(a: Agent) {
-    editingId = a.id;
-    showForm = true;
-    newId = a.id; newName = a.name; newProvider = a.provider;
-    newApiKey = a.api_key || ""; newBaseUrl = a.base_url || "";
-    newModel = a.model;
-    
-    // Check if model is in the standard list
-    const stdModels = PROVIDER_MODELS[a.provider] || [];
-    const isStd = stdModels.some(m => m.id === a.model && m.id !== "custom");
-    if (isStd) {
-      newModelSelect = a.model;
-      customModelValue = "";
-    } else {
-      newModelSelect = "custom";
-      customModelValue = a.model;
+  function parseAgentsFromJson(json: string): Agent[] {
+    const parsed = JSON.parse(json);
+    if (!Array.isArray(parsed)) throw new Error("Root must be an array of agents");
+    for (const a of parsed) {
+      if (!a.id || !a.name || !a.provider || !a.model) {
+        throw new Error(`Agent missing required field (id, name, provider, model): ${JSON.stringify(a)}`);
+      }
     }
-  }
-  function cancelEdit() {
-    editingId = null;
-    showForm = false;
-    newId = ""; newName = "";
+    return parsed;
   }
 
-  async function saveAgent() {
-    const finalModel = newModelSelect === "custom" ? customModelValue.trim() : newModelSelect;
-    if (!newId.trim() || !newName.trim() || !finalModel) return;
-    
-    const config: Agent = {
-      id: newId.trim(),
-      name: newName.trim(),
-      provider: newProvider,
-      model: finalModel,
-      base_url: newBaseUrl.trim() || null,
-      api_key: newApiKey.trim() || null,
-      capabilities: [],
-      temperature: null,
-      system_prompt: null
-    };
+  async function saveAgents() {
+    saveStatus = "";
+    validationResults = {};
     try {
-      await invoke("ai_update_agent", { config });
+      const parsedAgents = parseAgentsFromJson(agentConfigJson);
+      for (const agent of parsedAgents) {
+        await invoke("ai_update_agent", { config: agent });
+      }
       await loadAgents();
-      cancelEdit();
+      saveStatus = `${parsedAgents.length} agents saved.`;
     } catch (e) {
-      console.error("Failed to save agent:", e);
+      saveStatus = `Save failed: ${e}`;
     }
   }
-  async function removeAgent(id: string) {
+
+  async function validateAgents() {
+    validating = true;
+    validationResults = {};
     try {
-      await invoke("ai_remove_agent", { agentId: id });
-      await loadAgents();
-      if (editingId === id) cancelEdit();
+      const parsedAgents = parseAgentsFromJson(agentConfigJson);
+      for (const agent of parsedAgents) {
+        try {
+          const res = await invoke<{ agent_id: string; valid: boolean; error: string | null }>(
+            "ai_validate_agent", { agentId: agent.id }
+          );
+          validationResults[agent.id] = { valid: res.valid, error: res.error || undefined };
+        } catch (e) {
+          validationResults[agent.id] = { valid: false, error: String(e) };
+        }
+      }
     } catch (e) {
-      console.error("Failed to remove agent:", e);
+      saveStatus = `Validation error: ${e}`;
     }
+    validating = false;
   }
-  function defaultAgent(id: string): boolean { return ["coder", "shell", "architect"].includes(id); }
+
+  function agentsWithKeys(): number { return agents.filter(a => a.api_key).length; }
+  function validatedCount(): number { return Object.values(validationResults).filter(v => v.valid).length; }
   // ─── Shared Theme Layer ──────────────────────
   import { THEMES, FONTS, getStoredTheme, getStoredFont, getStoredFontSize, applyTheme as sharedApplyTheme, applyFont as sharedApplyFont, applyFontSize as sharedApplyFontSize } from "$lib/themes";
 
@@ -421,79 +389,67 @@
       </div>
     </div>
 
-  <!-- ═══ Agent Tab ═══ -->
+  <!-- ═══ Agent Tab (JSON-based) ═══ -->
   {:else if settingsTab === "agent"}
     <div class="agent-section">
       <div class="settings-header">
         <span class="settings-title">AI Agents</span>
-        <button class="settings-btn settings-btn-add" onclick={startAdd} disabled={showForm}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Add Agent
+        <div class="agent-header-actions">
+          <button class="settings-btn settings-btn-cancel" onclick={() => { agentConfigJson = getDefaultAgentsJson(); }}>Reset to Default</button>
+          <button class="settings-btn settings-btn-add" onclick={saveAgents} disabled={!agentConfigJson.trim()}>Save</button>
+        </div>
+      </div>
+      <div class="agent-editor-wrap">
+        <textarea class="agent-json-editor" spellcheck="false" bind:value={agentConfigJson}></textarea>
+      </div>
+      <div class="agent-toolbar">
+        {#if saveStatus}
+          <span class="agent-status-msg">{saveStatus}</span>
+        {/if}
+        <span class="agent-count">
+          {agents.length} agent{agents.length !== 1 ? 's' : ''} configured
+          ({agentsWithKeys()} with API key)
+        </span>
+        <button class="settings-btn settings-btn-validate" onclick={validateAgents} disabled={validating || agents.length === 0}>
+          {validating ? "Validating..." : "Validate Connections"}
         </button>
       </div>
 
-      {#if showForm}
-        <div class="settings-form">
-          <div class="form-grid">
-            <label class="form-field"><span>ID</span><input bind:value={newId} placeholder="my-agent" disabled={editingId !== null && defaultAgent(editingId)} /></label>
-            <label class="form-field"><span>Name</span><input bind:value={newName} placeholder="My Agent" /></label>
-            <label class="form-field"><span>Provider</span><select bind:value={newProvider} onchange={onProviderChange}>{#each PROVIDERS as p}<option value={p.id}>{p.label}</option>{/each}</select></label>
-            <label class="form-field">
-              <span>Model</span>
-              <select bind:value={newModelSelect} onchange={() => { if (newModelSelect !== 'custom') { newModel = newModelSelect; } }}>
-                {#each PROVIDER_MODELS[newProvider] || [{id: 'custom', label: 'Custom Write-In...'}] as opt}
-                  <option value={opt.id}>{opt.label}</option>
-                {/each}
-              </select>
-            </label>
-            {#if newModelSelect === "custom"}
-              <label class="form-field">
-                <span>Custom Model Name</span>
-                <input bind:value={customModelValue} placeholder="type model name (e.g. deepseek)..." oninput={() => newModel = customModelValue} />
-              </label>
-            {/if}
-            <label class="form-field"><span>API Key</span><input bind:value={newApiKey} type="password" placeholder="sk-..." /></label>
-            <label class="form-field"><span>Base URL</span><input bind:value={newBaseUrl} placeholder="https://..." /></label>
-          </div>
-          <div class="form-actions">
-            <span class="form-hint">Changes apply immediately</span>
-            <div class="form-btns">
-              <button class="settings-btn settings-btn-cancel" onclick={cancelEdit}>Cancel</button>
-              <button class="settings-btn settings-btn-save" onclick={saveAgent} disabled={!newId.trim() || !newName.trim() || !(newModelSelect === 'custom' ? customModelValue.trim() : newModelSelect)}>
-                {editingId && defaultAgent(editingId) ? "Update" : "Save"}
-              </button>
-            </div>
-          </div>
-        </div>
-      {/if}
-
-      <div class="settings-list">
-        {#each agents as agent (agent.id)}
-          <div class="agent-card" class:agent-default={defaultAgent(agent.id)}>
-            <div class="agent-header">
-              <div class="agent-info">
-                <span class="agent-name">{agent.name}</span>
-                <span class="agent-meta">{agent.provider} / {agent.model}</span>
+      {#if agents.length > 0}
+        <div class="settings-list">
+          {#each agents as agent (agent.id)}
+            {@const vr = validationResults[agent.id]}
+            <div class="agent-card" class:agent-card-valid={vr?.valid} class:agent-card-invalid={vr && !vr.valid}>
+              <div class="agent-header">
+                <div class="agent-info">
+                  <span class="agent-name">{agent.name}</span>
+                  <span class="agent-meta">{agent.provider} / {agent.model}</span>
+                </div>
+                {#if vr}
+                  <span class="agent-badge" class:agent-badge-ok={vr.valid} class:agent-badge-fail={!vr.valid}>
+                    {vr.valid ? "OK" : "FAIL"}
+                  </span>
+                {:else if agent.api_key}
+                  <span class="agent-badge agent-badge-key" title="Has API key">&#x1F512;</span>
+                {/if}
+                {#if ["coder", "shell", "architect"].includes(agent.id)}
+                  <span class="agent-badge agent-badge-default">default</span>
+                {/if}
               </div>
-              {#if agent.api_key}<span class="agent-badge agent-badge-key" title="API key">&#x1F512;</span>{/if}
-              {#if defaultAgent(agent.id)}<span class="agent-badge agent-badge-default">default</span>{/if}
-            </div>
-            {#if agent.base_url}<div class="agent-url">{agent.base_url}</div>{/if}
-            <div class="agent-actions">
-              <button class="agent-action agent-action-edit" onclick={() => startEdit(agent)} title="Edit">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
-                Edit
-              </button>
-              {#if !defaultAgent(agent.id)}
-                <button class="agent-action agent-action-del" onclick={() => removeAgent(agent.id)} title="Delete">
-                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                  Delete
-                </button>
+              {#if agent.base_url}
+                <div class="agent-url">{agent.base_url}</div>
+              {/if}
+              {#if vr && vr.error}
+                <div class="agent-error">{vr.error}</div>
               {/if}
             </div>
-          </div>
-        {/each}
-      </div>
+          {/each}
+        </div>
+      {:else}
+        <div class="agent-empty">
+          <p>No agents configured. Add agents to the JSON above and click Save.</p>
+        </div>
+      {/if}
     </div>
   {:else if settingsTab === "setup"}
     <div class="setup-section">
@@ -885,7 +841,6 @@
 
   .settings-form { padding:14px 16px; background:var(--bg-surface); border-bottom:1px solid var(--border-subtle); flex-shrink:0; animation:slideDown 0.2s cubic-bezier(0.4, 0, 0.2, 1); }
   @keyframes slideDown { from { opacity:0; transform: translateY(-4px); } to { opacity:1; transform: translateY(0); } }
-  .form-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px; }
   .form-field { display:flex; flex-direction:column; gap:4px; }
   .form-field span { font-size:var(--fs-10); color:var(--text-muted); text-transform:uppercase; letter-spacing:0.5px; }
   .form-field input, .form-field select { background:var(--bg-primary); color:var(--text-primary); border:1px solid var(--border-subtle); border-radius:6px; padding:6px 10px; font-size:var(--font-size); }
@@ -895,7 +850,7 @@
   .form-btns { display:flex; gap:6px; }
 
   .agent-card { display:flex; flex-direction:column; gap:8px; }
-  .agent-default { border-left:4px solid var(--accent-blue) !important; }
+
   .agent-header { display:flex; align-items:center; gap:8px; margin-bottom:2px; }
   .agent-info { flex:1; min-width:0; }
   .agent-name { font-weight:600; font-size:var(--font-size); color:var(--text-primary); }
@@ -904,12 +859,36 @@
   .agent-badge-key { font-size:var(--font-size); padding:0; background:none; }
   .agent-badge-default { background:var(--accent-blue); color:var(--bg-primary); text-transform:uppercase; letter-spacing:0.3px; font-weight: 600; }
   .agent-url { font-size:var(--fs-10); color:var(--text-muted); font-family:monospace; margin-bottom:2px; padding:4px 8px; background:var(--bg-primary); border-radius:4px; border:1px solid var(--border-subtle); }
-  .agent-actions { display:flex; gap:6px; margin-top:2px; }
-  .agent-action { display:inline-flex; align-items:center; gap:4px; border:1px solid var(--border-subtle); border-radius:6px; padding:4px 10px; font-size:var(--fs-10); cursor:pointer; background:transparent; transition:all 0.12s ease; }
-  .agent-action-edit { color:var(--accent-blue); }
-  .agent-action-edit:hover { border-color:var(--accent-blue); background:color-mix(in srgb, var(--accent-blue) 6%, transparent); }
-  .agent-action-del { color:var(--accent-red); }
-  .agent-action-del:hover { border-color:var(--accent-red); background:color-mix(in srgb, var(--accent-red) 6%, transparent); }
+  .agent-card-valid { border-color:var(--accent-green) !important; }
+  .agent-card-invalid { border-color:var(--accent-red) !important; }
+  .agent-error { font-size:var(--fs-10); color:var(--accent-red); padding:4px 8px; background:color-mix(in srgb, var(--accent-red) 6%, transparent); border-radius:4px; margin-top:4px; word-break:break-word; }
+  .agent-header-actions { display:flex; gap:6px; }
+  .agent-editor-wrap { flex-shrink:0; border-bottom:1px solid var(--border-subtle); }
+  .agent-json-editor {
+    width:100%; height:220px; padding:10px 12px; box-sizing:border-box;
+    background:var(--bg-primary); color:var(--text-primary);
+    border:none; font-family:monospace; font-size:var(--fs-11); line-height:1.5;
+    resize:vertical; outline:none; tab-size:2;
+  }
+  .agent-json-editor:focus { background:var(--bg-elevated); }
+  .agent-toolbar {
+    display:flex; align-items:center; gap:8px; padding:6px 16px;
+    border-bottom:1px solid var(--border-subtle); flex-shrink:0;
+  }
+  .agent-count { font-size:var(--fs-10); color:var(--text-muted); flex:1; }
+  .agent-status-msg { font-size:var(--fs-10); color:var(--accent-blue); }
+  .agent-empty { display:flex; align-items:center; justify-content:center; flex:1; padding:24px; }
+  .agent-empty p { font-size:var(--fs-11); color:var(--text-muted); margin:0; }
+  .agent-badge-ok { background:var(--accent-green); color:var(--bg-primary); padding:2px 6px; border-radius:3px; font-size:var(--fs-9); font-weight:600; }
+  .agent-badge-fail { background:var(--accent-red); color:var(--bg-primary); padding:2px 6px; border-radius:3px; font-size:var(--fs-9); font-weight:600; }
+  .settings-btn-validate {
+    background:transparent; color:var(--text-secondary);
+    border:1px solid var(--border-subtle); border-radius:6px;
+    padding:4px 10px; font-size:var(--fs-10); cursor:pointer; transition:all 0.12s ease;
+  }
+  .settings-btn-validate:hover:not(:disabled) { border-color:var(--accent-blue); color:var(--accent-blue); }
+  .settings-btn-validate:disabled { opacity:0.4; cursor:not-allowed; }
+
 
   /* ═══ Setup (minimal language management) ═══ */
   .setup-section { display:flex; flex-direction:column; height:100%; overflow-y:auto; gap:10px; padding:14px; }
