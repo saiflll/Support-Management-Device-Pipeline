@@ -1,0 +1,33 @@
+[package]
+name = "contlib"
+version = "0.1.0"
+description = "AI-native workshop with split terminal, multi-agent chat, notepad, file manager, and code editor"
+authors = ["you"]
+edition = "2021"
+
+[lib]
+name = "contlib_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-shell = "2"
+tauri-plugin-process = "2"
+tauri-plugin-fs = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+portable-pty = "0.9"
+tokio = { version = "1", features = ["full"] }
+reqwest = { version = "0.12", features = ["json", "stream", "blocking"] }
+uuid = { version = "1", features = ["v4"] }
+futures = "0.3"
+chrono = { version = "0.4", features = ["serde"] }
+dirs = "6"
+log = "0.4"
+env_logger = "0.11"
+
