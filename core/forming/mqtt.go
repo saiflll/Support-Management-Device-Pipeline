@@ -3,79 +3,85 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"sync"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
+// === STATE GLOBAL ===
+
 var (
 	lastPayloads   = make(map[string]Payload)
 	lastPayloadsMu sync.Mutex
 )
 
+// === INISIALISASI MQTT ===
+
 // initMQTT configures and connects to our MQTT broker
 func initMQTT() mqtt.Client {
-	mqttHost := getEnv("MQTT_HOST", "emqx")
-	mqttPort := getEnv("MQTT_PORT", "1883")
-	mqttUser := getEnv("MQTT_USER", "apps")
-	mqttPass := getEnv("MQTT_PASSWORD", "apps")
-	brokerUrl := fmt.Sprintf("tcp://%s:%s", mqttHost, mqttPort)
+	hst := getEnv("MQTT_HOST", "emqx")
+	prt := getEnv("MQTT_PORT", "1883")
+	usr := getEnv("MQTT_USER", "apps")
+	pwd := getEnv("MQTT_PASSWORD", "apps")
+	url := fmt.Sprintf("tcp://%s:%s", hst, prt)
 
-	opts := mqtt.NewClientOptions()
-	opts.AddBroker(brokerUrl)
-	opts.SetClientID("forming-app-subscriber-" + fmt.Sprintf("%d", time.Now().Unix()))
-	opts.SetDefaultPublishHandler(messagePubHandler)
-	opts.SetCleanSession(true)
-	opts.SetAutoReconnect(true)
-	opts.SetKeepAlive(60 * time.Second)
-	opts.SetPingTimeout(10 * time.Second)
-	opts.SetConnectTimeout(10 * time.Second)
-	opts.SetProtocolVersion(4) 
+	opt := mqtt.NewClientOptions()
+	opt.AddBroker(url)
+	opt.SetClientID("forming-app-subscriber-" + fmt.Sprintf("%d", time.Now().Unix()))
+	opt.SetDefaultPublishHandler(messagePubHandler)
+	opt.SetCleanSession(true)
+	opt.SetAutoReconnect(true)
+	opt.SetKeepAlive(60 * time.Second)
+	opt.SetPingTimeout(10 * time.Second)
+	opt.SetConnectTimeout(10 * time.Second)
+	opt.SetProtocolVersion(4) 
 
-	if mqttUser != "" {
-		opts.SetUsername(mqttUser)
-		log.Printf("MQTT Username: %s", mqttUser)
+	if usr != "" {
+		opt.SetUsername(usr)
+		lg("MQTT Username: %s", usr)
 	}
-	if mqttPass != "" {
-		opts.SetPassword(mqttPass)
-		log.Println("MQTT Password: ***")
-	}
-
-	opts.OnConnectionLost = func(c mqtt.Client, err error) {
-		log.Printf("MQTT Connection lost: %v - Will auto-reconnect", err)
-	}
-	opts.OnConnect = func(c mqtt.Client) {
-		log.Println("MQTT Connected successfully!")
-		subscribe(c)
+	if pwd != "" {
+		opt.SetPassword(pwd)
+		lg("MQTT Password: ***")
 	}
 
-	log.Printf("Connecting to MQTT broker: %s", brokerUrl)
-	client := mqtt.NewClient(opts)
-	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		log.Printf("Warning: Could not connect to MQTT: %v", token.Error())
-		log.Println("App will continue running. MQTT will auto-reconnect when available.")
+	opt.OnConnectionLost = func(cln mqtt.Client, err error) {
+		hndlErr("MQTT Connection lost (auto-reconnect)", err)
+	}
+	opt.OnConnect = func(cln mqtt.Client) {
+		lg("MQTT Connected successfully!")
+		subscribe(cln)
 	}
 
-	return client
+	lg("Connecting to MQTT broker: %s", url)
+	cln := mqtt.NewClient(opt)
+	if tkn := cln.Connect(); tkn.Wait() && tkn.Error() != nil {
+		hndlErr("Warning: Could not connect to MQTT", tkn.Error())
+		lg("App will continue running. MQTT will auto-reconnect when available.")
+	}
+
+	return cln
 }
 
-func subscribe(client mqtt.Client) {
-	topic := "production/mdcw"
-	if token := client.Subscribe(topic, 1, nil); token.Wait() && token.Error() != nil {
-		log.Printf("Error subscribing to topic %s: %v", topic, token.Error())
+// subscribe handles subscribing to the required topics
+func subscribe(cln mqtt.Client) {
+	tpc := "production/mdcw"
+	if tkn := cln.Subscribe(tpc, 1, nil); tkn.Wait() && tkn.Error() != nil {
+		hndlErr(fmt.Sprintf("Error subscribing to topic %s", tpc), tkn.Error())
 	} else {
-		log.Printf("Subscribed to topic: %s", topic)
+		lg("Subscribed to topic: %s", tpc)
 	}
 }
 
-func messagePubHandler(client mqtt.Client, msg mqtt.Message) {
-	log.Printf("Received message: %s from topic: %s\n", msg.Payload(), msg.Topic())
+// === HANDLER PESAN ===
+
+func messagePubHandler(cln mqtt.Client, psn mqtt.Message) {
+	lg("Received message: %s from topic: %s", string(psn.Payload()), psn.Topic())
 
 	var p Payload
-	if err := json.Unmarshal(msg.Payload(), &p); err != nil {
-		log.Println("Error parsing JSON:", err)
+	if err := json.Unmarshal(psn.Payload(), &p); err != nil {
+		hndlErr("Error parsing JSON", err)
 		return
 	}
 
@@ -90,11 +96,11 @@ func messagePubHandler(client mqtt.Client, msg mqtt.Message) {
 	if p.Reg5 == 0 && p.Code != 0 { p.Reg5 = p.Code }
 	if p.Reg114 == 0 && p.Weight != 0 { p.Reg114 = p.Weight }
 
-	nowStr := time.Now().Format("2006-01-02 15:04:05")
+	wktStr := time.Now().Format("2006-01-02 15:04:05")
 	if p.Ts == nil {
-		p.Ts = nowStr
+		p.Ts = wktStr
 	} else if _, ok := p.Ts.(string); !ok {
-		p.Ts = nowStr
+		p.Ts = wktStr
 	}
 
 	go insertData(p)

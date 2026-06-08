@@ -4,31 +4,32 @@ import (
 	"database/sql"
 	"fmt"
 	"forming/lib"
-	"log"
 	"strings"
 
 	_ "github.com/lib/pq"
 )
 
+// === KONEKSI DATABASE ===
+
 var db *sql.DB
 
 func initDB() {
-	host := getEnv("DB_HOST", "postgres_db")
-	port := getEnv("DB_PORT", "5432")
-	user := getEnv("DB_USER", "postgres")
-	pass := getEnv("DB_PASSWORD", "password_rahasia_anda")
-	name := getEnv("DB_NAME", "servfi")
+	hst := getEnv("DB_HOST", "postgres_db")
+	prt := getEnv("DB_PORT", "5432")
+	usr := getEnv("DB_USER", "postgres")
+	pwd := getEnv("DB_PASSWORD", "password_rahasia_anda")
+	nm := getEnv("DB_NAME", "servfi")
 
-	connStr := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", user, pass, host, port, name)
+	cnn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", usr, pwd, hst, prt, nm)
 
 	var err error
-	db, err = sql.Open("postgres", connStr)
+	db, err = sql.Open("postgres", cnn)
 	if err != nil {
-		log.Printf("Error opening database connection: %v", err)
+		hndlErr("initDB.Open", err)
 	} else if err = db.Ping(); err != nil {
-		log.Printf("Warning: Could not connect to database: %v", err)
+		hndlErr("initDB.Ping", err)
 	} else {
-		log.Println("Connected to PostgreSQL")
+		lg("Connected to PostgreSQL")
 		createTable()
 		ensureColumns()
 	}
@@ -40,8 +41,10 @@ func closeDB() {
 	}
 }
 
+// === SKEMA DATABASE ===
+
 func createTable() {
-	query := `
+	qry := `
 	CREATE TABLE IF NOT EXISTS production_mdcw (
 		id SERIAL PRIMARY KEY,
 		ts VARCHAR(50),
@@ -53,13 +56,13 @@ func createTable() {
 		confidence REAL DEFAULT 1.0,
 		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	)`
-	if _, err := db.Exec(query); err != nil {
-		log.Println("Error creating table:", err)
+	if _, err := db.Exec(qry); err != nil {
+		hndlErr("createTable: production_mdcw", err)
 	} else {
-		log.Println("Table 'production_mdcw' ensured")
+		lg("Table 'production_mdcw' ensured")
 	}
 
-	skipLogQuery := `
+	skpQry := `
 	CREATE TABLE IF NOT EXISTS skip_log (
 		id SERIAL PRIMARY KEY,
 		ts VARCHAR(50),
@@ -70,30 +73,30 @@ func createTable() {
 		reason VARCHAR(100),
 		skipped_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 	)`
-	if _, err := db.Exec(skipLogQuery); err != nil {
-		log.Println("Error creating skip_log table:", err)
+	if _, err := db.Exec(skpQry); err != nil {
+		hndlErr("createTable: skip_log", err)
 	} else {
-		log.Println("Table 'skip_log' ensured")
+		lg("Table 'skip_log' ensured")
 	}
 }
 
 func ensureColumns() {
-	// Add data_type column if not exists
-	_, err := db.Exec("ALTER TABLE production_mdcw ADD COLUMN IF NOT EXISTS data_type VARCHAR(20) DEFAULT 'VALID'")
-	if err != nil {
-		log.Println("Note: Error adding data_type column (may already exist):", err)
+	// tambah kolom data_type jika belum ada
+	if _, err := db.Exec("ALTER TABLE production_mdcw ADD COLUMN IF NOT EXISTS data_type VARCHAR(20) DEFAULT 'VALID'"); err != nil {
+		hndlErr("ensureColumns: data_type (may already exist)", err)
 	} else {
-		log.Println("Column 'data_type' ensured")
+		lg("Column 'data_type' ensured")
 	}
 
-	// Add confidence column if not exists
-	_, err = db.Exec("ALTER TABLE production_mdcw ADD COLUMN IF NOT EXISTS confidence REAL DEFAULT 1.0")
-	if err != nil {
-		log.Println("Note: Error adding confidence column (may already exist):", err)
+	// tambah kolom confidence jika belum ada
+	if _, err := db.Exec("ALTER TABLE production_mdcw ADD COLUMN IF NOT EXISTS confidence REAL DEFAULT 1.0"); err != nil {
+		hndlErr("ensureColumns: confidence (may already exist)", err)
 	} else {
-		log.Println("Column 'confidence' ensured")
+		lg("Column 'confidence' ensured")
 	}
 }
+
+// === OPERASI INSERT & RETRIEVE ===
 
 func insertData(p Payload) {
 	if db == nil {
@@ -108,119 +111,124 @@ func insertData(p Payload) {
 	}
 
 	lastPayloadsMu.Lock()
-	prev, exists := lastPayloads[p.Prefix]
+	prv, ext := lastPayloads[p.Prefix]
 
-	isDuplicate := false
-	if exists && prev.Reg2 == p.Reg2 {
-		isDuplicate = true
-	} else if !exists {
+	isDpl := false
+	if ext && prv.Reg2 == p.Reg2 {
+		isDpl = true
+	} else if !ext {
 		var lastReg2 int
 		errCheck := db.QueryRow("SELECT reg2 FROM production_mdcw WHERE prefix = $1 ORDER BY id DESC LIMIT 1", p.Prefix).Scan(&lastReg2)
 		if errCheck == nil && lastReg2 == p.Reg2 {
-			isDuplicate = true
+			isDpl = true
 		}
 	}
 
-	if !isDuplicate {
+	if !isDpl {
 		lastPayloads[p.Prefix] = p
 	}
 	lastPayloadsMu.Unlock()
 
-	if isDuplicate {
-		log.Printf("[SKIP] Duplicate data from %s: reg2=%d", p.Prefix, p.Reg2)
-		skipQuery := `INSERT INTO skip_log (ts, reg2, reg5, reg114, prefix, reason) VALUES ($1, $2, $3, $4, $5, $6)`
-		if _, err := db.Exec(skipQuery, tsStr, p.Reg2, p.Reg5, p.Reg114, p.Prefix, "Duplicate data (reg2 unchanged)"); err != nil {
-			log.Println("Error logging skipped data:", err)
+	if isDpl {
+		lg("[SKIP] Duplicate data from %s: reg2=%d", p.Prefix, p.Reg2)
+		skpQry := `INSERT INTO skip_log (ts, reg2, reg5, reg114, prefix, reason) VALUES ($1, $2, $3, $4, $5, $6)`
+		if _, err := db.Exec(skpQry, tsStr, p.Reg2, p.Reg5, p.Reg114, p.Prefix, "Duplicate data (reg2 unchanged)"); err != nil {
+			hndlErr("insertData: log skipped data (duplicate)", err)
 		}
 		return
 	}
 
-	// ML Filtering
-	dataType, confidence := AnalyzeRecord(p.Prefix, p.Reg114)
+	// ml filtering
+	typ, cfd := AnalyzeRecord(p.Prefix, p.Reg114)
 	
-	// If it's definitely SPAM, we might want to skip or just label it
-	if dataType == DataTypeSpam && confidence > 0.8 {
-		log.Printf("[FILTER] Spam detected from %s (delay too low)", p.Prefix)
-		skipQuery := `INSERT INTO skip_log (ts, reg2, reg5, reg114, prefix, reason) VALUES ($1, $2, $3, $4, $5, $6)`
-		if _, err := db.Exec(skipQuery, tsStr, p.Reg2, p.Reg5, p.Reg114, p.Prefix, "Spam detection (ML)"); err != nil {
-			log.Println("Error logging skipped data:", err)
+	// jika terdeteksi spam
+	if typ == DataTypeSpam && cfd > 0.8 {
+		lg("[FILTER] Spam detected from %s (delay too low)", p.Prefix)
+		skpQry := `INSERT INTO skip_log (ts, reg2, reg5, reg114, prefix, reason) VALUES ($1, $2, $3, $4, $5, $6)`
+		if _, err := db.Exec(skpQry, tsStr, p.Reg2, p.Reg5, p.Reg114, p.Prefix, "Spam detection (ML)"); err != nil {
+			hndlErr("insertData: log skipped data (spam)", err)
 		}
 		return
 	}
 
-	query := `INSERT INTO production_mdcw (ts, reg2, reg5, reg114, prefix, data_type, confidence) VALUES ($1, $2, $3, $4, $5, $6, $7)`
-	if _, err := db.Exec(query, tsStr, p.Reg2, p.Reg5, p.Reg114, p.Prefix, dataType, confidence); err != nil {
-		log.Println("Error inserting data:", err)
+	qry := `INSERT INTO production_mdcw (ts, reg2, reg5, reg114, prefix, data_type, confidence) VALUES ($1, $2, $3, $4, $5, $6, $7)`
+	if _, err := db.Exec(qry, tsStr, p.Reg2, p.Reg5, p.Reg114, p.Prefix, typ, cfd); err != nil {
+		hndlErr("insertData: production_mdcw", err)
 	} else {
-		log.Printf("Data inserted successfully (Type: %s, Conf: %.2f)", dataType, confidence)
-		go func(p Payload, dType string) {
+		lg("Data inserted successfully (Type: %s, Conf: %.2f)", typ, cfd)
+
+		// forward ke Google Sheets (async)
+		go func(pl Payload, dType string) {
 			if err := lib.AppendToSheet(lib.Payload{
-				Ts:     fmt.Sprintf("%v", p.Ts),
-				Reg2:   p.Reg2,
-				Reg5:   p.Reg5,
-				Reg114: p.Reg114,
-				Prefix: p.Prefix + " [" + dType + "]",
+				Ts:     fmt.Sprintf("%v", pl.Ts),
+				Reg2:   pl.Reg2,
+				Reg5:   pl.Reg5,
+				Reg114: pl.Reg114,
+				Prefix: pl.Prefix + " [" + dType + "]",
 			}); err != nil {
-				log.Printf("Warning: Failed to export to Sheets: %v", err)
+				hndlErr("Failed to export to Sheets", err)
 			}
-		}(p, dataType)
+		}(p, typ)
+
+		// forward ke Cloud MQTT Broker (async) — backend monitoring cloud akan terima di topik prod/mdcw
+		go ForwardToCloud(p, p.Prefix, p.Reg5, p.Reg114)
 	}
 }
 
-func getRecords(prefixFilter, statusFilter, sortBy, startDate, endDate string) ([]Record, error) {
+func getRecords(pfxFltr, stsFltr, srtBy, mliWkt, hntWkt string) ([]Record, error) {
 	if db == nil {
 		return []Record{}, nil
 	}
 
-	query := "SELECT id, ts, reg2, reg5, reg114, prefix, data_type, confidence, created_at FROM production_mdcw WHERE 1=1"
+	qry := "SELECT id, ts, reg2, reg5, reg114, prefix, data_type, confidence, created_at FROM production_mdcw WHERE 1=1"
 	var args []interface{}
 	argId := 1
 
-	if prefixFilter != "" && prefixFilter != "all" {
-		query += fmt.Sprintf(" AND UPPER(REPLACE(prefix, ' ', '')) = $%d", argId)
-		args = append(args, strings.ToUpper(strings.ReplaceAll(prefixFilter, " ", "")))
+	if pfxFltr != "" && pfxFltr != "all" {
+		qry += fmt.Sprintf(" AND UPPER(REPLACE(prefix, ' ', '')) = $%d", argId)
+		args = append(args, strings.ToUpper(strings.ReplaceAll(pfxFltr, " ", "")))
 		argId++
 	}
 
-	if startDate != "" {
-		query += fmt.Sprintf(" AND DATE(created_at) >= $%d", argId)
-		args = append(args, startDate)
+	if mliWkt != "" {
+		qry += fmt.Sprintf(" AND DATE(created_at) >= $%d", argId)
+		args = append(args, mliWkt)
 		argId++
 	}
-	if endDate != "" {
-		query += fmt.Sprintf(" AND DATE(created_at) <= $%d", argId)
-		args = append(args, endDate)
+	if hntWkt != "" {
+		qry += fmt.Sprintf(" AND DATE(created_at) <= $%d", argId)
+		args = append(args, hntWkt)
 		argId++
 	}
 
-	switch sortBy {
+	switch srtBy {
 	case "weight_desc":
-		query += " ORDER BY reg114 DESC"
+		qry += " ORDER BY reg114 DESC"
 	case "weight_asc":
-		query += " ORDER BY reg114 ASC"
+		qry += " ORDER BY reg114 ASC"
 	default:
-		query += " ORDER BY created_at DESC"
+		qry += " ORDER BY created_at DESC"
 	}
-	query += " LIMIT 2000"
+	qry += " LIMIT 2000"
 
-	rows, err := db.Query(query, args...)
+	rws, err := db.Query(qry, args...)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rws.Close()
 
-	var records []Record
+	var rec []Record
 	lastPackCnt := make(map[string]int)
-	seenPrefix := make(map[string]bool)
+	seen := make(map[string]bool)
 
-	for rows.Next() {
+	for rws.Next() {
 		var r Record
 		var p sql.NullString
 		var r2, r5, r114 sql.NullInt64
 		var dType sql.NullString
 		var conf sql.NullFloat64
 
-		if err := rows.Scan(&r.ID, &r.Ts, &r2, &r5, &r114, &p, &dType, &conf, &r.CreatedAt); err != nil {
+		if err := rws.Scan(&r.ID, &r.Ts, &r2, &r5, &r114, &p, &dType, &conf, &r.CreatedAt); err != nil {
 			return nil, err
 		}
 		
@@ -239,24 +247,24 @@ func getRecords(prefixFilter, statusFilter, sortBy, startDate, endDate string) (
 			r.Reg114 = 0
 		}
 
-		if r.Prefix == "IGNORE_RECORD" || !lib.MatchStatusFilter(statusFilter, r.Reg5) {
+		if r.Prefix == "IGNORE_RECORD" || !lib.MatchStatusFilter(stsFltr, r.Reg5) {
 			continue
 		}
 
-		if seenPrefix[r.Prefix] && lastPackCnt[r.Prefix] == r.Reg2 {
+		if seen[r.Prefix] && lastPackCnt[r.Prefix] == r.Reg2 {
 			continue
 		}
-		seenPrefix[r.Prefix] = true
+		seen[r.Prefix] = true
 		lastPackCnt[r.Prefix] = r.Reg2
 
 		r.WeightFormatted = fmt.Sprintf("%d,%d g", r.Reg114/10, r.Reg114%10)
-		records = append(records, r)
+		rec = append(rec, r)
 
-		if len(records) >= 100 {
+		if len(rec) >= 100 {
 			break
 		}
 	}
-	return records, nil
+	return rec, nil
 }
 
 func getSummary() ([]Summary, error) {
@@ -264,25 +272,25 @@ func getSummary() ([]Summary, error) {
 		return []Summary{}, nil
 	}
 
-	query := `
+	qry := `
 		SELECT prefix, reg5, reg114
 		FROM production_mdcw
 		WHERE DATE(created_at) = CURRENT_DATE
 		ORDER BY created_at DESC
 	`
-	rows, err := db.Query(query)
+	rws, err := db.Query(qry)
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer rws.Close()
 
-	summaryMap := make(map[string]*Summary)
+	smr := make(map[string]*Summary)
 
-	for rows.Next() {
+	for rws.Next() {
 		var prefix sql.NullString
 		var reg5, reg114 sql.NullInt64
 
-		if err := rows.Scan(&prefix, &reg5, &reg114); err != nil {
+		if err := rws.Scan(&prefix, &reg5, &reg114); err != nil {
 			continue
 		}
 
@@ -296,11 +304,11 @@ func getSummary() ([]Summary, error) {
 			continue
 		}
 
-		if _, exists := summaryMap[npfx]; !exists {
-			summaryMap[npfx] = &Summary{Prefix: npfx, MinWeight: nreg114}
+		if _, exists := smr[npfx]; !exists {
+			smr[npfx] = &Summary{Prefix: npfx, MinWeight: nreg114}
 		}
 
-		s := summaryMap[npfx]
+		s := smr[npfx]
 		s.TotalCount++
 
 		isOk := nreg5 == 41 || nreg5 == 521 || nreg5 == 553
@@ -324,21 +332,21 @@ func getSummary() ([]Summary, error) {
 		}
 	}
 
-	var summaries []Summary
-	for _, s := range summaryMap {
+	var smrs []Summary
+	for _, s := range smr {
 		if s.TotalCount > 0 {
 			s.AvgWeight /= s.TotalCount
 		}
-		summaries = append(summaries, *s)
+		smrs = append(smrs, *s)
 	}
 
-	for i := 0; i < len(summaries); i++ {
-		for j := i + 1; j < len(summaries); j++ {
-			if summaries[i].Prefix > summaries[j].Prefix {
-				summaries[i], summaries[j] = summaries[j], summaries[i]
+	for i := 0; i < len(smrs); i++ {
+		for j := i + 1; j < len(smrs); j++ {
+			if smrs[i].Prefix > smrs[j].Prefix {
+				smrs[i], smrs[j] = smrs[j], smrs[i]
 			}
 		}
 	}
 
-	return summaries, nil
+	return smrs, nil
 }

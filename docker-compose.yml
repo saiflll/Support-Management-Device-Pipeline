@@ -2,7 +2,7 @@ services:
   # === Database Service ===
   postgres:
     build:
-      context: ./util/db
+      context: ./db
       dockerfile: Dockerfile
     image: rennnagge/postgres-db:latest
     container_name: postgres_db
@@ -14,7 +14,7 @@ services:
       PGTZ: "Asia/Jakarta"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-      - ./util/db:/docker-entrypoint-initdb.d:ro
+      - ./db:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 5s
@@ -70,7 +70,7 @@ services:
     image: rennn/forwarder-app:latest
     container_name: forwarder
     build:
-      context: ./util/forward
+      context: ./core/forward
       dockerfile: Dockerfile
       args:
         GOLANG_VERSION: 1.24-alpine
@@ -159,6 +159,11 @@ services:
       - GOOGLE_SPREADSHEET_ID=${GOOGLE_SPREADSHEET_ID:-}
       - GOOGLE_SHEET_NAME=${GOOGLE_SHEET_NAME:-}
       - TZ=Asia/Jakarta
+      # Cloud MQTT Forwarder — forward data forming ke backend monitoring cloud
+      - CLOUD_MQTT_BROKER_URI=${CLOUD_MQTT_BROKER_URI:-}
+      - CLOUD_MQTT_TOPIC_FORMING=${CLOUD_MQTT_TOPIC_FORMING:-prod/mdcw}
+      - CLOUD_MQTT_USERNAME=${CLOUD_MQTT_USERNAME:-}
+      - CLOUD_MQTT_PASSWORD=${CLOUD_MQTT_PASSWORD:-}
     restart: unless-stopped
     depends_on:
       postgres:

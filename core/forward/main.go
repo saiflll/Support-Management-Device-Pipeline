@@ -5,11 +5,11 @@ import (
 	"IoTT/internal/config"
 	"IoTT/internal/database"
 	"IoTT/internal/forwarder"
+	"IoTT/internal/logger"
 	"IoTT/internal/models"
 	"IoTT/internal/mqtt"
 	internalrouter "IoTT/internal/router"
 	"IoTT/internal/telegram"
-	"log"
 	"os"
 	_ "time/tzdata" // Import untuk menyematkan database zona waktu
 
@@ -18,8 +18,13 @@ import (
 	"github.com/gofiber/template/html/v2"
 )
 
+// === ENTRYPOINT UTAMA ===
+
 func main() {
-	// Inisialisasi zona waktu aplikasi ke Asia/Jakarta (UTC+7)
+	// inisialisasi logger untuk mode debug
+	logger.AtrLogger()
+
+	// inisialisasi zona waktu aplikasi ke Asia/Jakarta (UTC+7)
 	config.InitTimezone()
 
 	database.InitDB()
@@ -29,23 +34,23 @@ func main() {
 
 	telegram.LoadConfig()
 	if err := telegram.InitBot(); err != nil {
-		log.Printf("Peringatan: Gagal menginisialisasi bot Telegram: %v. Notifikasi mungkin tidak berfungsi.", err)
+		logger.HndlErr("Gagal menginisialisasi bot Telegram. Notifikasi mungkin tidak berfungsi.", err)
 	}
 
-	// Jalankan MQTT client di goroutine agar tidak memblokir server HTTP
+	// jalankan MQTT client di goroutine agar tidak memblokir server HTTP
 	go mqtt.StartClient()
 
-	// Memulai worker yang menjalankan pengecekan periodik (sensor offline, pintu terbuka, dll.)-->> sensor_status
+	// memulai worker yang menjalankan pengecekan periodik (sensor offline, pintu terbuka, dll.)
 	models.StartPeriodicCheckWorker()
 
-	// Memulai worker untuk arsip data lama
+	// memulai worker untuk arsip data lama
 	go archiver.Start()
 
-	// Memulai worker untuk forwarder ke EMQX Publik
+	// memulai worker untuk forwarder ke EMQX Publik
 	go forwarder.Start()
 
-	// Memuat ulang data lookup untuk memastikan semua data hasil seeding tersedia.
-	log.Println("🔄 Memuat ulang data lookup (Area & Pintu)...")
+	// memuat ulang data lookup untuk memastikan semua data hasil seeding tersedia.
+	logger.Lg("🔄 Memuat ulang data lookup (Area & Pintu)...")
 	database.LoadLookupData()
 
 	engine := html.New("./internal/forwarder", ".html")
@@ -53,10 +58,10 @@ func main() {
 		Views: engine,
 	})
 
-	// Middleware
+	// middleware
 	app.Use(cors.New()) // Tambahkan CORS untuk pengembangan
 
-	// Daftarkan handler untuk dashboard forwarder
+	// daftarkan handler untuk dashboard forwarder
 	forwarder.RegisterForwarderHandlers(app)
 
 	internalrouter.SetupInternalRouter(app)
@@ -65,9 +70,9 @@ func main() {
 	if port == "" {
 		port = "8888"
 	}
-	log.Printf("Start server Fiber: %s", port)
+	logger.Lg("Start server Fiber: %s", port)
 
 	if err := app.Listen(":" + port); err != nil {
-		log.Fatalf("X Gagal menjalankan server Fiber: %v", err)
+		logger.Ftl("Gagal menjalankan server Fiber: %v", err)
 	}
 }

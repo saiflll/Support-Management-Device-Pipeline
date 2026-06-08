@@ -31,7 +31,7 @@ COPY core/ota/ .
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod=vendor \
     -ldflags='-w -s -extldflags "-static"' \
     -a -installsuffix cgo \
-    -o ota-server main.go
+    -o ota-server .
 
 # ============================================
 # Stage 3: Runtime

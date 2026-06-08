@@ -1,4 +1,4 @@
-package main
+package dev
 
 import (
 	"encoding/json"
@@ -13,6 +13,8 @@ import (
 	"github.com/gofiber/fiber/v2"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
+
+	"iot-ota-server/core"
 )
 
 // MockMQTTClient is a mock of the MQTT client
@@ -40,28 +42,28 @@ func (m *MockToken) Error() error { return nil }
 
 func TestMonitoringLogic(t *testing.T) {
 	app := fiber.New()
-	
+
 	// Setup test data
-	nodeMutex.Lock()
-	nodeStatus["test-node-1234567890ab"] = &NodeInfo{
+	core.NodeMutex.Lock()
+	core.NodeStatus["test-node-1234567890ab"] = &core.NodeInfo{
 		Status:  "online",
 		Updated: time.Now().Format("2006-01-02 15:04:05"),
 		Area:    "10",
 	}
-	nodeMutex.Unlock()
+	core.NodeMutex.Unlock()
 
 	app.Get("/api/nodes", func(c *fiber.Ctx) error {
-		nodeMutex.RLock()
-		defer nodeMutex.RUnlock()
-		return c.JSON(nodeStatus)
+		core.NodeMutex.RLock()
+		defer core.NodeMutex.RUnlock()
+		return c.JSON(core.NodeStatus)
 	})
 
 	req := httptest.NewRequest("GET", "/api/nodes", nil)
 	resp, _ := app.Test(req)
 
 	assert.Equal(t, 200, resp.StatusCode)
-	
-	var nodes map[string]NodeInfo
+
+	var nodes map[string]core.NodeInfo
 	json.NewDecoder(resp.Body).Decode(&nodes)
 	assert.Contains(t, nodes, "test-node-1234567890ab")
 }
@@ -69,7 +71,7 @@ func TestMonitoringLogic(t *testing.T) {
 func TestSetConfigCommand(t *testing.T) {
 	app := fiber.New()
 	mockMQTT := new(MockMQTTClient)
-	mqttClient = mockMQTT // Override global
+	core.MqttClient = mockMQTT // Override global
 
 	// Expectation: set_config with some values
 	mockMQTT.On("Publish", "nodes/node-1/command", mock.Anything, mock.Anything, mock.MatchedBy(func(payload []byte) bool {
@@ -81,10 +83,12 @@ func TestSetConfigCommand(t *testing.T) {
 		var req map[string]interface{}
 		c.BodyParser(&req)
 		nodeID := req["node"].(string)
-		
+
 		payload := make(map[string]interface{})
 		for k, v := range req {
-			if k != "node" { payload[k] = v }
+			if k != "node" {
+				payload[k] = v
+			}
 		}
 		payload["cmd"] = "set_config"
 
@@ -93,8 +97,8 @@ func TestSetConfigCommand(t *testing.T) {
 			values.Set(k, fmt.Sprintf("%v", v))
 		}
 		b := []byte(values.Encode())
-		mqttClient.Publish(fmt.Sprintf("nodes/%s/command", nodeID), 0, false, b)
-		
+		core.MqttClient.Publish(fmt.Sprintf("nodes/%s/command", nodeID), 0, false, b)
+
 		return c.SendStatus(200)
 	})
 
@@ -110,7 +114,7 @@ func TestSetConfigCommand(t *testing.T) {
 func TestOTATrigger(t *testing.T) {
 	app := fiber.New()
 	mockMQTT := new(MockMQTTClient)
-	mqttClient = mockMQTT
+	core.MqttClient = mockMQTT
 
 	otaURL := "http://example.com/firmware.bin"
 	expectedPayload := fmt.Sprintf("cmd=ota&url=%s", url.QueryEscape(otaURL))
@@ -125,7 +129,7 @@ func TestOTATrigger(t *testing.T) {
 		var o O
 		c.BodyParser(&o)
 		b := []byte(fmt.Sprintf("cmd=ota&url=%s", url.QueryEscape(o.URL)))
-		mqttClient.Publish(fmt.Sprintf("nodes/%s/command", o.Node), 0, false, b)
+		core.MqttClient.Publish(fmt.Sprintf("nodes/%s/command", o.Node), 0, false, b)
 		return c.SendStatus(200)
 	})
 

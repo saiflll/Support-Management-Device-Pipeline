@@ -2,14 +2,14 @@ package mqtt
 
 import (
 	"IoTT/internal/forwarder"
+	"IoTT/internal/logger"
 	"IoTT/internal/models"
 	"IoTT/internal/processor"
 	"encoding/json"
 	"fmt"
-	"log"
 	"os"
-	"strings"
 	"strconv"
+	"strings"
 	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
@@ -20,56 +20,54 @@ var client mqtt.Client
 // SensorDataTopic akan diisi dari environment variable saat startup.
 var SensorDataTopic string
 
-var messageHandler mqtt.MessageHandler = func(client mqtt.Client, msg mqtt.Message) {
-	log.Printf("📥 Pesan MQTT diterima dari topik: %s", msg.Topic())
-	payloadStr := string(msg.Payload())
+var messageHandler mqtt.MessageHandler = func(cln mqtt.Client, psn mqtt.Message) {
+	logger.Lg("📥 Pesan MQTT diterima dari topik: %s", psn.Topic())
+	psnStr := string(psn.Payload())
 
-	var receivedData []models.AreaData
+	var dt []models.AreaData
 
-	if strings.HasPrefix(payloadStr, "CSV,") {
+	if strings.HasPrefix(psnStr, "CSV,") {
 		// Konversi CSV Token Stream ke JSON struct
-		log.Printf("Info: Payload dideteksi berbentuk format CSV.")
-		ad := parseCSVtoAreaData(payloadStr)
+		logger.Lg("Info: Payload dideteksi berbentuk format CSV.")
+		ad := parseCSVtoAreaData(psnStr)
 		if ad != nil {
-			receivedData = append(receivedData, *ad)
+			dt = append(dt, *ad)
 		}
 	} else {
 		// Coba unmarshal sebagai array dulu (JSON Mode)
-		err := json.Unmarshal(msg.Payload(), &receivedData)
+		err := json.Unmarshal(psn.Payload(), &dt)
 		if err != nil {
 			// Jika gagal, coba unmarshal sebagai objek tunggal
-			log.Printf("Info: Gagal unmarshal sebagai array, mencoba sebagai objek tunggal. Error: %v", err)
+			logger.Lg("Info: Gagal unmarshal sebagai array, mencoba sebagai objek tunggal. Error: %v", err)
 			var singleData models.AreaData
-			if err2 := json.Unmarshal(msg.Payload(), &singleData); err2 != nil {
-				log.Printf("Error: Gagal unmarshal payload baik sebagai array/objek: %v", err2)
+			if err2 := json.Unmarshal(psn.Payload(), &singleData); err2 != nil {
+				logger.HndlErr("UnmarshalPayload", err2)
 				return
 			}
 			// Jika berhasil, bungkus dalam slice
-			receivedData = []models.AreaData{singleData}
+			dt = []models.AreaData{singleData}
 		}
 	}
 
 	// Inject topic metadata
-	for i := range receivedData {
-		receivedData[i].Topic = msg.Topic()
+	for i := range dt {
+		dt[i].Topic = psn.Topic()
 	}
 
-	log.Printf("Debug: Data setelah unmarshal: %+v", receivedData)
+	logger.Lg("Debug: Data setelah unmarshal: %+v", dt)
 
-	if len(receivedData) == 0 {
-		log.Println("Peringatan: Menerima payload MQTT kosong.")
+	if len(dt) == 0 {
+		logger.Lg("Peringatan: Menerima payload MQTT kosong.")
 		return
 	}
 
 	// Kirim data ke forwarder untuk agregasi
-	forwarder.AddToBufferAndAggregate(receivedData)
+	forwarder.AddToBufferAndAggregate(dt)
 
 	// Langsung panggil ProcessSensorData tanpa transaksi
-	_, err := processor.ProcessSensorData(receivedData)
+	_, err := processor.ProcessSensorData(dt)
 	if err != nil {
-		log.Printf("Error selama pemrosesan data sensor dari MQTT: %v", err)
-		// Error di sini kemungkinan besar adalah dari validasi atau parsing,
-		// karena penyimpanan data sudah ditangani oleh worker.
+		logger.HndlErr("ProcessSensorDataFromMQTT", err)
 	}
 }
 
@@ -125,22 +123,22 @@ func parseCSVtoAreaData(payload string) *models.AreaData {
 	return &ad
 }
 
-var connectHandler mqtt.OnConnectHandler = func(client mqtt.Client) {
-	log.Println("✅ Berhasil terhubung ke MQTT Broker.")
+var connectHandler mqtt.OnConnectHandler = func(cln mqtt.Client) {
+	logger.Lg("✅ Berhasil terhubung ke MQTT Broker.")
 	// Berlangganan ke topik setelah koneksi berhasil
-	token := client.Subscribe(SensorDataTopic, 1, messageHandler)
+	token := cln.Subscribe(SensorDataTopic, 1, messageHandler)
 	token.Wait()
-	log.Printf("✔️ Berlangganan ke topik: %s", SensorDataTopic)
+	logger.Lg("✔️ Berlangganan ke topik: %s", SensorDataTopic)
 }
 
-var connectionLostHandler mqtt.ConnectionLostHandler = func(client mqtt.Client, err error) {
-	log.Printf("⚠️ Koneksi ke MQTT Broker terputus: %v", err)
+var connectionLostHandler mqtt.ConnectionLostHandler = func(cln mqtt.Client, err error) {
+	logger.HndlErr("MQTTConnectionLost", err)
 }
 
 func StartClient() {
 	brokerURI := os.Getenv("MQTT_BROKER_URI")
 	if brokerURI == "" {
-		log.Println("Peringatan: MQTT_BROKER_URI tidak diatur. MQTT client tidak akan dimulai.")
+		logger.Lg("Peringatan: MQTT_BROKER_URI tidak diatur. MQTT client tidak akan dimulai.")
 		return
 	}
 
@@ -169,11 +167,11 @@ func StartClient() {
 	if username != "" {
 		opts.SetUsername(username)
 		opts.SetPassword(password)
-		log.Println("Menggunakan kredensial MQTT untuk koneksi lokal.")
+		logger.Lg("Menggunakan kredensial MQTT untuk koneksi lokal.")
 	}
 
 	client = mqtt.NewClient(opts)
 	if token := client.Connect(); token.Wait() && token.Error() != nil {
-		log.Fatalf("❌ Gagal terhubung ke MQTT Broker: %v", token.Error())
+		logger.Ftl("❌ Gagal terhubung ke MQTT Broker: %v", token.Error())
 	}
 }

@@ -8,99 +8,247 @@ import json
 # Konfigurasi
 # ==========================================
 LOCAL_BROKER = os.getenv("MQTT_LOCAL_BROKER", "localhost")
-LOCAL_PORT = int(os.getenv("MQTT_LOCAL_PORT", 1883))
+LOCAL_PORT   = int(os.getenv("MQTT_LOCAL_PORT", 1883))
 
-# Daftar Node yang disimulasikan
-# [FIX] sensor_no ESP32_DEV_002 diubah 2->1: Area 11 hanya daftarkan SensorNo=1 di config.go TempThresholds
-NODES = [
+MQTT_USERNAME = os.getenv("MQTT_USERNAME", "apps")
+MQTT_PASSWORD = os.getenv("MQTT_PASSWORD", "apps")
+
+# ==========================================
+# Node Suhu & Pintu yang disimulasikan
+# (CK 3, dikirim CSV ke sensor/data/ingest)
+# ==========================================
+TEMP_NODES = [
     {"id": "ESP32_DEV_001", "ck": 3, "area": 10, "door_id": 101, "sensor_no": 1},
     {"id": "ESP32_DEV_002", "ck": 3, "area": 11, "door_id": 102, "sensor_no": 1},
 ]
 
 # ==========================================
-# MQTT Credentials (ambil dari env atau default sesuai .env servfor)
-# [FIX] Default 'apps'/'apps' sesuai EMQX_AUTH__USER__1 di docker-compose.yml servfor
+# MDCW Forming Nodes
+# Topik: production/mdcw (JSON)
+# Forming service lokal akan:
+#   1. Simpan ke DB lokal (production_mdcw)
+#   2. Forward ke Cloud MQTT → prod/mdcw → backend monitoring
+#
+# reg2  = total pack count (monotonically increasing per prefix)
+# reg5  = status code: 41=OK, 25=Under, 73=Over, 8201=Metal, 9=Idle
+# reg114= berat (dalam 10x gram, contoh: 8910 = 891.0g)
+# prefix= nama line MDCW (harus cocok dengan mapping di cloud_forwarder.go)
 # ==========================================
-MQTT_USERNAME = os.getenv("MQTT_USERNAME", "apps")
-MQTT_PASSWORD = os.getenv("MQTT_PASSWORD", "apps")
+MDCW_LINES = [
+    {
+        "prefix":       "MDCW1 (UK)",
+        "pack_count":   random.randint(100, 500),   # simulated counter awal
+        "weight_range": (8710, 9520),                # OK range gram×10
+        "weight_ok":    9115,                        # target weight
+    },
+    {
+        "prefix":       "MDCW2 (Siomay)",
+        "pack_count":   random.randint(100, 500),
+        "weight_range": (7040, 7540),
+        "weight_ok":    7290,
+    },
+    {
+        "prefix":       "MDCW3 (Pentol)",
+        "pack_count":   random.randint(100, 500),
+        "weight_range": (5840, 6340),
+        "weight_ok":    6090,
+    },
+    {
+        "prefix":       "MDCW4 (AP)",
+        "pack_count":   random.randint(100, 500),
+        "weight_range": (14940, 15660),
+        "weight_ok":    15300,
+    },
+]
+
+# Status code dan probabilitasnya (OK paling sering)
+STATUS_CHOICES = [
+    (41,   0.75),    # OK / Pass
+    (25,   0.10),    # Underweight
+    (73,   0.08),    # Overweight
+    (8201, 0.05),    # Metal Detected
+    (9,    0.02),    # Idle / Mati
+]
+
+def pick_status():
+    """Pilih status code random berbobot."""
+    rand = random.random()
+    cumulative = 0.0
+    for code, prob in STATUS_CHOICES:
+        cumulative += prob
+        if rand <= cumulative:
+            return code
+    return 41
+
+
+def simulate_mdcw_payload(line: dict) -> dict:
+    """Buat payload JSON MDCW sesuai format yang dibaca forming service."""
+    status = pick_status()
+    line["pack_count"] += 1   # increment counter per paket
+
+    # Generate weight berdasarkan status
+    lo, hi = line["weight_range"]
+    if status == 41:    # OK — dalam range
+        weight = random.randint(lo, hi)
+    elif status == 25:  # Under
+        weight = random.randint(lo - 500, lo - 1)
+    elif status == 73:  # Over
+        weight = random.randint(hi + 1, hi + 500)
+    elif status == 8201:  # Metal — weight bisa apa saja
+        weight = random.randint(lo, hi)
+    else:               # Idle — weight 0
+        weight = 0
+
+    ts = time.strftime("%Y-%m-%d %H:%M:%S")
+
+    return {
+        "ts":     ts,
+        "reg2":   line["pack_count"],
+        "reg5":   status,
+        "reg114": weight,
+        "prefix": line["prefix"],
+    }
+
+
+def status_label(reg5: int) -> str:
+    labels = {41: "OK [PASS]", 25: "UNDER [<]", 73: "OVER  [>]", 8201: "METAL [!]", 9: "IDLE  [-]"}
+    return labels.get(reg5, f"?({reg5})")
+
+
+def weight_display(reg114: int) -> str:
+    if reg114 == 0:
+        return "  ---  "
+    return f"{reg114/10:.1f}g"
 
 
 def simulate_full_live():
-    # Gunakan Callback API v1 untuk kompatibilitas paho-mqtt 2.x
-    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION1, "Full_Live_Simulator")
-
-    # [FIX] Set credentials sebelum connect
+    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, "Full_Live_Simulator")
     client.username_pw_set(MQTT_USERNAME, MQTT_PASSWORD)
 
+    connected = False
+
+    def on_connect(c, userdata, flags, reason_code, properties):
+        nonlocal connected
+        if reason_code == 0:
+            connected = True
+            print(f"  [OK] Terkoneksi ke MQTT Broker {LOCAL_BROKER}:{LOCAL_PORT}")
+        else:
+            print(f"  [FAIL] Gagal koneksi, reason code: {reason_code}")
+
+    def on_disconnect(c, userdata, flags, reason_code, properties):
+        nonlocal connected
+        connected = False
+        print(f"  [WARN] Koneksi terputus (reason: {reason_code}). Mencoba reconnect...")
+
+    client.on_connect    = on_connect
+    client.on_disconnect = on_disconnect
+
+    print("=" * 65)
+    print("  FULL LIVE SIMULATOR -- Suhu + MDCW Forming")
+    print("=" * 65)
+    print(f"  Broker  : {LOCAL_BROKER}:{LOCAL_PORT}")
+    print(f"  User    : {MQTT_USERNAME}")
+    print(f"  Suhu    : {len(TEMP_NODES)} node(s) -> sensor/data/ingest (CSV)")
+    print(f"  MDCW    : {len(MDCW_LINES)} line(s) -> production/mdcw (JSON)")
+    print()
+    print("  [ALUR SUHU]")
+    print("   HW -> sensor/data/ingest (CSV) -> Servfor Forwarder")
+    print("       -> sensor/data/forwarded (JSON) -> IoT-BE -> Dashboard Suhu")
+    print()
+    print("  [ALUR FORMING]")
+    print("   HW -> production/mdcw (JSON) -> forming-app (servfor)")
+    print("       -> DB lokal + CLOUD_MQTT (prod/mdcw) -> IoT-BE -> Dashboard Forming")
+    print("=" * 65)
+    print("  Tekan Ctrl+C untuk berhenti.\n")
+
     try:
-        client.connect(LOCAL_BROKER, LOCAL_PORT)
-        print(f"=== FULL LIVE SIMULATOR STARTED ===")
-        print(f"Connecting to Broker: {LOCAL_BROKER}:{LOCAL_PORT}")
-        print(f"Simulating {len(NODES)} nodes...")
-        print(f"[ALUR] HW(sim) -> sensor/data/ingest (CSV) -> Servfor Forwarder -> sensor/data/forwarded (JSON) -> BE -> FE")
+        client.connect(LOCAL_BROKER, LOCAL_PORT, keepalive=60)
+        client.loop_start()
+        time.sleep(1.5)   # tunggu on_connect
 
+        if not connected:
+            print("  [!] Belum terkoneksi setelah 1.5s, tetap lanjut (auto-retry)...")
+
+        cycle = 0
         while True:
-            for node in NODES:
-                node_id = node["id"]
-                timestamp = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
-                readable_time = time.strftime("%Y-%m-%d %H:%M:%S")
+            cycle += 1
+            now = time.strftime("%Y-%m-%d %H:%M:%S")
+            ts_iso = time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
-                temp = round(random.uniform(24.0, 30.0), 2)
-                humi = round(random.uniform(60.0, 75.0), 2)
+            print(f"\n--- Siklus #{cycle:04d}  [{now}] -------------------------------------------")
+
+            # -- A. Suhu & Pintu --
+            print("  [SUHU/PINTU]")
+            for node in TEMP_NODES:
+                temp        = round(random.uniform(24.0, 30.0), 2)
+                humi        = round(random.uniform(60.0, 75.0), 2)
                 door_status = random.choice([0, 1])
-                relay_status = temp > 28.5
+                relay       = temp > 28.5
 
-                # 1. Kirim STATUS (Dashboard OTA)
-                status_payload = {
-                    "status": "online",
-                    "model": "TEMP|4",
-                    "version": "v1.5.0-live",
-                    "ip": f"192.168.1.{random.randint(10, 200)}",
-                    "ck": str(node["ck"]),
-                    "area": str(node["area"]),
-                    "no": str(node["sensor_no"])
-                }
-                client.publish(f"nodes/{node_id}/status", json.dumps(status_payload), retain=True)
+                # Status payload (OTA dashboard)
+                client.publish(f"nodes/{node['id']}/status", json.dumps({
+                    "status":  "online",
+                    "model":   "TEMP|4",
+                    "version": "v1.5.0-sim",
+                    "ip":      f"192.168.1.{random.randint(10, 200)}",
+                    "ck":      str(node["ck"]),
+                    "area":    str(node["area"]),
+                    "no":      str(node["sensor_no"]),
+                }), retain=True)
 
-                # 2. Kirim MONITOR (RAM, SD, Alarm Relay)
-                monitor_payload = {
+                # Monitor payload
+                client.publish(f"nodes/{node['id']}/monitor", json.dumps({
                     "ram_free_bytes": random.randint(150000, 220000),
-                    "sd_ok": True,
-                    "relay": relay_status,
-                    "cur_t1": temp,
-                    "cur_p1": 1 if relay_status else 0
-                }
-                client.publish(f"nodes/{node_id}/monitor", json.dumps(monitor_payload))
+                    "sd_ok":   True,
+                    "relay":   relay,
+                    "cur_t1":  temp,
+                    "cur_p1":  1 if relay else 0,
+                }))
 
-                # 3. Kirim DATA SENSOR sebagai CSV ke sensor/data/ingest
-                #    Forwarder (servfor) yang akan parse CSV, agregasi, lalu forward ke
-                #    sensor/data/forwarded → iot-suhu-be menerima dan simpan ke DB
-                csv_data = f"CSV,CK,{node['ck']},AREA,{node['area']},TS,{timestamp},M,{node['sensor_no']},{temp},{humi},D,{node['door_id']},{door_status}"
-                client.publish("sensor/data/ingest", csv_data)
+                # Sensor data CSV -> sensor/data/ingest
+                csv_data = (
+                    f"CSV,CK,{node['ck']},AREA,{node['area']},"
+                    f"TS,{ts_iso},M,{node['sensor_no']},"
+                    f"{temp},{humi},D,{node['door_id']},{door_status}"
+                )
+                res = client.publish("sensor/data/ingest", csv_data)
 
-                # 4. Kirim LOG (Dashboard Logs)
-                logs = [
-                    f"Sensor read success: T={temp}C, H={humi}%",
-                    f"MQTT Publish OK -> sensor/data/ingest",
-                    "Battery Voltage: 3.95V",
-                    "Heartbeat OK"
-                ]
-                client.publish(f"nodes/{node_id}/log", random.choice(logs))
+                door_icon  = "OPEN" if door_status == 0 else "CLOSE"
+                relay_icon = "ON" if relay else "OFF"
+                status_pub = "OK" if res.rc == 0 else f"FAIL(rc={res.rc})"
+                print(f"    {node['id']} Area={node['area']} "
+                      f"T={temp}C H={humi}% Door={door_icon} Relay={relay_icon} | pub:{status_pub}")
 
-                print(f"[{readable_time}] Node {node_id} (Area {node['area']}, Sensor {node['sensor_no']}): "
-                      f"T={temp}°C H={humi}% Door={door_status} | CSV->ingest ✓")
+            # ── B. MDCW Forming ──────────────────────────────────────────
+            print("  [MDCW FORMING]")
+            # Hanya kirim 2–4 line random per siklus (realistis)
+            active_lines = random.sample(MDCW_LINES, k=random.randint(2, len(MDCW_LINES)))
+            for line in active_lines:
+                payload = simulate_mdcw_payload(line)
+                json_str = json.dumps(payload)
+                res = client.publish("production/mdcw", json_str)
 
-            time.sleep(10)  # HW baca tiap 10 detik
+                slabel  = status_label(payload["reg5"])
+                wdisplay = weight_display(payload["reg114"])
+                status_pub = "OK" if res.rc == 0 else f"FAIL(rc={res.rc})"
+                print(f"    {line['prefix']:<18} pack#{payload['reg2']:>5} "
+                      f"w={wdisplay:>8}  {slabel:<12} | pub:{status_pub}")
+
+            time.sleep(10)
 
     except KeyboardInterrupt:
-        print("\nStopping simulation...")
-        for node in NODES:
-            client.publish(f"nodes/{node['id']}/status", json.dumps({"status": "offline"}), retain=True)
-        print("All nodes marked as offline.")
+        print("\n\n  Menghentikan simulasi...")
+        for node in TEMP_NODES:
+            client.publish(f"nodes/{node['id']}/status",
+                           json.dumps({"status": "offline"}), retain=True)
+        print("  Semua node ditandai offline.")
     except Exception as e:
-        print(f"Error: {e}")
+        print(f"  [ERR] {e}")
     finally:
+        client.loop_stop()
         client.disconnect()
+        print("  Simulator selesai. Goodbye!")
+
 
 if __name__ == "__main__":
     simulate_full_live()
