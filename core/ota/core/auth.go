@@ -14,12 +14,12 @@ import (
 )
 
 func RequireAuth(c *fiber.Ctx) error {
-	sess, err := Store.Get(c)
+	ss, err := Store.Get(c)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).SendString("Session error")
 	}
 
-	if sess.Get("authenticated") != true {
+	if ss.Get("authenticated") != true {
 		return c.Redirect("/login")
 	}
 
@@ -31,36 +31,36 @@ func HandleShowLogin(c *fiber.Ctx) error {
 }
 
 func HandleLogin(c *fiber.Ctx) error {
-	sess, err := Store.Get(c)
+	ss, err := Store.Get(c)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).SendString("Session error")
 	}
 
-	submittedCode := strings.ToLower(c.FormValue("code"))
-	if submittedCode == "" {
+	kdSmt := strings.ToLower(c.FormValue("code"))
+	if kdSmt == "" {
 		return c.Render("login", fiber.Map{"error": "Kode tidak boleh kosong."})
 	}
 
-	authCodeVal := sess.Get("auth_code")
-	authExpiresVal := sess.Get("auth_expires")
+	kdVal := ss.Get("auth_code")
+	expVal := ss.Get("auth_expires")
 
-	if authCodeVal == nil || authExpiresVal == nil {
+	if kdVal == nil || expVal == nil {
 		return c.Render("login", fiber.Map{"error": "Sesi tidak ditemukan. Silakan minta kode baru."})
 	}
 
-	authCode, ok1 := authCodeVal.(string)
+	kd, ok1 := kdVal.(string)
 
-	var expiryUnix int64
+	var expUnix int64
 	var ok2 bool
-	switch v := authExpiresVal.(type) {
+	switch v := expVal.(type) {
 	case int64:
-		expiryUnix = v
+		expUnix = v
 		ok2 = true
 	case int:
-		expiryUnix = int64(v)
+		expUnix = int64(v)
 		ok2 = true
 	case float64:
-		expiryUnix = int64(v)
+		expUnix = int64(v)
 		ok2 = true
 	}
 
@@ -68,41 +68,41 @@ func HandleLogin(c *fiber.Ctx) error {
 		return c.Render("login", fiber.Map{"error": "Data sesi korup. Silakan minta kode baru."})
 	}
 
-	expiryTime := time.Unix(expiryUnix, 0)
+	expWkt := time.Unix(expUnix, 0)
 
-	if authCode != submittedCode || time.Now().After(expiryTime) {
+	if kd != kdSmt || time.Now().After(expWkt) {
 		return RenderLogin(c, fiber.Map{"error": "Kode verifikasi salah atau sudah kadaluarsa."})
 	}
 
-	sess.Delete("auth_code")
-	sess.Delete("auth_expires")
-	sess.Set("authenticated", true)
-	if err := sess.Save(); err != nil {
+	ss.Delete("auth_code")
+	ss.Delete("auth_expires")
+	ss.Set("authenticated", true)
+	if err := ss.Save(); err != nil {
 		return c.Status(http.StatusInternalServerError).SendString("Gagal menyimpan sesi")
 	}
 
 	return c.Redirect("/")
 }
 
-func RenderLogin(c *fiber.Ctx, data fiber.Map) error {
+func RenderLogin(c *fiber.Ctx, dt fiber.Map) error {
 	c.Type("html")
-	tmpl, err := template.New("login").Parse(loginHTML)
+	tmp, err := template.New("login").Parse(loginHTML)
 	if err != nil {
 		return c.Status(500).SendString("Template error: " + err.Error())
 	}
 	var buf bytes.Buffer
-	if err := tmpl.Execute(&buf, data); err != nil {
+	if err := tmp.Execute(&buf, dt); err != nil {
 		return c.Status(500).SendString("Execute error: " + err.Error())
 	}
 	return c.Send(buf.Bytes())
 }
 
 func HandleLogout(c *fiber.Ctx) error {
-	sess, err := Store.Get(c)
+	ss, err := Store.Get(c)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).SendString("Session error")
 	}
-	sess.Destroy()
+	ss.Destroy()
 	return c.Redirect("/login")
 }
 
@@ -114,7 +114,7 @@ func HandleRequestCode(c *fiber.Ctx) error {
 		})
 	}
 
-	sess, err := Store.Get(c)
+	ss, err := Store.Get(c)
 	if err != nil {
 		HndlErr("Error getting session", err)
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"status": "error", "message": "Gagal membuat sesi."})
@@ -122,20 +122,20 @@ func HandleRequestCode(c *fiber.Ctx) error {
 
 	b := make([]byte, 3)
 	rand.Read(b)
-	code := hex.EncodeToString(b)
+	kd := hex.EncodeToString(b)
 
-	sess.Set("auth_code", code)
-	sess.Set("auth_expires", time.Now().Add(5*time.Minute).Unix())
+	ss.Set("auth_code", kd)
+	ss.Set("auth_expires", time.Now().Add(5*time.Minute).Unix())
 
-	if err := sess.Save(); err != nil {
+	if err := ss.Save(); err != nil {
 		HndlErr("Error saving session", err)
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"status": "error", "message": fmt.Sprintf("Gagal menyimpan sesi: %v", err)})
 	}
 
-	Lg("Code generated and saved: %s", code)
+	Lg("Code generated and saved: %s", kd)
 
-	message := fmt.Sprintf("```json\n{\n  \"event\": \"AUTH_CODE_GENERATED\",\n  \"service\": \"OTA_CORE\",\n  \"auth_code\": \"%s\",\n  \"expires\": \"5m\",\n  \"status\": \"pending\"\n}\n```", code)
-	go SendTelegramMessage(message)
+	psn := fmt.Sprintf("```json\n{\n  \"event\": \"AUTH_CODE_GENERATED\",\n  \"service\": \"OTA_CORE\",\n  \"auth_code\": \"%s\",\n  \"expires\": \"5m\",\n  \"status\": \"pending\"\n}\n```", kd)
+	go SendTelegramMessage(psn)
 
 	return c.JSON(fiber.Map{"status": "ok"})
 }

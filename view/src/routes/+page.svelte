@@ -6,106 +6,95 @@
     formatBytes
   } from '$lib/api';
 
-  // ── State ─────────────────────────────────────────────────
-  let nodes: Record<string, any> = $state({});
-  let files: any[] = $state([]);
-  let activeTab: 'running' | 'offline' = $state('running');
-  let toasts: { id: number; type: string; msg: string }[] = $state([]);
-  let toastId = 0;
+  let nds: Record<string, any> = $state({});
+  let fls: any[] = $state([]);
+  let tab: 'running' | 'offline' = $state('running');
+  let tsts: { id: number; type: string; msg: string }[] = $state([]);
+  let tstId = 0;
 
-  // Modal states
-  let showLogModal = $state(false);
-  let showConfigModal = $state(false);
-  let showOtaModal = $state(false);
-  let modalLogs: string[] = $state([]);
-  let modalNode = $state('');
-  let configJson = $state('');
+  let mdlLog = $state(false);
+  let mdlCfg = $state(false);
+  let mdlOta = $state(false);
+  let mdlLgs: string[] = $state([]);
+  let mdlNd = $state('');
+  let cfgJson = $state('');
   let otaUrl = $state('');
-  let otaNode = $state('');
+  let otaNd = $state('');
 
-  // OTA Upload
-  let selectedFiles: File[] = $state([]);
-  let uploadProgress = $state('');
+  let flsSel: File[] = $state([]);
+  let prgUgg = $state('');
 
-  // Intervals
-  let pollInterval: ReturnType<typeof setInterval>;
+  let pollInt: ReturnType<typeof setInterval>;
 
-  // ── Computed ──────────────────────────────────────────────
-  let runningNodes = $derived(
-    Object.entries(nodes).filter(([, v]: any) => v.status === 'online')
+  let ndsRun = $derived(
+    Object.entries(nds).filter(([, v]: any) => v.status === 'online')
   );
-  let offlineNodes = $derived(
-    Object.entries(nodes).filter(([, v]: any) => v.status !== 'online')
+  let ndsOff = $derived(
+    Object.entries(nds).filter(([, v]: any) => v.status !== 'online')
   );
-  let displayNodes = $derived(activeTab === 'running' ? runningNodes : offlineNodes);
+  let ndsTmpl = $derived(tab === 'running' ? ndsRun : ndsOff);
 
-  // ── Lifecycle ─────────────────────────────────────────────
   onMount(() => {
     fetchAll();
-    pollInterval = setInterval(fetchAll, 3000);
+    pollInt = setInterval(fetchAll, 3000);
   });
-  onDestroy(() => clearInterval(pollInterval));
+  onDestroy(() => clearInterval(pollInt));
 
-  // ── Data Fetch ────────────────────────────────────────────
   async function fetchAll() {
     try {
-      const data = await getNodes();
-      nodes = data || {};
+      const dt = await getNodes();
+      nds = dt || {};
     } catch {}
     try {
-      const data = await getFiles();
-      files = data || [];
+      const dt = await getFiles();
+      fls = dt || [];
     } catch {}
   }
 
-  // ── Toast ─────────────────────────────────────────────────
   function toast(msg: string, type = 'info') {
-    const id = ++toastId;
-    toasts = [...toasts, { id, type, msg }];
-    setTimeout(() => { toasts = toasts.filter(t => t.id !== id); }, 4000);
+    const id = ++tstId;
+    tsts = [...tsts, { id, type, msg }];
+    setTimeout(() => { tsts = tsts.filter(t => t.id !== id); }, 4000);
   }
 
-  // ── Log Modal ─────────────────────────────────────────────
-  async function openLogs(nodeId: string) {
-    modalNode = nodeId;
-    showLogModal = true;
+  async function openLogs(ndId: string) {
+    mdlNd = ndId;
+    mdlLog = true;
     try {
-      const data = await getLogs(nodeId);
-      modalLogs = data.logs || [];
+      const dt = await getLogs(ndId);
+      mdlLgs = dt.logs || [];
     } catch {
-      modalLogs = ['[ERROR] Failed to fetch logs'];
+      mdlLgs = ['[ERROR] Failed to fetch logs'];
     }
   }
 
-  // ── Config Modal ──────────────────────────────────────────
-  async function openConfig(nodeId: string) {
-    modalNode = nodeId;
-    showConfigModal = true;
+  async function openConfig(ndId: string) {
+    mdlNd = ndId;
+    mdlCfg = true;
     try {
-      const data = await getNodeConfig(nodeId);
-      configJson = JSON.stringify(data, null, 2);
+      const dt = await getNodeConfig(ndId);
+      cfgJson = JSON.stringify(dt, null, 2);
     } catch {
-      configJson = '{}';
+      cfgJson = '{}';
     }
   }
 
   async function applyConfig() {
     try {
-      const parsed = JSON.parse(configJson);
-      parsed.node = modalNode;
-      await sendConfig(parsed);
+      const prs = JSON.parse(cfgJson);
+      prs.node = mdlNd;
+      await sendConfig(prs);
       toast('Config applied — node akan reboot', 'success');
-      showConfigModal = false;
+      mdlCfg = false;
     } catch (e: any) {
       toast('Error: ' + e.message, 'error');
     }
   }
 
-  // ── OTA Modal ─────────────────────────────────────────────
-  function openOta(nodeId: string) {
-    otaNode = nodeId;
+  function openOta(ndId: string) {
+    otaNd = ndId;
     otaUrl = '';
-    showOtaModal = true;
+    mdlOta = true;
   }
 
   function selectFileForOTA(url: string) {
@@ -113,93 +102,90 @@
   }
 
   async function handleUpload() {
-    if (!selectedFiles.length) return;
+    if (!flsSel.length) return;
     try {
-      uploadProgress = 'Uploading...';
-      await uploadFiles(selectedFiles);
-      uploadProgress = 'Upload berhasil!';
-      selectedFiles = [];
-      const data = await getFiles();
-      files = data || [];
-      setTimeout(() => uploadProgress = '', 3000);
+      prgUgg = 'Uploading...';
+      await uploadFiles(flsSel);
+      prgUgg = 'Upload berhasil!';
+      flsSel = [];
+      const dt = await getFiles();
+      fls = dt || [];
+      setTimeout(() => prgUgg = '', 3000);
     } catch (e: any) {
-      uploadProgress = 'Error: ' + e.message;
+      prgUgg = 'Error: ' + e.message;
     }
   }
 
-  async function handleDeleteFile(name: string) {
-    if (!confirm(`Hapus file ${name}?`)) return;
+  async function handleDeleteFile(nm: string) {
+    if (!confirm(`Hapus file ${nm}?`)) return;
     try {
-      await deleteFile(name);
-      files = files.filter(f => f.name !== name);
-      toast(`File ${name} dihapus`, 'success');
+      await deleteFile(nm);
+      fls = fls.filter(f => f.name !== nm);
+      toast(`File ${nm} dihapus`, 'success');
     } catch (e: any) {
       toast('Error: ' + e.message, 'error');
     }
   }
 
   async function triggerOTA() {
-    if (!otaUrl || !otaNode) return;
+    if (!otaUrl || !otaNd) return;
     try {
-      await sendOTA(otaNode, otaUrl);
-      toast(`OTA flash initiated → ${otaNode}`, 'success');
-      showOtaModal = false;
+      await sendOTA(otaNd, otaUrl);
+      toast(`OTA flash initiated → ${otaNd}`, 'success');
+      mdlOta = false;
     } catch (e: any) {
       toast('OTA error: ' + e.message, 'error');
     }
   }
 
-  async function handleReboot(nodeId: string) {
-    if (!confirm(`Reboot node ${nodeId}?`)) return;
+  async function handleReboot(ndId: string) {
+    if (!confirm(`Reboot node ${ndId}?`)) return;
     try {
-      await sendReboot(nodeId);
-      toast(`Reboot command sent → ${nodeId}`, 'success');
+      await sendReboot(ndId);
+      toast(`Reboot command sent → ${ndId}`, 'success');
     } catch (e: any) {
       toast('Error: ' + e.message, 'error');
     }
   }
 
-  async function handleDeleteNode(nodeId: string) {
-    if (!confirm(`Hapus node ${nodeId} dari registry?`)) return;
+  async function handleDeleteNode(ndId: string) {
+    if (!confirm(`Hapus node ${ndId} dari registry?`)) return;
     try {
-      await deleteNode(nodeId);
-      toast(`Node ${nodeId} dihapus`, 'success');
+      await deleteNode(ndId);
+      toast(`Node ${ndId} dihapus`, 'success');
     } catch (e: any) {
       toast('Error: ' + e.message, 'error');
     }
   }
 
-  function ramLabel(bytes: number): string {
-    return bytes > 0 ? formatBytes(bytes) + ' free' : '-';
+  function ramLabel(b: number): string {
+    return b > 0 ? formatBytes(b) + ' free' : '-';
   }
 </script>
 
-<!-- Toast Container -->
 <div class="toast-container">
-  {#each toasts as t (t.id)}
+  {#each tsts as t (t.id)}
     <div class="toast {t.type}">{t.msg}</div>
   {/each}
 </div>
 
-<!-- Tab Bar -->
 <div class="tab-bar">
-  <button class="tab-item" class:active={activeTab === 'running'} onclick={() => activeTab = 'running'}>
-    [ RUNNING: {runningNodes.length} ]
+  <button class="tab-item" class:active={tab === 'running'} onclick={() => tab = 'running'}>
+    [ RUNNING: {ndsRun.length} ]
   </button>
-  <button class="tab-item" class:active={activeTab === 'offline'} onclick={() => activeTab = 'offline'}>
-    [ OFFLINE: {offlineNodes.length} ]
+  <button class="tab-item" class:active={tab === 'offline'} onclick={() => tab = 'offline'}>
+    [ OFFLINE: {ndsOff.length} ]
   </button>
 </div>
 
-<!-- Node Grid -->
-{#if displayNodes.length === 0}
+{#if ndsTmpl.length === 0}
   <div class="loading-state">
     <div class="spinner"></div>
     <span>AWAITING_NODES...</span>
   </div>
 {:else}
   <div class="grid-4">
-    {#each displayNodes as [id, info]}
+    {#each ndsTmpl as [id, info]}
       <div class="node-card" class:offline={info.status !== 'online'}>
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:6px;">
           <div class="node-id">{id}</div>
@@ -243,16 +229,15 @@
   </div>
 {/if}
 
-<!-- Log Modal -->
-{#if showLogModal}
-  <div class="modal-overlay" onclick={() => showLogModal = false} role="button" tabindex="-1">
+{#if mdlLog}
+  <div class="modal-overlay" onclick={() => mdlLog = false} role="button" tabindex="-1">
     <div class="modal" onclick={(e) => e.stopPropagation()} role="dialog">
       <div class="modal-header">
-        <span class="modal-title">SYSTEM_LOGS — {modalNode}</span>
-        <button onclick={() => showLogModal = false} style="color:var(--text-muted);font-size:16px;">✕</button>
+        <span class="modal-title">SYSTEM_LOGS — {mdlNd}</span>
+        <button onclick={() => mdlLog = false} style="color:var(--text-muted);font-size:16px;">✕</button>
       </div>
       <div class="modal-body" style="background:black;">
-        {#each modalLogs as line}
+        {#each mdlLgs as line}
           <div class="mono text-xs" style="padding:2px 0;color:var(--green);line-height:1.7;">{line}</div>
         {:else}
           <div class="text-muted mono text-xs">No logs available.</div>
@@ -262,20 +247,19 @@
   </div>
 {/if}
 
-<!-- Config Modal -->
-{#if showConfigModal}
-  <div class="modal-overlay" onclick={() => showConfigModal = false} role="button" tabindex="-1">
+{#if mdlCfg}
+  <div class="modal-overlay" onclick={() => mdlCfg = false} role="button" tabindex="-1">
     <div class="modal" style="max-width:780px;" onclick={(e) => e.stopPropagation()} role="dialog">
       <div class="modal-header">
-        <span class="modal-title">CONFIG_JSON_EDITOR — {modalNode}</span>
-        <button onclick={() => showConfigModal = false} style="color:var(--text-muted);font-size:16px;">✕</button>
+        <span class="modal-title">CONFIG_JSON_EDITOR — {mdlNd}</span>
+        <button onclick={() => mdlCfg = false} style="color:var(--text-muted);font-size:16px;">✕</button>
       </div>
       <div class="modal-body">
         <div style="display:flex;gap:16px;height:350px;">
           <div style="flex:1;display:flex;flex-direction:column;">
             <div class="form-label">JSON PAYLOAD</div>
             <textarea
-              bind:value={configJson}
+              bind:value={cfgJson}
               style="flex:1;background:black;color:var(--green);font-family:var(--font-mono);font-size:11px;border:1px solid var(--border);border-radius:4px;padding:10px;resize:none;outline:none;"
               spellcheck="false"
             ></textarea>
@@ -293,27 +277,25 @@
         </div>
       </div>
       <div class="modal-footer">
-        <button class="btn btn-ghost" onclick={() => showConfigModal = false}>CANCEL</button>
+        <button class="btn btn-ghost" onclick={() => mdlCfg = false}>CANCEL</button>
         <button class="btn btn-primary" onclick={applyConfig}>APPLY_DEPLOYMENT</button>
       </div>
     </div>
   </div>
 {/if}
 
-<!-- OTA Modal -->
-{#if showOtaModal}
-  <div class="modal-overlay" onclick={() => showOtaModal = false} role="button" tabindex="-1">
+{#if mdlOta}
+  <div class="modal-overlay" onclick={() => mdlOta = false} role="button" tabindex="-1">
     <div class="modal" style="max-width:800px;" onclick={(e) => e.stopPropagation()} role="dialog">
       <div class="modal-header">
-        <span class="modal-title">OTA_FLASH_MANAGER — {otaNode}</span>
-        <button onclick={() => showOtaModal = false} style="color:var(--text-muted);font-size:16px;">✕</button>
+        <span class="modal-title">OTA_FLASH_MANAGER — {otaNd}</span>
+        <button onclick={() => mdlOta = false} style="color:var(--text-muted);font-size:16px;">✕</button>
       </div>
       <div class="modal-body" style="display:flex;gap:20px;">
-        <!-- Asset Library -->
         <div style="flex:1;">
           <div class="form-label" style="margin-bottom:10px;">ASSET_LIBRARY</div>
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;max-height:240px;overflow-y:auto;">
-            {#each files as f}
+            {#each fls as f}
               <div
                 style="border:1px solid {otaUrl.includes(f.url) ? 'var(--green)' : 'var(--border)'};border-radius:4px;padding:8px;cursor:pointer;background:var(--surface-2);transition:border-color 0.2s;"
                 onclick={() => selectFileForOTA(f.url)}
@@ -328,18 +310,16 @@
               <div class="text-muted mono text-xs" style="grid-column:span 2;padding:20px;text-align:center;">[NO_ASSETS_IN_VAULT]</div>
             {/each}
           </div>
-          <!-- Upload -->
           <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);">
             <div class="form-label">UPLOAD_NEW_ASSET</div>
-            <input type="file" multiple onchange={(e:any) => selectedFiles = Array.from(e.target.files)} style="margin:6px 0;width:100%;font-size:10px;" />
+            <input type="file" multiple onchange={(e:any) => flsSel = Array.from(e.target.files)} style="margin:6px 0;width:100%;font-size:10px;" />
             <button class="btn btn-primary" style="font-size:10px;" onclick={handleUpload}>UPLOAD_TO_VAULT</button>
-            {#if uploadProgress}
-              <span class="mono text-xs" style="margin-left:10px;color:var(--green);">{uploadProgress}</span>
+            {#if prgUgg}
+              <span class="mono text-xs" style="margin-left:10px;color:var(--green);">{prgUgg}</span>
             {/if}
           </div>
         </div>
 
-        <!-- Control Panel -->
         <div style="width:220px;display:flex;flex-direction:column;gap:14px;">
           <div>
             <div class="form-label">MANUAL TARGET URL</div>

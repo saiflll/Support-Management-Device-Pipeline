@@ -97,11 +97,11 @@ var prefixToMachineID = map[string]int{
 // reg5ToShift memetakan status code reg5 ke nomor shift berdasarkan waktu saat ini.
 // Shift 1: 07:00-15:00, Shift 2: 15:00-23:00, Shift 3: 23:00-07:00
 func currentShift() int {
-	hour := time.Now().Hour()
+	hr := time.Now().Hour()
 	switch {
-	case hour >= 7 && hour < 15:
+	case hr >= 7 && hr < 15:
 		return 1
-	case hour >= 15 && hour < 23:
+	case hr >= 15 && hr < 23:
 		return 2
 	default:
 		return 3
@@ -132,7 +132,7 @@ func reg5IsOver(reg5 int) bool {
 
 // ForwardToCloud mengirim satu record MDCW ke Cloud MQTT dalam format CSV
 // yang dipahami backend cloud (prod/mdcw).
-func ForwardToCloud(p Payload, pfx string, reg5 int, reg114 int) {
+func ForwardToCloud(psn Payload, pfx string, reg5 int, reg114 int) {
 	if cldFwd == nil || !cldFwd.enabled {
 		return
 	}
@@ -182,13 +182,13 @@ func ForwardToCloud(p Payload, pfx string, reg5 int, reg114 int) {
 	}
 
 	// timestamp dalam format RFC3339 (UTC)
-	wktStr := time.Now().UTC().Format(time.RFC3339)
-	if tsRaw, ok := p.Ts.(string); ok && tsRaw != "" {
-		wktStr = tsRaw
+	wkt := time.Now().Format(time.RFC3339)
+	if tsRaw, ok := psn.Ts.(string); ok && tsRaw != "" {
+		wkt = tsRaw
 	}
 
 	// format CSV untuk cloud backend
-	csvPayload := fmt.Sprintf(
+	csv := fmt.Sprintf(
 		"CSV,%d,%d,%d,%d,%d,%d,%d,%d,%d,%.3f,%.2f,%s",
 		macId,
 		sft,
@@ -201,7 +201,7 @@ func ForwardToCloud(p Payload, pfx string, reg5 int, reg114 int) {
 		rjctOth,
 		pwr,
 		eff,
-		wktStr,
+		wkt,
 	)
 
 	cldFwd.mu.Lock()
@@ -213,7 +213,7 @@ func ForwardToCloud(p Payload, pfx string, reg5 int, reg114 int) {
 		tkn.Wait()
 	}
 
-	tkn := cldFwd.client.Publish(cldFwd.topic, 1, false, csvPayload)
+	tkn := cldFwd.client.Publish(cldFwd.topic, 1, false, csv)
 	tkn.Wait()
 	if err := tkn.Error(); err != nil {
 		hndlErr("CloudFwdPublish", err)

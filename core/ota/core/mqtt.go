@@ -66,93 +66,93 @@ func mqttHandler(cln mqtt.Client, psn mqtt.Message) {
 		return
 	}
 
-	var nodeID, sub string
+	var ndId, sub string
 	if prts[0] == "nodes" && len(prts) >= 3 {
-		nodeID = prts[1]
+		ndId = prts[1]
 		sub = prts[2]
 	} else if len(prts) >= 2 {
-		nodeID = prts[0]
+		ndId = prts[0]
 		sub = prts[1]
 	} else {
 		return
 	}
 
 	raw := psn.Payload()
-	now := time.Now().Format("2006-01-02 15:04:05")
+	wkt := time.Now().Format("2006-01-02 15:04:05")
 
 	NodeMutex.Lock()
 	defer NodeMutex.Unlock()
 
-	if _, ok := NodeStatus[nodeID]; !ok {
-		newMacMatches := MacRegex.FindAllString(nodeID, -1)
-		if len(newMacMatches) > 0 {
-			newMac := newMacMatches[len(newMacMatches)-1]
-			for oldID, oldInfo := range NodeStatus {
-				if oldID == nodeID {
+	if _, ok := NodeStatus[ndId]; !ok {
+		mtcMac := MacRegex.FindAllString(ndId, -1)
+		if len(mtcMac) > 0 {
+			mac := mtcMac[len(mtcMac)-1]
+			for oldId, oldInf := range NodeStatus {
+				if oldId == ndId {
 					continue
 				}
-				oldMacMatches := MacRegex.FindAllString(oldID, -1)
-				if len(oldMacMatches) > 0 && oldMacMatches[len(oldMacMatches)-1] == newMac {
-					Lg("MAC match! Migrating '%s' -> '%s'", oldID, nodeID)
-					newNodeInfo := &NodeInfo{
-						Ck:           oldInfo.Ck,
-						Area:         oldInfo.Area,
-						No:           oldInfo.No,
-						MinT1:        oldInfo.MinT1,
-						MaxT1:        oldInfo.MaxT1,
-						MinT2:        oldInfo.MinT2,
-						MaxT2:        oldInfo.MaxT2,
-						MinT3:        oldInfo.MinT3,
-						MaxT3:        oldInfo.MaxT3,
-						SHTSuhuMin:   oldInfo.SHTSuhuMin,
-						SHTSuhuMax:   oldInfo.SHTSuhuMax,
-						SHTHumMin:    oldInfo.SHTHumMin,
-						SHTHumMax:    oldInfo.SHTHumMax,
-						Interval:     oldInfo.Interval,
-						Prefix:       oldInfo.Prefix,
-						Model:        oldInfo.Model,
-						Version:      oldInfo.Version,
-						AppMode:      oldInfo.AppMode,
-						Trans:        oldInfo.Trans,
-						PassCode:     oldInfo.PassCode,
-						IP:           oldInfo.IP,
-						RamFreeBytes: oldInfo.RamFreeBytes,
-						SD_OK:        oldInfo.SD_OK,
-						Logs:         oldInfo.Logs,
+				oldMacMtc := MacRegex.FindAllString(oldId, -1)
+				if len(oldMacMtc) > 0 && oldMacMtc[len(oldMacMtc)-1] == mac {
+					Lg("MAC match! Migrating '%s' -> '%s'", oldId, ndId)
+					newInf := &NodeInfo{
+						Ck:           oldInf.Ck,
+						Area:         oldInf.Area,
+						No:           oldInf.No,
+						MinT1:        oldInf.MinT1,
+						MaxT1:        oldInf.MaxT1,
+						MinT2:        oldInf.MinT2,
+						MaxT2:        oldInf.MaxT2,
+						MinT3:        oldInf.MinT3,
+						MaxT3:        oldInf.MaxT3,
+						SHTSuhuMin:   oldInf.SHTSuhuMin,
+						SHTSuhuMax:   oldInf.SHTSuhuMax,
+						SHTHumMin:    oldInf.SHTHumMin,
+						SHTHumMax:    oldInf.SHTHumMax,
+						Interval:     oldInf.Interval,
+						Prefix:       oldInf.Prefix,
+						Model:        oldInf.Model,
+						Version:      oldInf.Version,
+						AppMode:      oldInf.AppMode,
+						Trans:        oldInf.Trans,
+						PassCode:     oldInf.PassCode,
+						IP:           oldInf.IP,
+						RamFreeBytes: oldInf.RamFreeBytes,
+						SD_OK:        oldInf.SD_OK,
+						Logs:         oldInf.Logs,
 						Status:       "online",
-						Updated:      now,
+						Updated:      wkt,
 					}
-					NodeStatus[nodeID] = newNodeInfo
-					delete(NodeStatus, oldID)
+					NodeStatus[ndId] = newInf
+					delete(NodeStatus, oldId)
 					break
 				}
 			}
 		}
 	}
 
-	if _, ok := NodeStatus[nodeID]; !ok {
+	if _, ok := NodeStatus[ndId]; !ok {
 		if len(NodeStatus) >= 1000 {
-			Lg("[MQTT] Node limit reached, dropping %s", nodeID)
+			Lg("[MQTT] Node limit reached, dropping %s", ndId)
 			return
 		}
-		NodeStatus[nodeID] = &NodeInfo{}
+		NodeStatus[ndId] = &NodeInfo{}
 	}
-	info := NodeStatus[nodeID]
+	inf := NodeStatus[ndId]
 
 	switch sub {
 	case "status":
-		rawStr := string(raw)
-		if strings.HasPrefix(rawStr, "state=") || strings.HasPrefix(rawStr, "cmd=") {
-			values, err := url.ParseQuery(rawStr)
+		str := string(raw)
+		if strings.HasPrefix(str, "state=") || strings.HasPrefix(str, "cmd=") {
+			val, err := url.ParseQuery(str)
 			if err != nil {
-				HndlErr(fmt.Sprintf("[MQTT] Warning: URL decode failed for %s, parsing anyway", nodeID), err)
+				HndlErr(fmt.Sprintf("[MQTT] Warning: URL decode failed for %s, parsing anyway", ndId), err)
 			}
-			boolFields := map[string]bool{"alarm_enabled": true, "sd_ok": true, "relay": true}
-			if values != nil {
+			fldBool := map[string]bool{"alarm_enabled": true, "sd_ok": true, "relay": true}
+			if val != nil {
 				m := make(map[string]interface{})
-				for k, v := range values {
+				for k, v := range val {
 					if len(v) > 0 {
-						if boolFields[k] {
+						if fldBool[k] {
 							m[k] = v[0] == "true" || v[0] == "1"
 						} else if f, err := strconv.ParseFloat(v[0], 64); err == nil {
 							m[k] = f
@@ -161,262 +161,262 @@ func mqttHandler(cln mqtt.Client, psn mqtt.Message) {
 						}
 					}
 				}
-				info.FullConfig = m
+				inf.FullConfig = m
 				b, _ := json.Marshal(m)
-				json.Unmarshal(b, info)
+				json.Unmarshal(b, inf)
 				if v, ok := m["state"]; ok {
-					info.Status = fmt.Sprintf("%v", v)
+					inf.Status = fmt.Sprintf("%v", v)
 				}
 				if v, ok := m["active_model"]; ok {
-					info.Model = fmt.Sprintf("%v", v)
+					inf.Model = fmt.Sprintf("%v", v)
 				}
-				info.Updated = now
+				inf.Updated = wkt
 			}
 		} else {
 			var tmp interface{}
 			if err := json.Unmarshal(raw, &tmp); err == nil {
 				if m, ok := tmp.(map[string]interface{}); ok {
-					info.FullConfig = m
-					if err := json.Unmarshal(raw, info); err != nil {
+					inf.FullConfig = m
+					if err := json.Unmarshal(raw, inf); err != nil {
 						HndlErr("[MQTT] Error auto-mapping node info", err)
 					}
 					if v, ok := m["active_model"]; ok {
-						info.Model = fmt.Sprintf("%v", v)
+						inf.Model = fmt.Sprintf("%v", v)
 					}
 					for _, key := range []string{"conf", "config"} {
 						if cfg, ex := m[key]; ex {
 							if cm, ok := cfg.(map[string]interface{}); ok {
 								for k, v := range cm {
-									info.FullConfig[k] = v
+									inf.FullConfig[k] = v
 								}
 								cfgRaw, _ := json.Marshal(cm)
-								json.Unmarshal(cfgRaw, info)
+								json.Unmarshal(cfgRaw, inf)
 							}
 						}
 					}
 				} else {
-					info.Status = fmt.Sprintf("%v", tmp)
+					inf.Status = fmt.Sprintf("%v", tmp)
 				}
-				info.Updated = now
+				inf.Updated = wkt
 			}
 		}
 	case "monitor":
-		monStr := string(raw)
-		info.Logs = append(info.Logs, "[MON] "+monStr)
-		if len(info.Logs) > 10 {
-			info.Logs = info.Logs[len(info.Logs)-10:]
+		str := string(raw)
+		inf.Logs = append(inf.Logs, "[MON] "+str)
+		if len(inf.Logs) > 10 {
+			inf.Logs = inf.Logs[len(inf.Logs)-10:]
 		}
 
-		if strings.HasPrefix(monStr, "M,") {
-			parts := strings.Split(monStr, ",")
+		if strings.HasPrefix(str, "M,") {
+			parts := strings.Split(str, ",")
 			if len(parts) >= 3 {
 				if ram, err := strconv.ParseInt(parts[1], 10, 64); err == nil {
-					info.RamFreeBytes = ram
+					inf.RamFreeBytes = ram
 				}
 				if parts[2] == "1" || strings.ToLower(parts[2]) == "true" {
 					t := true
-					info.SD_OK = &t
+					inf.SD_OK = &t
 				} else {
 					f := false
-					info.SD_OK = &f
+					inf.SD_OK = &f
 				}
 			}
 		} else {
 			var m map[string]interface{}
 			if err := json.Unmarshal(raw, &m); err == nil {
-				info.FullConfig = m
+				inf.FullConfig = m
 				if v, ok := m["ram"]; ok {
 					if val, ok := v.(float64); ok {
-						info.RamFreeBytes = int64(val)
+						inf.RamFreeBytes = int64(val)
 					}
 				}
 				if v, ok := m["ram_free"]; ok {
 					if val, ok := v.(float64); ok {
-						info.RamFreeBytes = int64(val)
+						inf.RamFreeBytes = int64(val)
 					}
 				}
 				if v, ok := m["ram_free_bytes"]; ok {
 					if val, ok := v.(float64); ok {
-						info.RamFreeBytes = int64(val)
+						inf.RamFreeBytes = int64(val)
 					}
 				}
 				if v, ok := m["ip"]; ok {
-					info.IP = fmt.Sprintf("%v", v)
+					inf.IP = fmt.Sprintf("%v", v)
 				}
 				if v, ok := m["ck"]; ok {
-					info.Ck = fmt.Sprintf("%v", v)
+					inf.Ck = fmt.Sprintf("%v", v)
 				}
 				if v, ok := m["area"]; ok {
-					info.Area = fmt.Sprintf("%v", v)
+					inf.Area = fmt.Sprintf("%v", v)
 				}
 				if v, ok := m["no"]; ok {
-					info.No = fmt.Sprintf("%v", v)
+					inf.No = fmt.Sprintf("%v", v)
 				}
 				if v, ok := m["no_t1"]; ok {
 					if f, ok := v.(float64); ok {
-						info.NoT1 = int(f)
+						inf.NoT1 = int(f)
 					}
 				}
 				if v, ok := m["no_t2"]; ok {
 					if f, ok := v.(float64); ok {
-						info.NoT2 = int(f)
+						inf.NoT2 = int(f)
 					}
 				}
 				if v, ok := m["no_t3"]; ok {
 					if f, ok := v.(float64); ok {
-						info.NoT3 = int(f)
+						inf.NoT3 = int(f)
 					}
 				}
 				if v, ok := m["no_sht"]; ok {
 					if f, ok := v.(float64); ok {
-						info.NoSHT = int(f)
+						inf.NoSHT = int(f)
 					}
 				}
 				if v, ok := m["no_p1"]; ok {
 					if f, ok := v.(float64); ok {
-						info.NoP1 = int(f)
+						inf.NoP1 = int(f)
 					}
 				}
 				if v, ok := m["no_p2"]; ok {
 					if f, ok := v.(float64); ok {
-						info.NoP2 = int(f)
+						inf.NoP2 = int(f)
 					}
 				}
 				if v, ok := m["no_p3"]; ok {
 					if f, ok := v.(float64); ok {
-						info.NoP3 = int(f)
+						inf.NoP3 = int(f)
 					}
 				}
 				if v, ok := m["sd_ok"]; ok {
 					if b, ok := v.(bool); ok {
-						info.SD_OK = &b
+						inf.SD_OK = &b
 					}
 				}
 				if v, ok := m["model"]; ok {
-					info.Model = fmt.Sprintf("%v", v)
+					inf.Model = fmt.Sprintf("%v", v)
 				}
 				if v, ok := m["version"]; ok {
-					info.Version = fmt.Sprintf("%v", v)
+					inf.Version = fmt.Sprintf("%v", v)
 				}
 				if v, ok := m["node_prefix"]; ok {
-					info.Prefix = fmt.Sprintf("%v", v)
+					inf.Prefix = fmt.Sprintf("%v", v)
 				}
 				if data, ok := m["data"]; ok {
 					if dm, ok := data.(map[string]interface{}); ok {
 						if t1, ok := dm["t1"].(float64); ok {
-							info.CurT1 = t1
+							inf.CurT1 = t1
 						}
 						if t2, ok := dm["t2"].(float64); ok {
-							info.CurT2 = t2
+							inf.CurT2 = t2
 						}
 						if t3, ok := dm["t3"].(float64); ok {
-							info.CurT3 = t3
+							inf.CurT3 = t3
 						}
 						if p1, ok := dm["p1"].(float64); ok {
-							info.CurP1 = int(p1)
+							inf.CurP1 = int(p1)
 						}
 						if p2, ok := dm["p2"].(float64); ok {
-							info.CurP2 = int(p2)
+							inf.CurP2 = int(p2)
 						}
 						if p3, ok := dm["p3"].(float64); ok {
-							info.CurP3 = int(p3)
+							inf.CurP3 = int(p3)
 						}
 						if st, ok := dm["sht_t"].(float64); ok {
-							info.CurSHT_T = st
+							inf.CurSHT_T = st
 						}
 						if sh, ok := dm["sht_h"].(float64); ok {
-							info.CurSHT_H = sh
+							inf.CurSHT_H = sh
 						}
 					}
 				}
 				if v, ok := m["relay"]; ok {
-					relayOn := false
+					isRly := false
 					switch val := v.(type) {
 					case bool:
-						relayOn = val
+						isRly = val
 					case float64:
-						relayOn = val > 0
+						isRly = val > 0
 					case string:
-						relayOn = val == "ON" || val == "1" || val == "true"
+						isRly = val == "ON" || val == "1" || val == "true"
 					}
 
-					if relayOn != info.Relay {
-						info.Relay = relayOn
+					if isRly != inf.Relay {
+						inf.Relay = isRly
 						AlarmMutex.Lock()
-						prev, exists := LastAlarmState[nodeID]
-						if relayOn && (!exists || !prev) {
-							LastAlarmState[nodeID] = true
-							go sendRelayTelegram(nodeID, info, true)
-						} else if !relayOn && exists && prev {
-							LastAlarmState[nodeID] = false
-							go sendRelayTelegram(nodeID, info, false)
+						prev, ada := LastAlarmState[ndId]
+						if isRly && (!ada || !prev) {
+							LastAlarmState[ndId] = true
+							go sendRelayTelegram(ndId, inf, true)
+						} else if !isRly && ada && prev {
+							LastAlarmState[ndId] = false
+							go sendRelayTelegram(ndId, inf, false)
 						}
 						AlarmMutex.Unlock()
 					}
 				}
 			}
 		}
-		info.Updated = now
+		inf.Updated = wkt
 	case "log":
-		line := string(raw)
-		line = strings.TrimSpace(line)
-		if line != "" {
-			info.Logs = append(info.Logs, "[LOG] "+line)
-			if len(info.Logs) > 10 {
-				info.Logs = info.Logs[len(info.Logs)-10:]
+		ln := string(raw)
+		ln = strings.TrimSpace(ln)
+		if ln != "" {
+			inf.Logs = append(inf.Logs, "[LOG] "+ln)
+			if len(inf.Logs) > 10 {
+				inf.Logs = inf.Logs[len(inf.Logs)-10:]
 			}
-			info.Updated = now
+			inf.Updated = wkt
 		}
 	}
-	NodeStatus[nodeID] = info
+	NodeStatus[ndId] = inf
 }
 
-func sendRelayTelegram(nodeID string, info *NodeInfo, isActive bool) {
-	statusStr := "🚨 *ALARM ACTIVE*"
-	if !isActive {
-		statusStr = "✅ *ALARM CLEARED*"
+func sendRelayTelegram(ndId string, inf *NodeInfo, aktf bool) {
+	stsStr := "🚨 *ALARM ACTIVE*"
+	if !aktf {
+		stsStr = "✅ *ALARM CLEARED*"
 	}
 
-	emoji := "🔋"
-	if isActive {
-		emoji = "⚠️"
+	emj := "🔋"
+	if aktf {
+		emj = "⚠️"
 	}
 
-	message := fmt.Sprintf("%s\n", statusStr)
-	message += fmt.Sprintf("*Device:* `%s` (%s)\n", nodeID, info.Model)
-	message += fmt.Sprintf("*Site:* CK %s - Area %s (Node #%s)\n", info.Ck, info.Area, info.No)
-	message += "----------------------------\n"
+	psn := fmt.Sprintf("%s\n", stsStr)
+	psn += fmt.Sprintf("*Device:* `%s` (%s)\n", ndId, inf.Model)
+	psn += fmt.Sprintf("*Site:* CK %s - Area %s (Node #%s)\n", inf.Ck, inf.Area, inf.No)
+	psn += "----------------------------\n"
 
-	message += "*TEMPERATURES:*\n"
-	if info.CurT1 > -100 {
-		message += fmt.Sprintf("• T1: `%.1f°C` (Limit: %.1f - %.1f)\n", info.CurT1, info.MinT1, info.MaxT1)
+	psn += "*TEMPERATURES:*\n"
+	if inf.CurT1 > -100 {
+		psn += fmt.Sprintf("• T1: `%.1f°C` (Limit: %.1f - %.1f)\n", inf.CurT1, inf.MinT1, inf.MaxT1)
 	}
-	if info.CurT2 > -100 {
-		message += fmt.Sprintf("• T2: `%.1f°C` (Limit: %.1f - %.1f)\n", info.CurT2, info.MinT2, info.MaxT2)
+	if inf.CurT2 > -100 {
+		psn += fmt.Sprintf("• T2: `%.1f°C` (Limit: %.1f - %.1f)\n", inf.CurT2, inf.MinT2, inf.MaxT2)
 	}
-	if info.CurT3 > -100 {
-		message += fmt.Sprintf("• T3: `%.1f°C` (Limit: %.1f - %.1f)\n", info.CurT3, info.MinT3, info.MaxT3)
-	}
-
-	if info.CurSHT_T > -40 {
-		message += fmt.Sprintf("• SHT: `%.1f°C` / `%.1f%%`RH\n", info.CurSHT_T, info.CurSHT_H)
+	if inf.CurT3 > -100 {
+		psn += fmt.Sprintf("• T3: `%.1f°C` (Limit: %.1f - %.1f)\n", inf.CurT3, inf.MinT3, inf.MaxT3)
 	}
 
-	message += "\n*DOOR STATUS:*\n"
-	message += fmt.Sprintf("• P1: %s\n", formatDoor(info.CurP1))
-	message += fmt.Sprintf("• P2: %s\n", formatDoor(info.CurP2))
-	message += fmt.Sprintf("• P3: %s\n", formatDoor(info.CurP3))
+	if inf.CurSHT_T > -40 {
+		psn += fmt.Sprintf("• SHT: `%.1f°C` / `%.1f%%`RH\n", inf.CurSHT_T, inf.CurSHT_H)
+	}
 
-	message += "----------------------------\n"
-	if isActive {
-		message += fmt.Sprintf("%s *RELAY STATUS: ON*\n", emoji)
-		message += "_Immediately check the storage area!_"
+	psn += "\n*DOOR STATUS:*\n"
+	psn += fmt.Sprintf("• P1: %s\n", formatDoor(inf.CurP1))
+	psn += fmt.Sprintf("• P2: %s\n", formatDoor(inf.CurP2))
+	psn += fmt.Sprintf("• P3: %s\n", formatDoor(inf.CurP3))
+
+	psn += "----------------------------\n"
+	if aktf {
+		psn += fmt.Sprintf("%s *RELAY STATUS: ON*\n", emj)
+		psn += "_Immediately check the storage area!_"
 	} else {
-		message += "🔋 *RELAY STATUS: OFF*\n"
-		message += "_System normalized._"
+		psn += "🔋 *RELAY STATUS: OFF*\n"
+		psn += "_System normalized._"
 	}
 
-	SendTelegramMessage(message)
+	SendTelegramMessage(psn)
 }
 
 func formatDoor(val int) string {

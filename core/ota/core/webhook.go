@@ -13,51 +13,51 @@ func HandleEMQXWebhook(c *fiber.Ctx) error {
 		return c.Status(http.StatusUnauthorized).JSON(fiber.Map{"error": "unauthorized"})
 	}
 
-	var payload EMQXWebhook
-	if err := c.BodyParser(&payload); err != nil {
+	var psn EMQXWebhook
+	if err := c.BodyParser(&psn); err != nil {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "cannot parse body"})
 	}
 
-	nodeID := payload.ClientID
-	if nodeID == "" {
+	ndId := psn.ClientID
+	if ndId == "" {
 		return c.Status(http.StatusBadRequest).JSON(fiber.Map{"error": "empty clientid"})
 	}
 
-	isTechnical := strings.HasPrefix(nodeID, "web-") ||
-		strings.HasPrefix(nodeID, "megdev-") ||
-		strings.HasPrefix(nodeID, "servfi-") ||
-		strings.HasPrefix(nodeID, "forming-") ||
-		strings.HasPrefix(nodeID, "forwarder-")
+	isTek := strings.HasPrefix(ndId, "web-") ||
+		strings.HasPrefix(ndId, "megdev-") ||
+		strings.HasPrefix(ndId, "servfi-") ||
+		strings.HasPrefix(ndId, "forming-") ||
+		strings.HasPrefix(ndId, "forwarder-")
 
 	NodeMutex.Lock()
 	defer NodeMutex.Unlock()
 
-	exists := false
-	if _, ok := NodeStatus[nodeID]; ok {
-		exists = ok
+	ada := false
+	if _, ok := NodeStatus[ndId]; ok {
+		ada = ok
 	}
 
-	if isTechnical && !exists {
+	if isTek && !ada {
 		return c.JSON(fiber.Map{"status": "ignored", "reason": "technical_client"})
 	}
 
-	if !exists {
-		NodeStatus[nodeID] = &NodeInfo{}
+	if !ada {
+		NodeStatus[ndId] = &NodeInfo{}
 	}
-	info := NodeStatus[nodeID]
+	inf := NodeStatus[ndId]
 
-	now := time.Now().Format("2006-01-02 15:04:05")
-	info.Updated = now
+	wkt := time.Now().Format("2006-01-02 15:04:05")
+	inf.Updated = wkt
 
-	switch payload.Event {
+	switch psn.Event {
 	case "client.connected":
-		info.Status = "online"
-		Lg("Webhook: Node %s connected", nodeID)
+		inf.Status = "online"
+		Lg("Webhook: Node %s connected", ndId)
 	case "client.disconnected":
-		info.Status = "offline"
-		Lg("Webhook: Node %s disconnected (reason: %s)", nodeID, payload.Reason)
+		inf.Status = "offline"
+		Lg("Webhook: Node %s disconnected (reason: %s)", ndId, psn.Reason)
 	default:
-		return c.JSON(fiber.Map{"status": "ignored", "event": payload.Event})
+		return c.JSON(fiber.Map{"status": "ignored", "event": psn.Event})
 	}
 
 	return c.JSON(fiber.Map{"status": "ok"})

@@ -12,17 +12,17 @@ func FloatPtr(f float64) *float64 {
 	return &f
 }
 
-func GetEnv(key, def string) string {
-	if v := os.Getenv(key); v != "" {
+func GetEnv(k, d string) string {
+	if v := os.Getenv(k); v != "" {
 		return v
 	}
-	return def
+	return d
 }
 
 func SendTelegramMessage(psn string) {
-	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", TelegramBotToken)
+	urlStr := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", TelegramBotToken)
 
-	rsp, err := http.PostForm(apiURL, url.Values{
+	res, err := http.PostForm(urlStr, url.Values{
 		"chat_id":    {TelegramChatID},
 		"text":       {psn},
 		"parse_mode": {"Markdown"},
@@ -32,34 +32,34 @@ func SendTelegramMessage(psn string) {
 		HndlErr("Error sending Telegram message", err)
 		return
 	}
-	defer rsp.Body.Close()
+	defer res.Body.Close()
 
-	if rsp.StatusCode != http.StatusOK {
-		bdy, _ := io.ReadAll(rsp.Body)
-		HndlErr("Failed to send Telegram message", fmt.Errorf("status: %s, response: %s", rsp.Status, string(bdy)))
+	if res.StatusCode != http.StatusOK {
+		dt, _ := io.ReadAll(res.Body)
+		HndlErr("Failed to send Telegram message", fmt.Errorf("status: %s, response: %s", res.Status, string(dt)))
 	}
 }
 
-func LoadInitialFiles(dir string) {
+func LoadInitialFiles(dr string) {
 	FileMutex.Lock()
 	defer FileMutex.Unlock()
 
-	entries, err := os.ReadDir(dir)
+	ent, err := os.ReadDir(dr)
 	if err != nil {
-		HndlErr(fmt.Sprintf("could not read upload directory %s", dir), err)
+		HndlErr(fmt.Sprintf("could not read upload directory %s", dr), err)
 		return
 	}
 
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			info, err := entry.Info()
+	for _, e := range ent {
+		if !e.IsDir() {
+			inf, err := e.Info()
 			if err == nil {
-				name := info.Name()
-				FileInfos[name] = FileInfo{
-					Name:       name,
-					URL:        "/files/" + name,
-					UploadTime: info.ModTime(),
-					Size:       info.Size(),
+				nm := inf.Name()
+				FileInfos[nm] = FileInfo{
+					Name:       nm,
+					URL:        "/files/" + nm,
+					UploadTime: inf.ModTime(),
+					Size:       inf.Size(),
 				}
 			}
 		}

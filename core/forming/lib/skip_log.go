@@ -6,60 +6,59 @@ import (
 )
 
 // Skip data dengan weight = 0 dan log
-func LogSkippedData(db *sql.DB, ts string, reg2, reg5, reg114 int, prefix string) {
+func LogSkippedData(db *sql.DB, ts string, reg2, reg5, reg114 int, prf string) {
 	if db == nil {
 		return
 	}
 
-	log.Printf("[SKIP] Data with weight=0 from %s at %s (reg2=%d, reg5=%d)", prefix, ts, reg2, reg5)
+	log.Printf("[SKIP] Data with weight=0 from %s at %s (reg2=%d, reg5=%d)", prf, ts, reg2, reg5)
 
-	skipQuery := `INSERT INTO skip_log (ts, reg2, reg5, reg114, prefix, reason) VALUES ($1, $2, $3, $4, $5, $6)`
-	_, err := db.Exec(skipQuery, ts, reg2, reg5, reg114, prefix, "Weight is zero")
+	qry := `INSERT INTO skip_log (ts, reg2, reg5, reg114, prefix, reason) VALUES ($1, $2, $3, $4, $5, $6)`
+	_, err := db.Exec(qry, ts, reg2, reg5, reg114, prf, "Weight is zero")
 	if err != nil {
 		log.Println("Error logging skipped data:", err)
 	}
 }
 
-// GetSkipLogs retrieves all skip logs
 func GetSkipLogs(db *sql.DB) ([]map[string]interface{}, error) {
 	if db == nil {
 		return []map[string]interface{}{}, nil
 	}
 
-	query := `SELECT id, ts, reg2, reg5, reg114, prefix, reason, skipped_at 
+	qry := `SELECT id, ts, reg2, reg5, reg114, prefix, reason, skipped_at 
 	          FROM skip_log 
 	          ORDER BY skipped_at DESC 
 	          LIMIT 100`
 
-	rows, err := db.Query(query)
+	rows, err := db.Query(qry)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var logs []map[string]interface{}
+	var lgs []map[string]interface{}
 	for rows.Next() {
 		var id int
-		var ts, prefix, reason string
+		var ts, prf, rsn string
 		var reg2, reg5, reg114 int
-		var skippedAt sql.NullTime
+		var skpWkt sql.NullTime
 
-		if err := rows.Scan(&id, &ts, &reg2, &reg5, &reg114, &prefix, &reason, &skippedAt); err != nil {
+		if err := rows.Scan(&id, &ts, &reg2, &reg5, &reg114, &prf, &rsn, &skpWkt); err != nil {
 			return nil, err
 		}
 
-		logEntry := map[string]interface{}{
+		ent := map[string]interface{}{
 			"id":         id,
 			"ts":         ts,
 			"reg2":       reg2,
 			"reg5":       reg5,
 			"reg114":     reg114,
-			"prefix":     prefix,
-			"reason":     reason,
-			"skipped_at": skippedAt.Time,
+			"prefix":     prf,
+			"reason":     rsn,
+			"skipped_at": skpWkt.Time,
 		}
-		logs = append(logs, logEntry)
+		lgs = append(lgs, ent)
 	}
 
-	return logs, nil
+	return lgs, nil
 }

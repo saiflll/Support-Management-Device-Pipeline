@@ -19,23 +19,17 @@ var (
 	sheetName     string
 )
 
-// InitGoogleSheets initializes Google Sheets API client
 func InitGoogleSheets() error {
-	// Read Base64-encoded credentials from environment
-	credsBase64 := os.Getenv("GOOGLE_SHEETS_CREDENTIALS")
-	if credsBase64 == "" {
+	crdB64 := os.Getenv("GOOGLE_SHEETS_CREDENTIALS")
+	if crdB64 == "" {
 		return fmt.Errorf("GOOGLE_SHEETS_CREDENTIALS not set")
 	}
-
-	// Decode Base64
-	credsJSON, err := base64.StdEncoding.DecodeString(credsBase64)
+	crdJson, err := base64.StdEncoding.DecodeString(crdB64)
 	if err != nil {
 		return fmt.Errorf("failed to decode credentials: %w", err)
 	}
-
-	// Create Sheets service
 	ctx := context.Background()
-	srv, err := sheets.NewService(ctx, option.WithCredentialsJSON(credsJSON))
+	srv, err := sheets.NewService(ctx, option.WithCredentialsJSON(crdJson))
 	if err != nil {
 		return fmt.Errorf("failed to create sheets service: %w", err)
 	}
@@ -48,35 +42,31 @@ func InitGoogleSheets() error {
 		return fmt.Errorf("GOOGLE_SPREADSHEET_ID not set")
 	}
 	if sheetName == "" {
-		sheetName = "Production Data" // Default sheet name
+		sheetName = "Production Data"
 	}
 
 	log.Println("✅ Google Sheets initialized successfully")
 	return nil
 }
 
-// CreateSheetIfNotExists creates the sheet and header row if not exists
 func CreateSheetIfNotExists() {
 	if sheetsService == nil {
 		return
 	}
+	rngBc := fmt.Sprintf("%s!A1:F1", sheetName)
+	res, err := sheetsService.Spreadsheets.Values.Get(spreadsheetID, rngBc).Do()
 
-	// Check if sheet exists, if not create header
-	readRange := fmt.Sprintf("%s!A1:F1", sheetName)
-	resp, err := sheetsService.Spreadsheets.Values.Get(spreadsheetID, readRange).Do()
-
-	if err != nil || len(resp.Values) == 0 {
-		// Sheet might not exist or header is missing, add header
-		header := []interface{}{"Timestamp", "Pack Count", "Status", "Weight (g)", "Prefix", "Created At"}
-		valueRange := &sheets.ValueRange{
-			Values: [][]interface{}{header},
+	if err != nil || len(res.Values) == 0 {
+		hdr := []interface{}{"Timestamp", "Pack Count", "Status", "Weight (g)", "Prefix", "Created At"}
+		rngVal := &sheets.ValueRange{
+			Values: [][]interface{}{hdr},
 		}
 
-		headerRange := fmt.Sprintf("%s!A1", sheetName)
+		rngHdr := fmt.Sprintf("%s!A1", sheetName)
 		_, err := sheetsService.Spreadsheets.Values.Update(
 			spreadsheetID,
-			headerRange,
-			valueRange,
+			rngHdr,
+			rngVal,
 		).ValueInputOption("RAW").Do()
 
 		if err != nil {
@@ -87,7 +77,6 @@ func CreateSheetIfNotExists() {
 	}
 }
 
-// Payload structure untuk export
 type Payload struct {
 	Ts     string `json:"ts"`
 	Reg2   int    `json:"reg2"`
@@ -96,55 +85,51 @@ type Payload struct {
 	Prefix string `json:"prefix"`
 }
 
-// AppendToSheet appends a row to Google Sheets
-func AppendToSheet(payload Payload) error {
+func AppendToSheet(psn Payload) error {
 	if sheetsService == nil {
 		return fmt.Errorf("sheets service not initialized")
 	}
 
-	// Map status code to text
-	statusText := "Unknown"
-	switch payload.Reg5 {
+	sts := "Unknown"
+	switch psn.Reg5 {
 	case 1:
-		statusText = "OK"
+		sts = "OK"
 	case 2:
-		statusText = "Under"
+		sts = "Under"
 	case 3:
-		statusText = "Over"
+		sts = "Over"
 	}
 
-	// Prepare row data
-	row := []interface{}{
-		payload.Ts,
-		payload.Reg2,
-		statusText,
-		payload.Reg114,
-		payload.Prefix,
+	brs := []interface{}{
+		psn.Ts,
+		psn.Reg2,
+		sts,
+		psn.Reg114,
+		psn.Prefix,
 		time.Now().Format("2006-01-02 15:04:05"),
 	}
 
-	valueRange := &sheets.ValueRange{
-		Values: [][]interface{}{row},
+	rngVal := &sheets.ValueRange{
+		Values: [][]interface{}{brs},
 	}
 
-	appendRange := fmt.Sprintf("%s!A:F", sheetName)
+	rngApp := fmt.Sprintf("%s!A:F", sheetName)
 	_, err := sheetsService.Spreadsheets.Values.Append(
 		spreadsheetID,
-		appendRange,
-		valueRange,
+		rngApp,
+		rngVal,
 	).ValueInputOption("RAW").InsertDataOption("INSERT_ROWS").Do()
 
 	if err != nil {
 		return fmt.Errorf("failed to append to sheet: %w", err)
 	}
 
-	log.Printf("📊 Exported to Sheets: %s | %s | %dg", payload.Prefix, statusText, payload.Reg114)
+	log.Printf("📊 Exported to Sheets: %s | %s | %dg", psn.Prefix, sts, psn.Reg114)
 	return nil
 }
 
-// Helper to convert Payload from JSON
-func PayloadFromJSON(data []byte) (Payload, error) {
+func PayloadFromJSON(dt []byte) (Payload, error) {
 	var p Payload
-	err := json.Unmarshal(data, &p)
+	err := json.Unmarshal(dt, &p)
 	return p, err
 }

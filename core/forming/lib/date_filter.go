@@ -8,24 +8,23 @@ import (
 	"time"
 )
 
-func NormalizeRecord(prefix string, reg5 int, reg114 int) (string, int, int) {
-	if prefix == "" {
-		return prefix, reg5, reg114
+func NormalizeRecord(prf string, reg5 int, reg114 int) (string, int, int) {
+	if prf == "" {
+		return prf, reg5, reg114
 	}
 
-	// Convert negative weight (reg114) to positive
 	if reg114 < 0 {
 		reg114 = -reg114
 	}
 
-	prefixNormalized := strings.ToUpper(strings.ReplaceAll(prefix, " ", ""))
+	prfNorm := strings.ToUpper(strings.ReplaceAll(prf, " ", ""))
 
-	if prefixNormalized == "MDCW" || strings.Contains(prefixNormalized, "TEST") || strings.Contains(prefixNormalized, "LINE2") || strings.Contains(prefixNormalized, "CEK") {
+	if prfNorm == "MDCW" || strings.Contains(prfNorm, "TEST") || strings.Contains(prfNorm, "LINE2") || strings.Contains(prfNorm, "CEK") {
 		return "IGNORE_RECORD", reg5, reg114
 	}
 
-	if strings.Contains(prefixNormalized, "MDCW1") || strings.Contains(prefixNormalized, "(UK)") {
-		prefix = "MDCW1 (UK)"
+	if strings.Contains(prfNorm, "MDCW1") || strings.Contains(prfNorm, "(UK)") {
+		prf = "MDCW1 (UK)"
 		if reg5 != 8201 {
 			if reg114 < 8710 {
 				reg5 = 25
@@ -35,8 +34,8 @@ func NormalizeRecord(prefix string, reg5 int, reg114 int) (string, int, int) {
 				reg5 = 41
 			}
 		}
-	} else if strings.Contains(prefixNormalized, "MDCW2") || strings.Contains(prefixNormalized, "SIOMAY") {
-		prefix = "MDCW2 (Siomay)"
+	} else if strings.Contains(prfNorm, "MDCW2") || strings.Contains(prfNorm, "SIOMAY") {
+		prf = "MDCW2 (Siomay)"
 		if reg5 != 8201 {
 			if reg114 < 7040 {
 				reg5 = 25
@@ -46,8 +45,8 @@ func NormalizeRecord(prefix string, reg5 int, reg114 int) (string, int, int) {
 				reg5 = 41
 			}
 		}
-	} else if strings.Contains(prefixNormalized, "MDCW3") || strings.Contains(prefixNormalized, "PENTOL") {
-		prefix = "MDCW3 (Pentol)"
+	} else if strings.Contains(prfNorm, "MDCW3") || strings.Contains(prfNorm, "PENTOL") {
+		prf = "MDCW3 (Pentol)"
 		if reg5 != 8201 {
 			if reg114 < 5840 {
 				reg5 = 25
@@ -57,8 +56,8 @@ func NormalizeRecord(prefix string, reg5 int, reg114 int) (string, int, int) {
 				reg5 = 41
 			}
 		}
-	} else if strings.Contains(prefixNormalized, "MDCW4") || strings.Contains(prefixNormalized, "AP") {
-		prefix = "MDCW4 (AP)"
+	} else if strings.Contains(prfNorm, "MDCW4") || strings.Contains(prfNorm, "AP") {
+		prf = "MDCW4 (AP)"
 		if reg5 != 8201 {
 			if reg114 < 14940 {
 				reg5 = 25
@@ -68,8 +67,8 @@ func NormalizeRecord(prefix string, reg5 int, reg114 int) (string, int, int) {
 				reg5 = 41
 			}
 		}
-	} else if strings.Contains(prefixNormalized, "MDCW5") || strings.Contains(prefixNormalized, "ACIN") {
-		prefix = "MDCW5 (ACIN)"
+	} else if strings.Contains(prfNorm, "MDCW5") || strings.Contains(prfNorm, "ACIN") {
+		prf = "MDCW5 (ACIN)"
 		if reg5 != 8201 {
 			if reg114 < 10100 {
 				reg5 = 25
@@ -79,8 +78,8 @@ func NormalizeRecord(prefix string, reg5 int, reg114 int) (string, int, int) {
 				reg5 = 41
 			}
 		}
-	} else if strings.Contains(prefixNormalized, "MDCW6") || strings.Contains(prefixNormalized, "LUMPIA") {
-		prefix = "MDCW6 (Lumpia)"
+	} else if strings.Contains(prfNorm, "MDCW6") || strings.Contains(prfNorm, "LUMPIA") {
+		prf = "MDCW6 (Lumpia)"
 		if reg5 != 8201 {
 			if reg114 < 3080 {
 				reg5 = 25
@@ -90,23 +89,22 @@ func NormalizeRecord(prefix string, reg5 int, reg114 int) (string, int, int) {
 				reg5 = 41
 			}
 		}
-	} else if strings.Contains(prefixNormalized, "MDCW") {
-		// Gabungkan MDCW lainnya yang punya spasi/huruf kecil
-		prefix = prefixNormalized
+	} else if strings.Contains(prfNorm, "MDCW") {
+		prf = prfNorm
 		if reg5 != 8201 && (reg5 == 9 || reg5 == 90 || reg5 == 8 || reg5 == 0) && reg114 > 0 {
-			reg5 = 41 // Paksa menjadi OK secara visual jika masih IDLE/MATI tapi punya berat > 0
+			reg5 = 41
 		}
 	} else {
-		prefix = strings.ToUpper(strings.TrimSpace(prefix))
+		prf = strings.ToUpper(strings.TrimSpace(prf))
 	}
-	return prefix, reg5, reg114
+	return prf, reg5, reg114
 }
 
-func MatchStatusFilter(statusFilter string, reg5 int) bool {
-	if statusFilter == "" || statusFilter == "all" {
+func MatchStatusFilter(fltSts string, reg5 int) bool {
+	if fltSts == "" || fltSts == "all" {
 		return true
 	}
-	switch statusFilter {
+	switch fltSts {
 	case "ok":
 		return reg5 == 41 || reg5 == 521 || reg5 == 553
 	case "idle":
@@ -122,11 +120,10 @@ func MatchStatusFilter(statusFilter string, reg5 int) bool {
 	case "unknown":
 		return reg5 != 8 && reg5 != 9 && reg5 != 90 && reg5 != 41 && reg5 != 521 && reg5 != 553 && reg5 != 8201 && reg5 != 25 && reg5 != 73
 	default:
-		return fmt.Sprintf("%d", reg5) == statusFilter
+		return fmt.Sprintf("%d", reg5) == fltSts
 	}
 }
 
-// Record structure for the DB
 type Record struct {
 	ID              int       `json:"id"`
 	Ts              string    `json:"ts"`
@@ -140,61 +137,67 @@ type Record struct {
 	CreatedAt       time.Time `json:"created_at"`
 }
 
-func GetRecordsByDateRange(db *sql.DB, startDate, endDate, prefixFilter, statusFilter, sortBy string) ([]Record, error) {
+func GetRecordsByDateRange(db *sql.DB, tglMli, tglHnt, fltPrf, fltSts, sortBy string) ([]Record, error) {
 	if db == nil {
 		return []Record{}, nil
 	}
 
-	query := "SELECT id, ts, reg2, reg5, reg114, prefix, data_type, confidence, created_at FROM production_mdcw WHERE 1=1"
+	qry := "SELECT id, ts, reg2, reg5, reg114, prefix, data_type, confidence, created_at FROM production_mdcw WHERE 1=1"
 	args := []interface{}{}
 	argId := 1
 
-	// Date range filter
-	if startDate != "" {
-		query += fmt.Sprintf(" AND DATE(created_at) >= $%d", argId)
-		args = append(args, startDate)
+	if tglMli != "" {
+		qry += fmt.Sprintf(" AND DATE(created_at) >= $%d", argId)
+		args = append(args, tglMli)
 		argId++
 	}
-	if endDate != "" {
-		query += fmt.Sprintf(" AND DATE(created_at) <= $%d", argId)
-		args = append(args, endDate)
+	if tglHnt != "" {
+		qry += fmt.Sprintf(" AND DATE(created_at) <= $%d", argId)
+		args = append(args, tglHnt)
 		argId++
 	}
 
-	// Sorting
 	if sortBy == "weight_desc" {
-		query += " ORDER BY reg114 DESC"
+		qry += " ORDER BY reg114 DESC"
 	} else if sortBy == "weight_asc" {
-		query += " ORDER BY reg114 ASC"
+		qry += " ORDER BY reg114 ASC"
 	} else {
-		query += " ORDER BY created_at DESC"
+		qry += " ORDER BY created_at DESC"
 	}
 
-	rows, err := db.Query(query, args...)
+	rows, err := db.Query(qry, args...)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 
-	var records []Record
-	lastPackCnt := make(map[string]int)
-	seenPrefix := make(map[string]bool)
+	var recs []Record
+	lstPack := make(map[string]int)
+	snPrf := make(map[string]bool)
 	for rows.Next() {
 		var r Record
-		var prefix sql.NullString
+		var prf sql.NullString
 		var reg2, reg5, reg114 sql.NullInt64
-		var dType sql.NullString
+		var dTpe sql.NullString
 		var conf sql.NullFloat64
 
-		if err := rows.Scan(&r.ID, &r.Ts, &reg2, &reg5, &reg114, &prefix, &dType, &conf, &r.CreatedAt); err != nil {
+		if err := rows.Scan(&r.ID, &r.Ts, &reg2, &reg5, &reg114, &prf, &dTpe, &conf, &r.CreatedAt); err != nil {
 			return nil, err
 		}
 
-		if dType.Valid { r.DataType = dType.String } else { r.DataType = "VALID" }
-		if conf.Valid { r.Confidence = conf.Float64 } else { r.Confidence = 1.0 }
+		if dTpe.Valid {
+			r.DataType = dTpe.String
+		} else {
+			r.DataType = "VALID"
+		}
+		if conf.Valid {
+			r.Confidence = conf.Float64
+		} else {
+			r.Confidence = 1.0
+		}
 
-		if prefix.Valid {
-			r.Prefix = prefix.String
+		if prf.Valid {
+			r.Prefix = prf.String
 		} else {
 			r.Prefix = "-"
 		}
@@ -217,71 +220,70 @@ func GetRecordsByDateRange(db *sql.DB, startDate, endDate, prefixFilter, statusF
 			continue
 		}
 
-		if prefixFilter != "" && prefixFilter != "all" && r.Prefix != prefixFilter {
+		if fltPrf != "" && fltPrf != "all" && r.Prefix != fltPrf {
 			continue
 		}
 
-		if !MatchStatusFilter(statusFilter, r.Reg5) {
+		if !MatchStatusFilter(fltSts, r.Reg5) {
 			continue
 		}
 
-		if seenPrefix[r.Prefix] && lastPackCnt[r.Prefix] == r.Reg2 {
+		if snPrf[r.Prefix] && lstPack[r.Prefix] == r.Reg2 {
 			continue
 		}
-		seenPrefix[r.Prefix] = true
-		lastPackCnt[r.Prefix] = r.Reg2
+		snPrf[r.Prefix] = true
+		lstPack[r.Prefix] = r.Reg2
 
-		intPart := r.Reg114 / 10
-		decPart := r.Reg114 % 10
-		r.WeightFormatted = fmt.Sprintf("%d,%d g", intPart, decPart)
+		intPrt := r.Reg114 / 10
+		decPrt := r.Reg114 % 10
+		r.WeightFormatted = fmt.Sprintf("%d,%d g", intPrt, decPrt)
 
-		records = append(records, r)
+		recs = append(recs, r)
 	}
 
-	return records, nil
+	return recs, nil
 }
 
-// GetPrefixes returns list of unique prefixes
 func GetPrefixes(db *sql.DB) ([]string, error) {
 	if db == nil {
 		return []string{}, nil
 	}
 
-	query := `SELECT DISTINCT prefix FROM production_mdcw WHERE prefix IS NOT NULL`
+	qry := `SELECT DISTINCT prefix FROM production_mdcw WHERE prefix IS NOT NULL`
 
-	rows, err := db.Query(query)
+	rows, err := db.Query(qry)
 	if err != nil {
 		log.Printf("Error fetching prefixes: %v", err)
 		return []string{}, nil
 	}
 	defer rows.Close()
 
-	prefixMap := make(map[string]bool)
+	mapPrf := make(map[string]bool)
 	for rows.Next() {
-		var prefix string
-		if err := rows.Scan(&prefix); err != nil {
+		var prf string
+		if err := rows.Scan(&prf); err != nil {
 			continue
 		}
-		if prefix != "" {
-			norm, _, _ := NormalizeRecord(prefix, 0, 0)
+		if prf != "" {
+			norm, _, _ := NormalizeRecord(prf, 0, 0)
 			if norm != "IGNORE_RECORD" {
-				prefixMap[norm] = true
+				mapPrf[norm] = true
 			}
 		}
 	}
 
-	var prefixes []string
-	for p := range prefixMap {
-		prefixes = append(prefixes, p)
+	var prfs []string
+	for p := range mapPrf {
+		prfs = append(prfs, p)
 	}
 
-	for i := 0; i < len(prefixes); i++ {
-		for j := i + 1; j < len(prefixes); j++ {
-			if prefixes[i] > prefixes[j] {
-				prefixes[i], prefixes[j] = prefixes[j], prefixes[i]
+	for i := 0; i < len(prfs); i++ {
+		for j := i + 1; j < len(prfs); j++ {
+			if prfs[i] > prfs[j] {
+				prfs[i], prfs[j] = prfs[j], prfs[i]
 			}
 		}
 	}
 
-	return prefixes, nil
+	return prfs, nil
 }

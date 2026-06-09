@@ -37,10 +37,10 @@ func AnalyzeRecord(pfx string, wgt int) (string, float64) {
 	machineStatesMu.Lock()
 	defer machineStatesMu.Unlock()
 
-	sts, ext := machineStates[pfx]
+	sts, ada := machineStates[pfx]
 	wkt := time.Now()
 
-	if !ext {
+	if !ada {
 		// inisialisasi state untuk mesin baru
 		machineStates[pfx] = &MachineStats{
 			LastTs:        wkt,

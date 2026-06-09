@@ -79,29 +79,43 @@ func subscribe(cln mqtt.Client) {
 func messagePubHandler(cln mqtt.Client, psn mqtt.Message) {
 	lg("Received message: %s from topic: %s", string(psn.Payload()), psn.Topic())
 
-	var p Payload
-	if err := json.Unmarshal(psn.Payload(), &p); err != nil {
+	var pl Payload
+	if err := json.Unmarshal(psn.Payload(), &pl); err != nil {
 		hndlErr("Error parsing JSON", err)
 		return
 	}
 
 	// fallbacks for varying FW payloads
-	if p.Prefix == "" && p.NodePrefix != "" { p.Prefix = p.NodePrefix }
-	
-	if p.Reg2 == 0 && p.Data.Reg2 != 0 { p.Reg2 = p.Data.Reg2 }
-	if p.Reg5 == 0 && p.Data.Reg5 != 0 { p.Reg5 = p.Data.Reg5 }
-	if p.Reg114 == 0 && p.Data.Reg114 != 0 { p.Reg114 = p.Data.Reg114 }
-
-	if p.Reg2 == 0 && p.Total != 0 { p.Reg2 = p.Total }
-	if p.Reg5 == 0 && p.Code != 0 { p.Reg5 = p.Code }
-	if p.Reg114 == 0 && p.Weight != 0 { p.Reg114 = p.Weight }
-
-	wktStr := time.Now().Format("2006-01-02 15:04:05")
-	if p.Ts == nil {
-		p.Ts = wktStr
-	} else if _, ok := p.Ts.(string); !ok {
-		p.Ts = wktStr
+	if pl.Prefix == "" && pl.NodePrefix != "" {
+		pl.Prefix = pl.NodePrefix
 	}
 
-	go insertData(p)
+	if pl.Reg2 == 0 && pl.Data.Reg2 != 0 {
+		pl.Reg2 = pl.Data.Reg2
+	}
+	if pl.Reg5 == 0 && pl.Data.Reg5 != 0 {
+		pl.Reg5 = pl.Data.Reg5
+	}
+	if pl.Reg114 == 0 && pl.Data.Reg114 != 0 {
+		pl.Reg114 = pl.Data.Reg114
+	}
+
+	if pl.Reg2 == 0 && pl.Total != 0 {
+		pl.Reg2 = pl.Total
+	}
+	if pl.Reg5 == 0 && pl.Code != 0 {
+		pl.Reg5 = pl.Code
+	}
+	if pl.Reg114 == 0 && pl.Weight != 0 {
+		pl.Reg114 = pl.Weight
+	}
+
+	wkt := time.Now().Format("2006-01-02 15:04:05")
+	if pl.Ts == nil {
+		pl.Ts = wkt
+	} else if _, ok := pl.Ts.(string); !ok {
+		pl.Ts = wkt
+	}
+
+	go insertData(pl)
 }

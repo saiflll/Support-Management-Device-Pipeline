@@ -11,20 +11,18 @@
     formatUptime,
   } from "$lib/api";
 
-  // Pipeline states
-  let pipelines: any[] = $state([]);
-  let buffer: any[] = $state([]);
-  let showModal = $state(false);
-  let showPacketModal = $state(false);
-  let selectedPacket: any = $state(null);
-  let toasts: { id: number; type: string; msg: string }[] = $state([]);
-  let toastId = 0;
+  let pls: any[] = $state([]);
+  let buf: any[] = $state([]);
+  let mdlAdd = $state(false);
+  let mdlPkt = $state(false);
+  let pktSel: any = $state(null);
+  let tsts: { id: number; type: string; msg: string }[] = $state([]);
+  let tstId = 0;
 
-  // Monitor states
-  let stats: any = $state(null);
-  let monError = $state("");
+  let sts: any = $state(null);
+  let errMon = $state("");
 
-  let form = $state({
+  let frm = $state({
     name: "",
     source_topic: "",
     broker_url: "",
@@ -35,31 +33,29 @@
     is_active: true,
   });
 
-  let pollInterval: ReturnType<typeof setInterval>;
+  let pollInt: ReturnType<typeof setInterval>;
 
   onMount(() => {
     fetchStatus();
-    pollInterval = setInterval(fetchStatus, 3000);
+    pollInt = setInterval(fetchStatus, 3000);
   });
-  onDestroy(() => clearInterval(pollInterval));
+  onDestroy(() => clearInterval(pollInt));
 
   async function fetchStatus() {
     try {
-      const data = await getForwarderStatus();
-      pipelines = data.pipelines || [];
-      buffer = [...(data.ReceivedDataBuffer || [])].reverse().slice(0, 12);
+      const dt = await getForwarderStatus();
+      pls = dt.pipelines || [];
+      buf = [...(dt.ReceivedDataBuffer || [])].reverse().slice(0, 12);
     } catch {}
 
-    // Fetch Monitor Status
     try {
-      stats = await getMonitorStatus();
-      monError = "";
+      sts = await getMonitorStatus();
+      errMon = "";
     } catch (e: any) {
-      monError = e.message;
+      errMon = e.message;
     }
   }
 
-  // --- Monitor Formatters ---
   function cpuColor(v: number) {
     if (v > 85) return "var(--red)";
     if (v > 60) return "var(--yellow)";
@@ -78,15 +74,15 @@
     return "var(--green)";
   }
 
-  function gb(bytes: number) {
-    return (bytes / 1024 / 1024 / 1024).toFixed(2) + " GB";
+  function gb(b: number) {
+    return (b / 1024 / 1024 / 1024).toFixed(2) + " GB";
   }
 
   function toast(msg: string, type = "info") {
-    const id = ++toastId;
-    toasts = [...toasts, { id, type, msg }];
+    const id = ++tstId;
+    tsts = [...tsts, { id, type, msg }];
     setTimeout(() => {
-      toasts = toasts.filter((t) => t.id !== id);
+      tsts = tsts.filter((t) => t.id !== id);
     }, 4000);
   }
 
@@ -94,11 +90,11 @@
     e.preventDefault();
     try {
       await createPipeline({
-        ...form,
-        interval_minutes: Number(form.interval_minutes),
+        ...frm,
+        interval_minutes: Number(frm.interval_minutes),
       });
       toast("Pipeline baru ditambahkan", "success");
-      showModal = false;
+      mdlAdd = false;
       resetForm();
       fetchStatus();
     } catch (err: any) {
@@ -118,7 +114,7 @@
   }
 
   function resetForm() {
-    form = {
+    frm = {
       name: "",
       source_topic: "",
       broker_url: "",
@@ -131,16 +127,12 @@
   }
 </script>
 
-<!-- Toast -->
 <div class="toast-container">
-  {#each toasts as t (t.id)}
+  {#each tsts as t (t.id)}
     <div class="toast {t.type}">{t.msg}</div>
   {/each}
 </div>
 
-<!-- ======================= -->
-<!-- MONITORING SECTION      -->
-<!-- ======================= -->
 <div class="flex items-center justify-between mb-4">
   <div>
     <div class="card-label">SYSTEM_MONITOR</div>
@@ -150,111 +142,106 @@
   </div>
 </div>
 
-{#if monError}
+{#if errMon}
   <div class="card" style="margin-bottom:24px;">
     <div class="mono text-xs text-red" style="padding:20px;">
-      [MONITOR_SERVICE_UNAVAILABLE] — {monError}
+      [MONITOR_SERVICE_UNAVAILABLE] — {errMon}
     </div>
   </div>
-{:else if !stats}
+{:else if !sts}
   <div class="loading-state" style="margin-bottom:24px;">
     <div class="spinner"></div>
     <span>CONNECTING_TO_MONITOR...</span>
   </div>
 {:else}
-  <!-- Metric Cards -->
   <div class="grid-4" style="margin-bottom:24px;">
-    <!-- CPU -->
     <div
       class="card"
-      style="border-left:3px solid {cpuColor(stats.cpu_usage)};"
+      style="border-left:3px solid {cpuColor(sts.cpu_usage)};"
     >
       <div class="flex justify-between items-center">
         <span class="card-label">CPU_USAGE</span>
         <span
           class="mono"
           style="font-size:18px;font-weight:700;color:{cpuColor(
-            stats.cpu_usage,
-          )};">{stats.cpu_usage.toFixed(1)}%</span
+            sts.cpu_usage,
+          )};">{sts.cpu_usage.toFixed(1)}%</span
         >
       </div>
       <div class="progress-bar" style="margin-top:12px;">
         <div
           class="progress-fill"
-          style="width:{stats.cpu_usage}%;background:{cpuColor(
-            stats.cpu_usage,
+          style="width:{sts.cpu_usage}%;background:{cpuColor(
+            sts.cpu_usage,
           )};"
         ></div>
       </div>
       <div class="flex justify-between" style="margin-top:8px;">
         <span class="mono text-xs text-muted">LOAD_AVG</span>
         <span class="mono text-xs"
-          >{stats.load1.toFixed(2)}
-          {stats.load5.toFixed(2)}
-          {stats.load15.toFixed(2)}</span
+          >{sts.load1.toFixed(2)}
+          {sts.load5.toFixed(2)}
+          {sts.load15.toFixed(2)}</span
         >
       </div>
     </div>
 
-    <!-- RAM -->
     <div
       class="card"
-      style="border-left:3px solid {ramColor(stats.ram_percent)};"
+      style="border-left:3px solid {ramColor(sts.ram_percent)};"
     >
       <div class="flex justify-between items-center">
         <span class="card-label">RAM_USAGE</span>
         <span
           class="mono"
           style="font-size:18px;font-weight:700;color:{ramColor(
-            stats.ram_percent,
-          )};">{stats.ram_percent.toFixed(1)}%</span
+            sts.ram_percent,
+          )};">{sts.ram_percent.toFixed(1)}%</span
         >
       </div>
       <div class="progress-bar" style="margin-top:12px;">
         <div
           class="progress-fill"
-          style="width:{stats.ram_percent}%;background:{ramColor(
-            stats.ram_percent,
+          style="width:{sts.ram_percent}%;background:{ramColor(
+            sts.ram_percent,
           )};"
         ></div>
       </div>
       <div class="flex justify-between" style="margin-top:8px;">
-        <span class="mono text-xs" style="color:{ramColor(stats.ram_percent)};"
-          >{gb(stats.ram_used)}</span
+        <span class="mono text-xs" style="color:{ramColor(sts.ram_percent)};"
+          >{gb(sts.ram_used)}</span
         >
-        <span class="mono text-xs text-muted">/ {gb(stats.ram_total)}</span>
+        <span class="mono text-xs text-muted">/ {gb(sts.ram_total)}</span>
       </div>
     </div>
 
-    <!-- Disk -->
     <div
       class="card"
-      style="border-left:3px solid {diskColor(stats.disk_percent)};"
+      style="border-left:3px solid {diskColor(sts.disk_percent)};"
     >
       <div class="flex justify-between items-center">
         <span class="card-label">DISK_STORAGE</span>
         <span
           class="mono"
           style="font-size:18px;font-weight:700;color:{diskColor(
-            stats.disk_percent,
-          )};">{stats.disk_percent.toFixed(1)}%</span
+            sts.disk_percent,
+          )};">{sts.disk_percent.toFixed(1)}%</span
         >
       </div>
       <div class="progress-bar" style="margin-top:12px;">
         <div
           class="progress-fill"
-          style="width:{stats.disk_percent}%;background:{diskColor(
-            stats.disk_percent,
+          style="width:{sts.disk_percent}%;background:{diskColor(
+            sts.disk_percent,
           )};"
         ></div>
       </div>
       <div class="flex justify-between" style="margin-top:8px;">
-        <span class="mono text-xs text-green">{gb(stats.disk_used)}</span>
-        <span class="mono text-xs text-muted">/ {gb(stats.disk_total)}</span>
+        <span class="mono text-xs text-green">{gb(sts.disk_used)}</span>
+        <span class="mono text-xs text-muted">/ {gb(sts.disk_total)}</span>
       </div>
     </div>
 
-    <!-- Network -->
     <div class="card" style="border-left:3px solid var(--orange);">
       <div class="flex justify-between items-center">
         <span class="card-label">NETWORK_IO</span>
@@ -264,20 +251,19 @@
         <div class="flex justify-between">
           <span class="mono text-xs text-muted">↑ UPLOAD:</span>
           <span class="mono text-xs" style="color:var(--orange);"
-            >{formatSpeed(stats.net_sent)}</span
+            >{formatSpeed(sts.net_sent)}</span
           >
         </div>
         <div class="flex justify-between">
           <span class="mono text-xs text-muted">↓ DOWNLOAD:</span>
           <span class="mono text-xs" style="color:var(--orange);"
-            >{formatSpeed(stats.net_recv)}</span
+            >{formatSpeed(sts.net_recv)}</span
           >
         </div>
       </div>
     </div>
   </div>
 
-  <!-- Server Info -->
   <div class="card" style="margin-bottom:32px;">
     <div class="card-header">
       <span class="card-label">SERVER_IDENTITY</span>
@@ -286,27 +272,24 @@
     <div class="grid-4">
       <div>
         <div class="card-label" style="margin-bottom:4px;">HOSTNAME</div>
-        <div class="mono text-xs">{stats.hostname}</div>
+        <div class="mono text-xs">{sts.hostname}</div>
       </div>
       <div>
         <div class="card-label" style="margin-bottom:4px;">OS_RUNTIME</div>
-        <div class="mono text-xs">{stats.os || "-"}</div>
+        <div class="mono text-xs">{sts.os || "-"}</div>
       </div>
       <div>
         <div class="card-label" style="margin-bottom:4px;">UPTIME</div>
-        <div class="mono text-xs text-accent">{formatUptime(stats.uptime)}</div>
+        <div class="mono text-xs text-accent">{formatUptime(sts.uptime)}</div>
       </div>
       <div>
         <div class="card-label" style="margin-bottom:4px;">LAST_POLL</div>
-        <div class="mono text-xs text-green">{stats.timestamp}</div>
+        <div class="mono text-xs text-green">{sts.timestamp}</div>
       </div>
     </div>
   </div>
 {/if}
 
-<!-- ======================= -->
-<!-- PIPELINE SECTION      -->
-<!-- ======================= -->
 <div class="flex items-center justify-between mb-4">
   <div>
     <div class="card-label">AGGREGATION_ENGINE</div>
@@ -314,13 +297,12 @@
       [ DYN_PIPELINES_ACTIVE ]
     </div>
   </div>
-  <button class="btn btn-primary" onclick={() => (showModal = true)}
+  <button class="btn btn-primary" onclick={() => (mdlAdd = true)}
     >+ NEW_FORWARD_RULE</button
   >
 </div>
 
-<!-- Pipeline Cards -->
-{#if pipelines.length === 0}
+{#if pls.length === 0}
   <div class="card" style="margin-bottom:24px;">
     <div
       style="padding:40px;text-align:center;color:var(--text-muted);font-family:var(--font-mono);font-size:11px;"
@@ -330,7 +312,7 @@
   </div>
 {:else}
   <div class="grid-3" style="margin-bottom:24px;">
-    {#each pipelines as p}
+    {#each pls as p}
       <div
         class="pipeline-card"
         class:ok={p.last_forward_status === "Sukses"}
@@ -403,18 +385,15 @@
   </div>
 {/if}
 
-<!-- Stream Buffer -->
 <div>
   <div class="card-label" style="margin-bottom:12px;">
     TELEMETRY_PIPELINE_STREAM:
   </div>
-  {#if buffer.length === 0}
+  {#if buf.length === 0}
     <div class="loading-state">[AWAITING_DATA_PACKETS]</div>
   {:else}
     <div class="grid-3">
-      {#each buffer as item, i}
-        <!-- svelte-ignore a11y_click_events_have_key_events -->
-        <!-- svelte-ignore a11y_no_static_element_interactions -->
+      {#each buf as item}
         <div
           class="card"
           style="cursor:pointer;"
@@ -423,9 +402,11 @@
           onmouseleave={(e: any) =>
             (e.currentTarget.style.borderColor = "var(--border)")}
           onclick={() => {
-            selectedPacket = item;
-            showPacketModal = true;
+            pktSel = item;
+            mdlPkt = true;
           }}
+          role="button"
+          tabindex="0"
         >
           <div
             class="flex items-center justify-between"
@@ -451,11 +432,10 @@
   {/if}
 </div>
 
-<!-- New Pipeline Modal -->
-{#if showModal}
+{#if mdlAdd}
   <div
     class="modal-overlay"
-    onclick={() => (showModal = false)}
+    onclick={() => (mdlAdd = false)}
     role="button"
     tabindex="-1"
   >
@@ -463,7 +443,7 @@
       <div class="modal-header">
         <span class="modal-title">[ PIPELINE_STRUCT_EDITOR ]</span>
         <button
-          onclick={() => (showModal = false)}
+          onclick={() => (mdlAdd = false)}
           style="color:var(--text-muted);font-size:16px;">✕</button
         >
       </div>
@@ -474,7 +454,7 @@
               <label class="form-label">PIPELINE_LABEL (OPT)</label>
               <input
                 type="text"
-                bind:value={form.name}
+                bind:value={frm.name}
                 placeholder="e.g. Jakarta Site A"
                 class="form-input"
               />
@@ -483,7 +463,7 @@
               <label class="form-label">SOURCE_MQTT_TOPIC</label>
               <input
                 type="text"
-                bind:value={form.source_topic}
+                bind:value={frm.source_topic}
                 required
                 placeholder="sensors/v2/data/+"
                 class="form-input"
@@ -493,7 +473,7 @@
               <label class="form-label">DEST_BROKER_URL</label>
               <input
                 type="text"
-                bind:value={form.broker_url}
+                bind:value={frm.broker_url}
                 required
                 placeholder="tcp://broker.emqx.io:1883"
                 class="form-input"
@@ -503,7 +483,7 @@
               <label class="form-label">TARGET_MQTT_TOPIC</label>
               <input
                 type="text"
-                bind:value={form.dest_topic}
+                bind:value={frm.dest_topic}
                 required
                 placeholder="cloud/forward/data"
                 class="form-input"
@@ -513,7 +493,7 @@
               <label class="form-label">USERNAME (OPT)</label>
               <input
                 type="text"
-                bind:value={form.username}
+                bind:value={frm.username}
                 class="form-input"
               />
             </div>
@@ -521,7 +501,7 @@
               <label class="form-label">PASSWORD (OPT)</label>
               <input
                 type="password"
-                bind:value={form.password}
+                bind:value={frm.password}
                 class="form-input"
               />
             </div>
@@ -529,7 +509,7 @@
               <label class="form-label">SYNC_INTERVAL (MENIT)</label>
               <input
                 type="number"
-                bind:value={form.interval_minutes}
+                bind:value={frm.interval_minutes}
                 min="1"
                 required
                 class="form-input"
@@ -541,7 +521,7 @@
           <button
             type="button"
             class="btn btn-ghost"
-            onclick={() => (showModal = false)}>CANCEL</button
+            onclick={() => (mdlAdd = false)}>CANCEL</button
           >
           <button type="submit" class="btn btn-success"
             >SAVE_PIPELINE_POLICY</button
@@ -552,16 +532,13 @@
   </div>
 {/if}
 
-<!-- Packet Data Modal -->
-{#if showPacketModal && selectedPacket}
+{#if mdlPkt && pktSel}
   <div
     class="modal-overlay"
-    onclick={() => (showPacketModal = false)}
+    onclick={() => (mdlPkt = false)}
     role="button"
     tabindex="-1"
   >
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
     <div
       class="modal"
       onclick={(e) => e.stopPropagation()}
@@ -571,7 +548,7 @@
       <div class="modal-header">
         <span class="modal-title">[ PACKET_DATA_MODEL ]</span>
         <button
-          onclick={() => (showPacketModal = false)}
+          onclick={() => (mdlPkt = false)}
           style="color:var(--text-muted);font-size:16px;cursor:pointer;background:none;border:none;"
           >✕</button
         >
@@ -583,7 +560,7 @@
         <pre
           class="mono text-xs"
           style="color:var(--green); margin:0;">{JSON.stringify(
-            selectedPacket,
+            pktSel,
             null,
             2,
           )}</pre>

@@ -1,92 +1,86 @@
-// API base URL — sama satu origin (Fiber OTA serve di 9999)
 const BASE = '';
 
-async function apiFetch(path: string, opts?: RequestInit) {
-    const res = await fetch(BASE + path, opts);
+async function apiFetch(pth: string, opt?: RequestInit) {
+    const res = await fetch(BASE + pth, opt);
     if (!res.ok) throw new Error(`API Error ${res.status}: ${await res.text()}`);
     return res.json();
 }
 
-// ─── Nodes ────────────────────────────────────────────────
 export function getNodes() { return apiFetch('/api/nodes'); }
 export function getLogs(id: string) { return apiFetch(`/logs/${id}`); }
 export function getNodeConfig(id: string) { return apiFetch(`/api/nodes/${id}/config`); }
 export function deleteNode(id: string) {
     return apiFetch(`/api/nodes/${id}`, { method: 'DELETE' });
 }
-export function sendConfig(payload: Record<string, unknown>) {
+export function sendConfig(pl: Record<string, unknown>) {
     return apiFetch('/config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload)
+        body: JSON.stringify(pl)
     });
 }
-export function sendOTA(node: string, url: string) {
+export function sendOTA(nd: string, url: string) {
     return apiFetch('/ota', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ node, url })
+        body: JSON.stringify({ node: nd, url })
     });
 }
-export function sendReboot(node: string) {
+export function sendReboot(nd: string) {
     return apiFetch('/reboot', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ node })
+        body: JSON.stringify({ node: nd })
     });
 }
 
-// ─── Files ────────────────────────────────────────────────
 export function getFiles() { return apiFetch('/api/files'); }
-export function deleteFile(name: string) {
-    return apiFetch(`/api/files/${name}`, { method: 'DELETE' });
+export function deleteFile(nm: string) {
+    return apiFetch(`/api/files/${nm}`, { method: 'DELETE' });
 }
-export function renameFile(name: string, newName: string) {
-    return apiFetch(`/api/files/${name}/rename`, {
+export function renameFile(nm: string, nmBru: string) {
+    return apiFetch(`/api/files/${nm}/rename`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ new_name: newName })
+        body: JSON.stringify({ new_name: nmBru })
     });
 }
-export async function uploadFiles(files: File[]) {
-    const form = new FormData();
-    files.forEach(f => form.append('file', f));
-    const res = await fetch('/upload', { method: 'POST', body: form });
+export async function uploadFiles(fls: File[]) {
+    const frm = new FormData();
+    fls.forEach(f => frm.append('file', f));
+    const res = await fetch('/upload', { method: 'POST', body: frm });
     if (!res.ok) throw new Error(`Upload error: ${res.status}`);
     return res.json();
 }
 
-// ─── Forwarder ────────────────────────────────────────────
 export function getForwarderStatus() { return apiFetch('/forwarder/status'); }
 export function getPipelines() { return apiFetch('/api/pipelines'); }
-export function createPipeline(data: unknown) {
+export function createPipeline(dt: unknown) {
     return apiFetch('/api/pipelines', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
+        body: JSON.stringify(dt)
     });
 }
 export function deletePipeline(id: number) {
     return apiFetch(`/api/pipelines/${id}`, { method: 'DELETE' });
 }
 
-// ─── Monitor ──────────────────────────────────────────────
 export function getMonitorStatus() { return apiFetch('/monitor/status'); }
 
-// ─── Utils ────────────────────────────────────────────────
-export function formatBytes(bytes: number, decimals = 2): string {
-    if (bytes === 0) return '0 B';
+export function formatBytes(b: number, dec = 2): string {
+    if (b === 0) return '0 B';
     const k = 1024;
-    const dm = decimals < 0 ? 0 : decimals;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(dm)) + ' ' + sizes[i];
+    const dm = dec < 0 ? 0 : dec;
+    const sz = ['B', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(b) / Math.log(k));
+    return parseFloat((b / Math.pow(k, i)).toFixed(dm)) + ' ' + sz[i];
 }
 
-export function formatSpeed(bytes: number): string {
-    if (bytes < 1024) return bytes + ' B/s';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB/s';
-    return (bytes / 1024 / 1024).toFixed(1) + ' MB/s';
+export function formatSpeed(b: number): string {
+    if (b < 1024) return b + ' B/s';
+    if (b < 1024 * 1024) return (b / 1024).toFixed(1) + ' KB/s';
+    return (b / 1024 / 1024).toFixed(1) + ' MB/s';
 }
 
 export function formatUptime(sec: number): string {

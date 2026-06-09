@@ -14,16 +14,16 @@ func AtrLogger() {
 	}
 }
 
-func Lg(format string, v ...interface{}) {
+func Lg(f string, v ...interface{}) {
 	if DbgMde {
-		log.Printf(format, v...)
+		log.Printf(f, v...)
 	}
 }
 
-func HndlErr(ctx string, err error) {
-	log.Printf("❌ [%s] ERROR: %v", ctx, err)
+func HndlErr(c string, err error) {
+	log.Printf("❌ [%s] ERROR: %v", c, err)
 }
 
-func Ftl(format string, v ...interface{}) {
-	log.Fatalf("❌ FATAL: "+format, v...)
+func Ftl(f string, v ...interface{}) {
+	log.Fatalf("❌ FATAL: "+f, v...)
 }
