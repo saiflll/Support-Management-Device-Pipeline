@@ -1,0 +1,331 @@
+{
+  "nodes": {
+    "view\\src\\lib\\api.ts:formatBytes": {
+      "id": "view\\src\\lib\\api.ts:formatBytes",
+      "name": "formatBytes",
+      "kind": "Function",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 71,
+      "column": 1,
+      "end_line": 73,
+      "doc_comment": null,
+      "parent_id": null
+    },
+    "view\\src\\lib\\api.ts:renameFile": {
+      "id": "view\\src\\lib\\api.ts:renameFile",
+      "name": "renameFile",
+      "kind": "Function",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 41,
+      "column": 1,
+      "end_line": 43,
+      "doc_comment": null,
+      "parent_id": null
+    },
+    "view\\src\\lib\\api.ts:getForwarderStatus": {
+      "id": "view\\src\\lib\\api.ts:getForwarderStatus",
+      "name": "getForwarderStatus",
+      "kind": "Function",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 56,
+      "column": 1,
+      "end_line": 58,
+      "doc_comment": null,
+      "parent_id": null
+    },
+    "view\\src\\lib\\api.ts:getNodes": {
+      "id": "view\\src\\lib\\api.ts:getNodes",
+      "name": "getNodes",
+      "kind": "Function",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 9,
+      "column": 1,
+      "end_line": 11,
+      "doc_comment": null,
+      "parent_id": null
+    },
+    "view\\src\\lib\\api.ts:sendConfig": {
+      "id": "view\\src\\lib\\api.ts:sendConfig",
+      "name": "sendConfig",
+      "kind": "Function",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 15,
+      "column": 1,
+      "end_line": 17,
+      "doc_comment": null,
+      "parent_id": null
+    },
+    "view\\src\\lib\\api.ts:getMonitorStatus": {
+      "id": "view\\src\\lib\\api.ts:getMonitorStatus",
+      "name": "getMonitorStatus",
+      "kind": "Function",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 69,
+      "column": 1,
+      "end_line": 71,
+      "doc_comment": null,
+      "parent_id": null
+    },
+    "view\\src\\lib\\api.ts:formatUptime": {
+      "id": "view\\src\\lib\\api.ts:formatUptime",
+      "name": "formatUptime",
+      "kind": "Function",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 86,
+      "column": 1,
+      "end_line": 88,
+      "doc_comment": null,
+      "parent_id": null
+    },
+    "view\\src\\lib\\api.ts:sendOTA": {
+      "id": "view\\src\\lib\\api.ts:sendOTA",
+      "name": "sendOTA",
+      "kind": "Function",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 22,
+      "column": 1,
+      "end_line": 24,
+      "doc_comment": null,
+      "parent_id": null
+    },
+    "view\\src\\lib\\api.ts:formatSpeed": {
+      "id": "view\\src\\lib\\api.ts:formatSpeed",
+      "name": "formatSpeed",
+      "kind": "Function",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 80,
+      "column": 1,
+      "end_line": 82,
+      "doc_comment": null,
+      "parent_id": null
+    },
+    "view\\src\\lib\\api.ts:sendReboot": {
+      "id": "view\\src\\lib\\api.ts:sendReboot",
+      "name": "sendReboot",
+      "kind": "Function",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 29,
+      "column": 1,
+      "end_line": 31,
+      "doc_comment": null,
+      "parent_id": null
+    },
+    "view\\src\\lib\\api.ts:apiFetch": {
+      "id": "view\\src\\lib\\api.ts:apiFetch",
+      "name": "apiFetch",
+      "kind": "Function",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 3,
+      "column": 1,
+      "end_line": 5,
+      "doc_comment": null,
+      "parent_id": null
+    },
+    "view\\src\\lib\\api.ts:deleteNode": {
+      "id": "view\\src\\lib\\api.ts:deleteNode",
+      "name": "deleteNode",
+      "kind": "Function",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 12,
+      "column": 1,
+      "end_line": 14,
+      "doc_comment": null,
+      "parent_id": null
+    },
+    "view\\src\\lib\\api.ts:getPipelines": {
+      "id": "view\\src\\lib\\api.ts:getPipelines",
+      "name": "getPipelines",
+      "kind": "Function",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 57,
+      "column": 1,
+      "end_line": 59,
+      "doc_comment": null,
+      "parent_id": null
+    },
+    "view\\src\\lib\\api.ts:getNodeConfig": {
+      "id": "view\\src\\lib\\api.ts:getNodeConfig",
+      "name": "getNodeConfig",
+      "kind": "Function",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 11,
+      "column": 1,
+      "end_line": 13,
+      "doc_comment": null,
+      "parent_id": null
+    },
+    "view\\src\\lib\\api.ts:deletePipeline": {
+      "id": "view\\src\\lib\\api.ts:deletePipeline",
+      "name": "deletePipeline",
+      "kind": "Function",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 65,
+      "column": 1,
+      "end_line": 67,
+      "doc_comment": null,
+      "parent_id": null
+    },
+    "view\\src\\lib\\api.ts:uploadFiles": {
+      "id": "view\\src\\lib\\api.ts:uploadFiles",
+      "name": "uploadFiles",
+      "kind": "Function",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 48,
+      "column": 1,
+      "end_line": 50,
+      "doc_comment": null,
+      "parent_id": null
+    },
+    "view\\src\\lib\\api.ts:getLogs": {
+      "id": "view\\src\\lib\\api.ts:getLogs",
+      "name": "getLogs",
+      "kind": "Function",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 10,
+      "column": 1,
+      "end_line": 12,
+      "doc_comment": null,
+      "parent_id": null
+    },
+    "view\\src\\lib\\api.ts:deleteFile": {
+      "id": "view\\src\\lib\\api.ts:deleteFile",
+      "name": "deleteFile",
+      "kind": "Function",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 38,
+      "column": 1,
+      "end_line": 40,
+      "doc_comment": null,
+      "parent_id": null
+    },
+    "view\\src\\lib\\api.ts:getFiles": {
+      "id": "view\\src\\lib\\api.ts:getFiles",
+      "name": "getFiles",
+      "kind": "Function",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 37,
+      "column": 1,
+      "end_line": 39,
+      "doc_comment": null,
+      "parent_id": null
+    },
+    "view\\src\\lib\\api.ts:createPipeline": {
+      "id": "view\\src\\lib\\api.ts:createPipeline",
+      "name": "createPipeline",
+      "kind": "Function",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 58,
+      "column": 1,
+      "end_line": 60,
+      "doc_comment": null,
+      "parent_id": null
+    }
+  },
+  "edges": [
+    {
+      "source_id": "view\\src\\lib\\api.ts:use",
+      "target_id": "view\\src\\lib\\api.ts:apiFetch",
+      "kind": "References",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 9
+    },
+    {
+      "source_id": "view\\src\\lib\\api.ts:use",
+      "target_id": "view\\src\\lib\\api.ts:apiFetch",
+      "kind": "References",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 10
+    },
+    {
+      "source_id": "view\\src\\lib\\api.ts:use",
+      "target_id": "view\\src\\lib\\api.ts:apiFetch",
+      "kind": "References",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 11
+    },
+    {
+      "source_id": "view\\src\\lib\\api.ts:use",
+      "target_id": "view\\src\\lib\\api.ts:apiFetch",
+      "kind": "References",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 13
+    },
+    {
+      "source_id": "view\\src\\lib\\api.ts:use",
+      "target_id": "view\\src\\lib\\api.ts:apiFetch",
+      "kind": "References",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 16
+    },
+    {
+      "source_id": "view\\src\\lib\\api.ts:use",
+      "target_id": "view\\src\\lib\\api.ts:apiFetch",
+      "kind": "References",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 23
+    },
+    {
+      "source_id": "view\\src\\lib\\api.ts:use",
+      "target_id": "view\\src\\lib\\api.ts:apiFetch",
+      "kind": "References",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 30
+    },
+    {
+      "source_id": "view\\src\\lib\\api.ts:use",
+      "target_id": "view\\src\\lib\\api.ts:apiFetch",
+      "kind": "References",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 37
+    },
+    {
+      "source_id": "view\\src\\lib\\api.ts:use",
+      "target_id": "view\\src\\lib\\api.ts:apiFetch",
+      "kind": "References",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 39
+    },
+    {
+      "source_id": "view\\src\\lib\\api.ts:use",
+      "target_id": "view\\src\\lib\\api.ts:apiFetch",
+      "kind": "References",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 42
+    },
+    {
+      "source_id": "view\\src\\lib\\api.ts:use",
+      "target_id": "view\\src\\lib\\api.ts:apiFetch",
+      "kind": "References",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 56
+    },
+    {
+      "source_id": "view\\src\\lib\\api.ts:use",
+      "target_id": "view\\src\\lib\\api.ts:apiFetch",
+      "kind": "References",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 57
+    },
+    {
+      "source_id": "view\\src\\lib\\api.ts:use",
+      "target_id": "view\\src\\lib\\api.ts:apiFetch",
+      "kind": "References",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 59
+    },
+    {
+      "source_id": "view\\src\\lib\\api.ts:use",
+      "target_id": "view\\src\\lib\\api.ts:apiFetch",
+      "kind": "References",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 66
+    },
+    {
+      "source_id": "view\\src\\lib\\api.ts:use",
+      "target_id": "view\\src\\lib\\api.ts:apiFetch",
+      "kind": "References",
+      "file_path": "view\\src\\lib\\api.ts",
+      "line": 69
+    }
+  ]
+}

@@ -1,0 +1,346 @@
+package sp
+
+import (
+	"database/sql"
+	"encoding/csv"
+	"fmt"
+	"log"
+	"strings"
+
+	mqtt "github.com/eclipse/paho.mqtt.golang"
+	"github.com/gofiber/fiber/v2"
+)
+
+var (
+	db         *sql.DB
+	mqttClient mqtt.Client
+)
+
+func Init(database *sql.DB, mqttCli mqtt.Client) {
+	db = database
+	mqttClient = mqttCli
+
+	createTable()
+
+	if mqttClient != nil {
+		subscribe(mqttClient)
+	}
+}
+
+func createTable() {
+	qry := `
+	CREATE TABLE IF NOT EXISTS production_sp (
+		id SERIAL PRIMARY KEY,
+		session_id VARCHAR(100),
+		data TEXT,
+		ts VARCHAR(50),
+		created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+	)`
+	if _, err := db.Exec(qry); err != nil {
+		log.Printf("[SP] createTable error: %v", err)
+	} else {
+		log.Println("[SP] Table 'production_sp' ensured")
+	}
+}
+
+func subscribe(cln mqtt.Client) {
+	tpc := "SP_data"
+	if tkn := cln.Subscribe(tpc, 1, messageHandler); tkn.Wait() && tkn.Error() != nil {
+		log.Printf("[SP] Error subscribing to topic %s: %v", tpc, tkn.Error())
+	} else {
+		log.Printf("[SP] Subscribed to topic: %s", tpc)
+	}
+}
+
+func messageHandler(cln mqtt.Client, psn mqtt.Message) {
+	payload := string(psn.Payload())
+
+	parts := strings.SplitN(payload, "&", 3)
+	if len(parts) < 3 {
+		log.Printf("[SP] Invalid payload format: %s", payload)
+		return
+	}
+
+	sessionID := parts[0]
+	data := parts[1]
+	ts := parts[2]
+
+	insertData(sessionID, data, ts)
+}
+
+func insertData(sessionID, data, ts string) {
+	if db == nil {
+		return
+	}
+
+	qry := `INSERT INTO production_sp (session_id, data, ts) VALUES ($1, $2, $3)`
+	if _, err := db.Exec(qry, sessionID, data, ts); err != nil {
+		log.Printf("[SP] insertData error: %v", err)
+	} else {
+		log.Printf("[SP] Data inserted: session=%s data=%s ts=%s", sessionID, data, ts)
+	}
+}
+
+func SetupRoutes(api fiber.Router) {
+	api.Get("/sp/data", handleGetData)
+	api.Get("/sp/summary", handleGetSummary)
+	api.Get("/sp/sessions", handleGetSessions)
+	api.Get("/sp/export-csv", handleExportCsv)
+	api.Get("/sp/daily-stats", handleGetDailyStats)
+}
+
+func handleGetData(c *fiber.Ctx) error {
+	rec, err := getRecords(
+		c.Query("session_id"),
+		c.Query("start_date"),
+		c.Query("end_date"),
+	)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(rec)
+}
+
+func handleGetSummary(c *fiber.Ctx) error {
+	smr, err := getSummary()
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(smr)
+}
+
+func handleGetSessions(c *fiber.Ctx) error {
+	sessions, err := getSessions()
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(sessions)
+}
+
+func handleExportCsv(c *fiber.Ctx) error {
+	sessionID := c.Query("session_id")
+	mli := c.Query("start_date")
+	hnt := c.Query("end_date")
+
+	fnm := "sp_export.csv"
+	if mli != "" && hnt != "" {
+		fnm = fmt.Sprintf("sp_export_%s_to_%s.csv", mli, hnt)
+	}
+
+	c.Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s\"", fnm))
+	c.Set("Content-Type", "text/csv")
+
+	rec, err := getRecords(sessionID, mli, hnt)
+	if err != nil {
+		return c.Status(500).SendString(err.Error())
+	}
+
+	w := csv.NewWriter(c.Response().BodyWriter())
+	w.Write([]string{"ID", "Session ID", "Data", "Timestamp"})
+
+	for _, r := range rec {
+		w.Write([]string{
+			fmt.Sprintf("%d", r.ID),
+			r.SessionID,
+			r.Data,
+			r.Ts,
+		})
+	}
+	w.Flush()
+	return nil
+}
+
+func getRecords(sessionFltr, mliWkt, hntWkt string) ([]Record, error) {
+	if db == nil {
+		return []Record{}, nil
+	}
+
+	qry := "SELECT id, session_id, data, ts, created_at FROM production_sp WHERE 1=1"
+	var args []interface{}
+	argId := 1
+
+	if sessionFltr != "" && sessionFltr != "all" {
+		qry += fmt.Sprintf(" AND session_id = $%d", argId)
+		args = append(args, sessionFltr)
+		argId++
+	}
+
+	if mliWkt != "" {
+		qry += fmt.Sprintf(" AND DATE(created_at) >= $%d", argId)
+		args = append(args, mliWkt)
+		argId++
+	}
+	if hntWkt != "" {
+		qry += fmt.Sprintf(" AND DATE(created_at) <= $%d", argId)
+		args = append(args, hntWkt)
+		argId++
+	}
+
+	qry += " ORDER BY created_at DESC LIMIT 2000"
+
+	rows, err := db.Query(qry, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var recs []Record
+	for rows.Next() {
+		var r Record
+		var sid, dt, ts sql.NullString
+
+		if err := rows.Scan(&r.ID, &sid, &dt, &ts, &r.CreatedAt); err != nil {
+			return nil, err
+		}
+
+		if sid.Valid {
+			r.SessionID = sid.String
+		}
+		if dt.Valid {
+			r.Data = dt.String
+		}
+		if ts.Valid {
+			r.Ts = ts.String
+		}
+
+		recs = append(recs, r)
+	}
+
+	return recs, nil
+}
+
+func getSummary() ([]Summary, error) {
+	if db == nil {
+		return []Summary{}, nil
+	}
+
+	qry := `
+		SELECT 
+			session_id, 
+			COUNT(*) as total_count,
+			MAX(ts) as last_scan,
+			MIN(ts) as first_scan
+		FROM production_sp
+		WHERE DATE(created_at) = CURRENT_DATE
+		GROUP BY session_id
+		ORDER BY session_id
+	`
+	rows, err := db.Query(qry)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var smrs []Summary
+	for rows.Next() {
+		var s Summary
+		var sid, lastTs, firstTs sql.NullString
+		var cnt sql.NullInt64
+
+		if err := rows.Scan(&sid, &cnt, &lastTs, &firstTs); err != nil {
+			continue
+		}
+
+		if sid.Valid {
+			s.SessionID = sid.String
+		}
+		if cnt.Valid {
+			s.TotalCount = int(cnt.Int64)
+		}
+		if lastTs.Valid {
+			s.LastScan = lastTs.String
+		}
+		if firstTs.Valid {
+			s.FirstScan = firstTs.String
+		}
+
+		smrs = append(smrs, s)
+	}
+
+	return smrs, nil
+}
+
+func getSessions() ([]string, error) {
+	if db == nil {
+		return []string{}, nil
+	}
+
+	qry := `SELECT DISTINCT session_id FROM production_sp WHERE session_id IS NOT NULL ORDER BY session_id`
+	rows, err := db.Query(qry)
+	if err != nil {
+		return []string{}, nil
+	}
+	defer rows.Close()
+
+	var sessions []string
+	for rows.Next() {
+		var s string
+		if err := rows.Scan(&s); err != nil {
+			continue
+		}
+		if s != "" {
+			sessions = append(sessions, s)
+		}
+	}
+
+	return sessions, nil
+}
+
+type DailyStat struct {
+	Date       string `json:"date"`
+	TotalCount int    `json:"total_count"`
+}
+
+func GetDailyStats(days int) ([]DailyStat, error) {
+	if db == nil {
+		return []DailyStat{}, nil
+	}
+
+	prm := fmt.Sprintf("%d", days)
+	qry := `
+		SELECT DATE(created_at) as dt, COUNT(*) as total
+		FROM production_sp
+		WHERE created_at >= CURRENT_DATE - $1::INTEGER * INTERVAL '1 day'
+		GROUP BY DATE(created_at)
+		ORDER BY dt ASC
+	`
+	rows, err := db.Query(qry, prm)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var stats []DailyStat
+	for rows.Next() {
+		var s DailyStat
+		var dt sql.NullTime
+		var total sql.NullInt64
+
+		if err := rows.Scan(&dt, &total); err != nil {
+			continue
+		}
+
+		if dt.Valid {
+			s.Date = dt.Time.Format("2006-01-02")
+		}
+		if total.Valid {
+			s.TotalCount = int(total.Int64)
+		}
+
+		stats = append(stats, s)
+	}
+
+	return stats, nil
+}
+
+func handleGetDailyStats(c *fiber.Ctx) error {
+	days := 7
+	if d := c.Query("days"); d != "" {
+		fmt.Sscanf(d, "%d", &days)
+	}
+	stats, err := GetDailyStats(days)
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(stats)
+}

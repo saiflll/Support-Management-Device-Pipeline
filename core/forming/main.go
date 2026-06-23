@@ -2,14 +2,13 @@ package main
 
 import (
 	"forming/lib"
+	"forming/modul/mdcw"
+	"forming/modul/sp"
 
 	"github.com/gofiber/fiber/v2"
 )
 
-// === MAIN ENTRYPOINT ===
-
 func main() {
-	// inisialisasi logger untuk mode debug
 	atrLogger()
 
 	if err := lib.InitGoogleSheets(); err != nil {
@@ -21,11 +20,12 @@ func main() {
 	initDB()
 	defer closeDB()
 
-	// inisialisasi MQTT lokal (subscribe dari perangkat IoT)
-	initMQTT()
+	mqttClient := initMQTT()
 
-	// inisialisasi Cloud MQTT Forwarder (publish ke backend cloud)
-	initCloudForwarder()
+	mdcw.Init(db, mqttClient)
+	mdcw.InitCloudForwarder()
+
+	sp.Init(db, mqttClient)
 
 	ap := fiber.New()
 	setupRoutes(ap)
