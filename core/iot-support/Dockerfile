@@ -69,8 +69,8 @@ COPY --from=svelte-builder /ui/build ./web
 RUN mkdir -p /app/static/uploads
 
 # Salin entrypoint script
-COPY core/iot-support/entrypoint.sh /entrypoint.sh
-RUN chmod +x /entrypoint.sh
+COPY core/iot-support/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 # Expose port forwarder (8888) dan ota (9999)
 EXPOSE 8888 9999
@@ -85,4 +85,4 @@ RUN addgroup -g 1000 appuser && \
 
 USER appuser
 
-ENTRYPOINT ["/entrypoint.sh"]
+ENTRYPOINT ["/app/entrypoint.sh"]

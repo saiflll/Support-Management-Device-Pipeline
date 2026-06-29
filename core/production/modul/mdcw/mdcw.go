@@ -9,8 +9,6 @@ import (
 	"sync"
 	"time"
 
-	"production/lib"
-
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
@@ -182,20 +180,6 @@ func insertData(psn Payload) {
 	if _, err := db.Exec(qry, ts, psn.Reg2, psn.Reg5, psn.Reg114, psn.Prefix, typ, cfd); err != nil {
 		log.Printf("[MDCW] insertData: production_mdcw: %v", err)
 	} else {
-		log.Printf("[MDCW] Data inserted (Type: %s, Conf: %.2f)", typ, cfd)
-
-		go func(pl Payload, dTpe string) {
-			if err := lib.AppendToSheet(lib.Payload{
-				Ts:     fmt.Sprintf("%v", pl.Ts),
-				Reg2:   pl.Reg2,
-				Reg5:   pl.Reg5,
-				Reg114: pl.Reg114,
-				Prefix: pl.Prefix + " [" + dTpe + "]",
-			}); err != nil {
-				log.Printf("[MDCW] Failed to export to Sheets: %v", err)
-			}
-		}(psn, typ)
-
 		go ForwardToCloud(psn, psn.Prefix, psn.Reg5, psn.Reg114)
 	}
 }

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"production/lib"
 	"production/modul/mdcw"
 	"production/modul/sp"
 
@@ -11,11 +10,7 @@ import (
 func main() {
 	atrLogger()
 
-	if err := lib.InitGoogleSheets(); err != nil {
-		hndlErr("Google Sheets initialization failed", err)
-	} else {
-		lib.CreateSheetIfNotExists()
-	}
+	// Google Sheets export has been disabled as requested.
 
 	initDB()
 	defer closeDB()
