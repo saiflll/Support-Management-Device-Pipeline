@@ -46,7 +46,10 @@ services:
 
   # === Backend Forwarder Service ===
   backend:
-    image: rennnagge/forwarder-app:latest
+    build:
+      context: .
+      dockerfile: core/forward/Dockerfile
+    image: iot-forwarder:latest
     container_name: forwarder
     ports:
       - "8888:8888"
@@ -80,15 +83,19 @@ services:
         condition: service_healthy
     networks:
       - iot-net
-      
+
   # === OTA Update Service ===
   ota:
-    image: rennnagge/ota-app:latest
+    build:
+      context: .
+      dockerfile: core/ota/Dockerfile
+    image: iot-ota:latest
     container_name: ota-app
     ports:
       - "9999:9999"
     volumes:
-      - /data/ota/uploads:/app/static/uploads
+      # File upload disimpan di folder 'upload/' relatif terhadap lokasi docker-compose
+      - ./upload:/app/static/uploads
     environment:
       - MQTT_BROKER=tcp://emqx:1883
       - MQTT_USER=${MQTT_USER}
@@ -109,7 +116,10 @@ services:
 
   # === Forming/Production Monitoring Service ===
   forming:
-    image: rennnagge/forming-app:latest
+    build:
+      context: .
+      dockerfile: core/preproduction/Dockerfile
+    image: iot-forming:latest
     container_name: forming-app
     ports:
       - "3000:3000"
