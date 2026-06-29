@@ -1,0 +1,33 @@
+name: Deploy IoT Server to Server
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Create .env file from Secret
+        run: |
+          echo "${{ secrets.ENV_FILE }}" > .env
+
+      - name: Pull latest Docker images
+        run: |
+          docker compose -f docker-compose.prod.yml pull
+
+      - name: Restart updated services (tidak menyentuh postgres & emqx yang sudah berjalan)
+        run: |
+          docker stop forwarder ota-app forming-app || true
+          docker rm forwarder ota-app forming-app || true
+          docker compose -f docker-compose.prod.yml up -d --no-recreate
+
+      - name: Prune unused Docker images
+        run: |
+          docker image prune -f

@@ -48,3 +48,14 @@ envi.txt
 # listmac.txt
 # docs
 # dev
+
+# Tooling and caching
+.nyx/
+
+# Analysis and data files
+analysis.json
+*.json
+!package.json
+
+# Ignore renamed .gitignore
+.ignoregit
