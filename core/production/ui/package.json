@@ -11,10 +11,12 @@
   "devDependencies": {
     "@sveltejs/vite-plugin-svelte": "^5.0.3",
     "@tsconfig/svelte": "^5.0.8",
+    "sass": "^1.101.0",
     "svelte": "^5.0.0",
     "vite": "^6.0.0"
   },
   "dependencies": {
+    "@lucide/svelte": "^1.22.0",
     "chart.js": "^4.5.1"
   }
 }
