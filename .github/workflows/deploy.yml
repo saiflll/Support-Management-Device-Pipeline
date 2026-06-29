@@ -18,10 +18,10 @@ jobs:
         run: |
           echo "${{ secrets.ENV_FILE }}" > .env
 
-      - name: Stop & remove old app containers (tidak menyentuh postgres & emqx)
+      - name: Stop & remove old/conflicting containers (tidak menghapus volume data)
         run: |
-          docker stop iot-support production || true
-          docker rm iot-support production || true
+          docker stop iot-support production emqx postgres_db || true
+          docker rm iot-support production emqx postgres_db || true
 
       - name: Build images from source
         run: |
