@@ -1,7 +1,9 @@
 package core
 
 import (
+	"encoding/json"
 	"regexp"
+	"strconv"
 	"sync"
 	"time"
 
@@ -9,13 +11,42 @@ import (
 	"github.com/gofiber/fiber/v2/middleware/session"
 )
 
+type FlexString string
+
+func (fs *FlexString) UnmarshalJSON(b []byte) error {
+	if len(b) == 0 {
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(b, &s); err == nil {
+		*fs = FlexString(s)
+		return nil
+	}
+	var f float64
+	if err := json.Unmarshal(b, &f); err == nil {
+		*fs = FlexString(strconv.FormatFloat(f, 'f', -1, 64))
+		return nil
+	}
+	var bl bool
+	if err := json.Unmarshal(b, &bl); err == nil {
+		*fs = FlexString(strconv.FormatBool(bl))
+		return nil
+	}
+	*fs = FlexString(string(b))
+	return nil
+}
+
+func (fs FlexString) String() string {
+	return string(fs)
+}
+
 type NodeInfo struct {
 	Status       string                 `json:"status,omitempty"`
 	RamFreeBytes int64                  `json:"ram_free_bytes,omitempty"`
 	SD_OK        *bool                  `json:"sd_ok,omitempty"`
-	Ck           string                 `json:"ck,omitempty"`
-	Area         string                 `json:"area,omitempty"`
-	No           string                 `json:"no,omitempty"`
+	Ck           FlexString             `json:"ck,omitempty"`
+	Area         FlexString             `json:"area,omitempty"`
+	No           FlexString             `json:"no,omitempty"`
 	MinT1        float64                `json:"min_t1,omitempty"`
 	MaxT1        float64                `json:"max_t1,omitempty"`
 	MinT2        float64                `json:"min_t2,omitempty"`

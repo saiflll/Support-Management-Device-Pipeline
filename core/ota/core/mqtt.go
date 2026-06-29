@@ -244,13 +244,13 @@ func mqttHandler(cln mqtt.Client, psn mqtt.Message) {
 					inf.IP = fmt.Sprintf("%v", v)
 				}
 				if v, ok := m["ck"]; ok {
-					inf.Ck = fmt.Sprintf("%v", v)
+					inf.Ck = FlexString(fmt.Sprintf("%v", v))
 				}
 				if v, ok := m["area"]; ok {
-					inf.Area = fmt.Sprintf("%v", v)
+					inf.Area = FlexString(fmt.Sprintf("%v", v))
 				}
 				if v, ok := m["no"]; ok {
-					inf.No = fmt.Sprintf("%v", v)
+					inf.No = FlexString(fmt.Sprintf("%v", v))
 				}
 				if v, ok := m["no_t1"]; ok {
 					if f, ok := v.(float64); ok {
