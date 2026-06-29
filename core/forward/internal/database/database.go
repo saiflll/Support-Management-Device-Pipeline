@@ -73,21 +73,23 @@ func createTables() {
             area_id INTEGER NOT NULL,
             FOREIGN KEY (area_id) REFERENCES area (area_id) ON DELETE CASCADE
         );`,
-		`CREATE TABLE IF NOT EXISTS temp (
-            temp_id SERIAL PRIMARY KEY,
-            value REAL NOT NULL,
+		`CREATE TABLE IF NOT EXISTS env_sensor (
+            id SERIAL PRIMARY KEY,
             area_id INTEGER NOT NULL,
             no INTEGER NOT NULL,
-            ts TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
+            temp REAL,
+            rh REAL,
+            ts TIMESTAMPTZ NOT NULL,
             FOREIGN KEY (area_id) REFERENCES area (area_id) ON DELETE CASCADE
         );`,
-		`CREATE TABLE IF NOT EXISTS rh (
-            rh_id SERIAL PRIMARY KEY,
-            value REAL NOT NULL,
-            area_id INTEGER NOT NULL,
-            no INTEGER NOT NULL,
-            ts TIMESTAMPTZ DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (area_id) REFERENCES area (area_id) ON DELETE CASCADE
+		`CREATE TABLE IF NOT EXISTS failed_batch (
+            id SERIAL PRIMARY KEY,
+            pipeline_id INTEGER NOT NULL,
+            payload_json JSONB NOT NULL,
+            dest_topic TEXT NOT NULL,
+            broker_url TEXT NOT NULL,
+            failed_at TIMESTAMPTZ DEFAULT NOW(),
+            retry_count INTEGER DEFAULT 0
         );`,
 		`CREATE TABLE IF NOT EXISTS prox (
             prox_id SERIAL PRIMARY KEY,

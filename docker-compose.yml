@@ -26,21 +26,6 @@ services:
     networks:
       - iot-net
 
-  # === Web UI for Database ===
-  pgadmin:
-    image: dpage/pgadmin4
-    container_name: pgadmin
-    environment:
-      PGADMIN_DEFAULT_EMAIL: admin@admin.com
-      PGADMIN_DEFAULT_PASSWORD: admin
-    ports:
-      - "5050:80"
-    restart: unless-stopped
-    depends_on:
-      - postgres
-    networks:
-      - iot-net
-
   # === MQTT Broker ===
   emqx:
     image: emqx:5.5
@@ -136,13 +121,13 @@ services:
     networks:
       - iot-net
 
-  # === Forming/Production Monitoring Service ===
-  forming:
-    image: rennnagge/forming-app:latest
-    container_name: forming-app
+  # === Preproduction Monitoring Service (MDCCW & Scraper) ===
+  preproduction:
+    image: rennnagge/preproduction-app:latest
+    container_name: preproduction-app
     build:
       context: .
-      dockerfile: core/forming/Dockerfile
+      dockerfile: core/preproduction/Dockerfile
     ports:
       - "3000:3000"
     environment:
@@ -159,11 +144,18 @@ services:
       - GOOGLE_SPREADSHEET_ID=${GOOGLE_SPREADSHEET_ID:-}
       - GOOGLE_SHEET_NAME=${GOOGLE_SHEET_NAME:-}
       - TZ=Asia/Jakarta
-      # Cloud MQTT Forwarder — forward data forming ke backend monitoring cloud
+      # Cloud MQTT Forwarder
       - CLOUD_MQTT_BROKER_URI=${CLOUD_MQTT_BROKER_URI:-}
       - CLOUD_MQTT_TOPIC_FORMING=${CLOUD_MQTT_TOPIC_FORMING:-prod/mdcw}
       - CLOUD_MQTT_USERNAME=${CLOUD_MQTT_USERNAME:-}
       - CLOUD_MQTT_PASSWORD=${CLOUD_MQTT_PASSWORD:-}
+      # External Conveyor DB Credentials for Scraper
+      - PROD_DB_HOST=10.201.40.2
+      - PROD_DB_PORT=3306
+      - PROD_DB_USER=ppa
+      - PROD_DB_PASSWORD=PestaPora123
+      - PROD_DB_NAME=db_konveyor
+      - DEBUG_MODE=1
     restart: unless-stopped
     depends_on:
       postgres:
@@ -172,6 +164,7 @@ services:
         condition: service_healthy
     networks:
       - iot-net
+
 
 volumes:
   postgres_data:

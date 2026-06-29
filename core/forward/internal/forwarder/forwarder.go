@@ -3,7 +3,6 @@ package forwarder
 import (
 	"crypto/rand"
 	"database/sql"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,13 +13,13 @@ import (
 	"sync"
 	"time"
 
+	"IoTT/internal/auth"
 	"IoTT/internal/database"
 	"IoTT/internal/models"
+	"IoTT/internal/worker"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/gofiber/fiber/v2"
-	"github.com/gofiber/fiber/v2/middleware/session"
-	"github.com/gofiber/storage/memory/v2"
 )
 
 // --- Configuration ---
@@ -79,8 +78,7 @@ var (
 	status      = ForwarderStatus{}
 	statusMutex = &sync.Mutex{}
 
-	// Session store for authentication
-	store            *session.Store
+	// Telegram config untuk notifikasi
 	telegramBotToken string
 	telegramChatID   string
 
@@ -92,31 +90,19 @@ var (
 	deltaMutex       = &sync.Mutex{}
 )
 
-
-// Start initializes the forwarder component.
+// Start menginisialisasi forwarder component.
 func Start() {
-	// Initialize session store for authentication
-	store = session.New(session.Config{
-		Storage:        memory.New(),
-		Expiration:     24 * time.Hour,
-		KeyLookup:      "cookie:session_id",
-		CookieHTTPOnly: true,
-		CookieSameSite: "Lax",
-		KeyGenerator: func() string {
-			b := make([]byte, 16)
-			rand.Read(b)
-			return hex.EncodeToString(b)
-		},
-	})
+	// Inisialisasi session store untuk autentikasi
+	auth.InitAuth()
 
-	// Load Telegram config from environment
+	// Load Telegram config dari environment
 	telegramBotToken = os.Getenv("TELE_BOT_ALRT")
 	telegramChatID = os.Getenv("TELEGRAM_CHAT_ID")
 	if telegramBotToken == "" || telegramChatID == "" {
-		log.Println("⚠️ Warning: TELE_BOT_ALRT or TELEGRAM_CHAT_ID not set. Login feature may not work.")
+		log.Println("⚠️ Warning: TELE_BOT_ALRT atau TELEGRAM_CHAT_ID tidak diset. Fitur login via Telegram tidak akan berfungsi.")
 	}
 
-	// Start the pipeline manager
+	// Mulai pipeline manager
 	go pipelineManager()
 
 	log.Println("✅ Forwarder worker started with Dynamic Pipeline Management.")
@@ -186,7 +172,7 @@ func syncPipelines() {
 		}
 	}
 
-	// Stop pipelines not in DB anymore
+	// Stop pipelines yang sudah tidak ada di DB
 	pipelinesMutex.Lock()
 	for id, instance := range pipelineInstances {
 		if !foundIDs[id] {
@@ -218,7 +204,7 @@ func startPipeline(p Pipeline) *PipelineInstance {
 		},
 	}
 
-	// Setup MQTT Client for this pipeline
+	// Setup MQTT Client untuk pipeline ini
 	opts := mqtt.NewClientOptions()
 	opts.AddBroker(p.BrokerURL)
 	opts.SetClientID(fmt.Sprintf("forwarder-%d-%d", p.ID, time.Now().UnixNano()))
@@ -233,10 +219,11 @@ func startPipeline(p Pipeline) *PipelineInstance {
 		inst.Status.LastForwardError = token.Error().Error()
 		inst.Status.LastForwardStatus = "Connection Failed"
 	} else {
-		// [FIX] Langsung set Sukses jika koneksi berhasil
 		inst.Status.LastForwardStatus = "Sukses"
 	}
 
+	// Daftarkan client ke RetryWorker agar bisa dipakai untuk re-publish
+	worker.RegisterRetryClient(p.ID, inst.Client)
 
 	inst.Ticker = time.NewTicker(interval)
 	go func() {
@@ -274,23 +261,27 @@ func (inst *PipelineInstance) Flush(force bool) {
 	jsonData, _ := json.Marshal(inst.Buffer)
 	currentSize = len(jsonData)
 
-	// Flush if forced or size reached
+	// Flush jika dipaksa atau ukuran buffer sudah penuh
 	if force || currentSize >= maxBufferSize {
 		if inst.Client == nil || !inst.Client.IsConnected() {
-			log.Printf("Error: MQTT client for pipeline %d not connected. Retrying...", inst.Config.ID)
-			inst.Client.Connect() // Try reconnect
-			if !inst.Client.IsConnected() {
-				inst.Status.LastForwardStatus = "Gagal"
-				inst.Status.LastForwardError = "Client disconnected"
-				return
-			}
+			log.Printf("Error: MQTT client untuk pipeline %d tidak terhubung. Menyimpan ke DB sebagai fallback...", inst.Config.ID)
+			worker.SaveFailedBatch(inst.Config.ID, inst.Config.DestTopic, inst.Config.BrokerURL, jsonData)
+			inst.Buffer = []models.AreaData{}
+			inst.Status.LastForwardStatus = "Gagal (disimpan ke DB)"
+			inst.Status.LastForwardError = "Client disconnected"
+			inst.Status.NextForwardTime = time.Now().Add(time.Duration(inst.Config.IntervalMinutes) * time.Minute)
+			return
 		}
 
 		token := inst.Client.Publish(inst.Config.DestTopic, 1, false, jsonData)
 		if token.WaitTimeout(10*time.Second) && token.Error() != nil {
-			inst.Status.LastForwardStatus = "Gagal"
+			// Publish gagal → simpan ke DB untuk di-retry nanti
+			log.Printf("❌ Pipeline %d publish gagal: %v. Menyimpan ke failed_batch...", inst.Config.ID, token.Error())
+			worker.SaveFailedBatch(inst.Config.ID, inst.Config.DestTopic, inst.Config.BrokerURL, jsonData)
+			inst.Status.LastForwardStatus = "Gagal (disimpan ke DB)"
 			inst.Status.LastForwardError = token.Error().Error()
 		} else {
+			// Publish berhasil → bersihkan buffer
 			inst.Status.LastForwardStatus = "Sukses"
 			inst.Status.LastForwardError = ""
 			inst.Status.LastForwardTime = time.Now()
@@ -307,7 +298,7 @@ func (inst *PipelineInstance) Flush(force bool) {
 }
 
 func AddToBufferAndAggregate(data []models.AreaData) {
-	// 1. Update global Log Buffer untuk dashboard UI (biar tetap update tiap 10s)
+	// 1. Update global Log Buffer untuk dashboard UI
 	statusMutex.Lock()
 	status.ReceivedDataBuffer = append(status.ReceivedDataBuffer, data...)
 	if len(status.ReceivedDataBuffer) > 100 {
@@ -340,7 +331,7 @@ func AddToBufferAndAggregate(data []models.AreaData) {
 				delta = lastVal - t.Temp
 			}
 
-			// Kirim jika: Baru pertama, atau delta > 2.0, atau > 10 menit (heartbeat)
+			// Kirim jika: baru pertama, delta > 2.0, atau > 10 menit (heartbeat)
 			if !exists || delta >= 2.0 || time.Since(lastTs) > 10*time.Minute {
 				filteredData.Temp = append(filteredData.Temp, t)
 				lastSensorValues[key] = t.Temp
@@ -374,22 +365,24 @@ func AddToBufferAndAggregate(data []models.AreaData) {
 		}
 	}
 }
+
 // RegisterForwarderHandlers mendaftarkan rute HTTP untuk dashboard.
 func RegisterForwarderHandlers(app *fiber.App) {
-	// Public routes - Login
+	// Public routes
 	app.Get("/login", handleShowLogin)
 	app.Post("/login", handleLogin)
 	app.Post("/request-code", handleRequestCode)
+	app.Post("/logout", handleLogout)
 
-	// Protected routes (AUTH DISABLED)
-	app.Get("/forwarder", func(c *fiber.Ctx) error {
+	// Dashboard (auth toggle lewat DEV_MODE env)
+	app.Get("/forwarder", auth.RequireAuth, func(c *fiber.Ctx) error {
 		return c.Render("index", fiber.Map{
 			"Title": "Forwarder Status",
 		})
 	})
 
-	// Rute untuk API status (AUTH DISABLED)
-	app.Get("/forwarder/status", func(c *fiber.Ctx) error {
+	// API status
+	app.Get("/forwarder/status", auth.RequireAuth, func(c *fiber.Ctx) error {
 		statusMutex.Lock()
 		defer statusMutex.Unlock()
 
@@ -403,7 +396,7 @@ func RegisterForwarderHandlers(app *fiber.App) {
 		return c.Status(http.StatusOK).JSON(status)
 	})
 
-	// CRUD Pipeline API (AUTH DISABLED for now)
+	// CRUD Pipeline API
 	app.Get("/api/pipelines", func(c *fiber.Ctx) error {
 		importDB := database.DB
 		rows, _ := importDB.Query("SELECT pipeline_id, name, source_topic, broker_url, dest_topic, username, password, interval_minutes, is_active FROM pipelines")
@@ -449,46 +442,28 @@ func RegisterForwarderHandlers(app *fiber.App) {
 			"status":  "success",
 			"message": "Pipeline deleted successfully",
 		})
-
 	})
 
-	// Rute untuk redirect ke Database (protected)
-	app.Get("/database", requireAuth, func(c *fiber.Ctx) error {
-		// Redirect to pgweb on localhost
+	// Redirect ke pgweb database viewer (protected)
+	app.Get("/database", auth.RequireAuth, func(c *fiber.Ctx) error {
 		return c.Redirect("http://localhost:8080", http.StatusFound)
 	})
-
-	// Logout endpoint
-	app.Post("/logout", handleLogout)
 }
 
 // --- Authentication Handlers ---
 
-func requireAuth(c *fiber.Ctx) error {
-	// TEMPORARY: Bypass authentication for debugging/setup
-	return c.Next()
-
-	/* -- Original Authentication Logic --
-	sess, err := store.Get(c)
-	if err != nil {
-		return c.Status(http.StatusInternalServerError).SendString("Session error")
-	}
-
-	if sess.Get("authenticated") != true {
-		return c.Redirect("/login")
-	}
-
-	return c.Next()
-	*/
-}
-
 func handleShowLogin(c *fiber.Ctx) error {
-	// Bypass forwarder login
-	return c.Redirect("/forwarder")
+	if auth.IsDevMode() {
+		return c.Redirect("/forwarder")
+	}
+	return c.Render("login", fiber.Map{})
 }
 
 func handleLogin(c *fiber.Ctx) error {
-	sess, err := store.Get(c)
+	if auth.Store == nil {
+		auth.InitAuth()
+	}
+	sess, err := auth.Store.Get(c)
 	if err != nil {
 		return c.Status(http.StatusInternalServerError).SendString("Session error")
 	}
@@ -498,34 +473,27 @@ func handleLogin(c *fiber.Ctx) error {
 		return c.Render("login", fiber.Map{"error": "Kode tidak boleh kosong."})
 	}
 
-	// Get code from session
 	authCode := sess.Get("auth_code")
 	authExpires := sess.Get("auth_expires")
-
 	if authCode == nil || authExpires == nil {
 		return c.Render("login", fiber.Map{"error": "Kode verifikasi salah atau sudah kedaluwarsa."})
 	}
 
-	// Convert Unix timestamp back to time.Time
 	expiryUnix, ok := authExpires.(int64)
 	if !ok {
 		return c.Render("login", fiber.Map{"error": "Kode verifikasi salah atau sudah kedaluwarsa."})
 	}
 
-	expiryTime := time.Unix(expiryUnix, 0)
-
-	if authCode.(string) != submittedCode || time.Now().After(expiryTime) {
+	if authCode.(string) != submittedCode || time.Now().After(time.Unix(expiryUnix, 0)) {
 		return c.Render("login", fiber.Map{"error": "Kode verifikasi salah atau sudah kedaluwarsa."})
 	}
 
-	// Code is valid, clear from session and set login status
 	sess.Delete("auth_code")
 	sess.Delete("auth_expires")
 	sess.Set("authenticated", true)
 	if err := sess.Save(); err != nil {
 		return c.Status(http.StatusInternalServerError).SendString("Gagal menyimpan sesi")
 	}
-
 	return c.Redirect("/forwarder")
 }
 
@@ -537,39 +505,40 @@ func handleRequestCode(c *fiber.Ctx) error {
 		})
 	}
 
-	sess, err := store.Get(c)
+	if auth.Store == nil {
+		auth.InitAuth()
+	}
+	sess, err := auth.Store.Get(c)
 	if err != nil {
-		log.Printf("Error getting session: %v", err)
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"status": "error", "message": "Gagal membuat sesi."})
 	}
 
-	// Generate random 6 digit code
+	// Generate random 6-digit hex code
 	b := make([]byte, 3)
-	rand.Read(b)
-	code := hex.EncodeToString(b)
+	if _, err := rand.Read(b); err != nil {
+		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"status": "error", "message": "Gagal generate kode."})
+	}
+	code := fmt.Sprintf("%x", b)
 
-	// Save code and expiry as Unix timestamp (int64)
 	sess.Set("auth_code", code)
 	sess.Set("auth_expires", time.Now().Add(5*time.Minute).Unix())
-
 	if err := sess.Save(); err != nil {
-		log.Printf("Error saving session: %v", err)
 		return c.Status(http.StatusInternalServerError).JSON(fiber.Map{"status": "error", "message": fmt.Sprintf("Gagal menyimpan sesi: %v", err)})
 	}
 
-	log.Printf("Code generated and saved: %s", code)
-
-	// Send code to Telegram
-	message := fmt.Sprintf("Kode verifikasi Anda untuk Forwarder Dashboard adalah: `%s`\nKode ini berlaku selama 5 menit.", code)
+	message := fmt.Sprintf("Kode verifikasi Forwarder Dashboard: `%s`\nBerlaku 5 menit.", code)
 	go sendTelegramMessage(message)
 
 	return c.JSON(fiber.Map{"status": "ok"})
 }
 
 func handleLogout(c *fiber.Ctx) error {
-	sess, err := store.Get(c)
+	if auth.Store == nil {
+		return c.Redirect("/login")
+	}
+	sess, err := auth.Store.Get(c)
 	if err != nil {
-		return c.Status(http.StatusInternalServerError).SendString("Session error")
+		return c.Redirect("/login")
 	}
 	sess.Destroy()
 	return c.Redirect("/login")
@@ -577,19 +546,16 @@ func handleLogout(c *fiber.Ctx) error {
 
 func sendTelegramMessage(message string) {
 	apiURL := fmt.Sprintf("https://api.telegram.org/bot%s/sendMessage", telegramBotToken)
-
 	resp, err := http.PostForm(apiURL, url.Values{
 		"chat_id":    {telegramChatID},
 		"text":       {message},
 		"parse_mode": {"Markdown"},
 	})
-
 	if err != nil {
 		log.Printf("Error sending Telegram message: %v", err)
 		return
 	}
 	defer resp.Body.Close()
-
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		log.Printf("Failed to send Telegram message, status: %s, response: %s", resp.Status, string(body))

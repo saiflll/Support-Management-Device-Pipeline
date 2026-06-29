@@ -48,7 +48,7 @@ func runArchivingProcess() {
 		return
 	}
 
-	tablesToArchive := []string{"temp", "rh", "prox"}
+	tablesToArchive := []string{"env_sensor", "prox"}
 	var totalRowsArchived int64 = 0
 
 	for _, table := range tablesToArchive {

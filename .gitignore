@@ -1,7 +1,7 @@
 # === Ketergantungan (Dependencies) ===
 # Abaikan semua direktori vendor yang dikelola oleh 'go mod vendor'
 # Aturan ini akan berlaku untuk 'forward/vendor/', 'ota/vendor/', dll.
-vendor/
+# vendor/ (Dinonaktifkan agar vendor/ tetap di-commit untuk build Docker di runner)
 
 # Node modules untuk frontend
 node_modules/
@@ -56,6 +56,12 @@ envi.txt
 analysis.json
 *.json
 !package.json
+!package-lock.json
+!tsconfig.json
+!tsconfig.node.json
 
 # Ignore renamed .gitignore
 .ignoregit
+
+# References
+dev/reff/

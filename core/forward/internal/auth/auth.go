@@ -3,6 +3,8 @@ package auth
 import (
 	"crypto/rand"
 	"encoding/hex"
+	"log"
+	"os"
 	"time"
 
 	"github.com/gofiber/fiber/v2"
@@ -12,7 +14,7 @@ import (
 
 var Store *session.Store
 
-// InitAuth initializes the session store
+// InitAuth menginisialisasi session store untuk autentikasi.
 func InitAuth() {
 	Store = session.New(session.Config{
 		Storage:        memory.New(),
@@ -28,8 +30,20 @@ func InitAuth() {
 	})
 }
 
-// RequireAuth middleware checks if user is authenticated
+// IsDevMode mengembalikan true jika aplikasi berjalan dalam mode development.
+// Set environment variable DEV_MODE=true untuk bypass autentikasi.
+func IsDevMode() bool {
+	return os.Getenv("DEV_MODE") == "true"
+}
+
+// RequireAuth middleware untuk memvalidasi sesi pengguna.
+// Jika DEV_MODE=true, autentikasi dilewati sepenuhnya.
 func RequireAuth(c *fiber.Ctx) error {
+	if IsDevMode() {
+		log.Println("⚠️ [DEV_MODE] Auth bypass aktif — nonaktifkan di production!")
+		return c.Next()
+	}
+
 	if Store == nil {
 		InitAuth()
 	}
@@ -40,7 +54,6 @@ func RequireAuth(c *fiber.Ctx) error {
 	}
 
 	if sess.Get("authenticated") != true {
-		// Redirect to OTA login
 		return c.Redirect("/login")
 	}
 

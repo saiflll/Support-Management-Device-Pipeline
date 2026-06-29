@@ -1,119 +1,85 @@
 package worker
 
 import (
-	"IoTT/internal/database"
-	"log"
-	"sync"
+	"IoTT/internal/logger"
+	"fmt"
 	"time"
+
+	mqtt "github.com/eclipse/paho.mqtt.golang"
 )
 
-var (
-	tempBuffer []TempBatchData
-	rhBuffer   []RhBatchData
-	proxBuffer []ProxBatchData
-	bufferMux  sync.Mutex
-)
+// retryPipelineClients menyimpan referensi MQTT client per pipeline untuk re-publish.
+// Diisi oleh forwarder saat pipeline diinisialisasi.
+var retryPipelineClients = make(map[int]mqtt.Client)
+var retryClientRegister = make(chan retryClientEntry, 10)
 
-func AddToBuffer(tempData []TempBatchData, rhData []RhBatchData, proxData []ProxBatchData) {
-	bufferMux.Lock()
-	defer bufferMux.Unlock()
-
-	tempBuffer = append(tempBuffer, tempData...)
-	rhBuffer = append(rhBuffer, rhData...)
-	proxBuffer = append(proxBuffer, proxData...)
+type retryClientEntry struct {
+	PipelineID int
+	Client     mqtt.Client
 }
 
-func StartPollingWorker() {
-	ticker := time.NewTicker(5 * time.Minute)
+// RegisterRetryClient mendaftarkan MQTT client pipeline agar bisa dipakai RetryWorker.
+// Dipanggil oleh forwarder saat pipeline baru dimulai.
+func RegisterRetryClient(pipelineID int, client mqtt.Client) {
+	retryClientRegister <- retryClientEntry{PipelineID: pipelineID, Client: client}
+}
+
+// StartRetryWorker memulai goroutine yang periodik mencoba re-publish payload yang gagal.
+// Interval: setiap 2 menit.
+func StartRetryWorker() {
 	go func() {
-		for {
-			<-ticker.C
-			flushBuffer()
+		// Proses registrasi client yang masuk
+		go func() {
+			for entry := range retryClientRegister {
+				retryPipelineClients[entry.PipelineID] = entry.Client
+			}
+		}()
+
+		ticker := time.NewTicker(2 * time.Minute)
+		defer ticker.Stop()
+		logger.Lg("✅ RetryWorker dimulai: akan coba re-publish failed batches setiap 2 menit.")
+
+		for range ticker.C {
+			runRetry()
 		}
 	}()
-	log.Println("✅ Worker for polling and batch insert has been started.")
 }
 
-func flushBuffer() {
-	bufferMux.Lock()
-
-	if len(tempBuffer) == 0 && len(rhBuffer) == 0 && len(proxBuffer) == 0 {
-		bufferMux.Unlock()
-		return
-	}
-
-	tempData := tempBuffer
-	rhData := rhBuffer
-	proxData := proxBuffer
-
-	tempBuffer = nil
-	rhBuffer = nil
-	proxBuffer = nil
-
-	bufferMux.Unlock()
-
-	tx, err := database.DB.Begin()
+// runRetry mencoba re-publish semua batch yang tersimpan di tabel failed_batch.
+func runRetry() {
+	batches, err := LoadFailedBatches()
 	if err != nil {
-		log.Printf("Error starting transaction for batch insert: %v", err)
-		// Optionally, re-add data to buffer
-		AddToBuffer(tempData, rhData, proxData)
+		logger.HndlErr("RetryWorker.LoadFailedBatches", err)
 		return
 	}
 
-	var wg sync.WaitGroup
-	errChan := make(chan error, 3)
-
-	if len(tempData) > 0 {
-		wg.Add(1)
-		go func(d []TempBatchData) {
-			defer wg.Done()
-			if err := BatchInsertTemp(tx, d); err != nil {
-				errChan <- err
-			}
-		}(tempData)
-	}
-
-	if len(rhData) > 0 {
-		wg.Add(1)
-		go func(d []RhBatchData) {
-			defer wg.Done()
-			if err := BatchInsertRh(tx, d); err != nil {
-				errChan <- err
-			}
-		}(rhData)
-	}
-
-	if len(proxData) > 0 {
-		wg.Add(1)
-		go func(d []ProxBatchData) {
-			defer wg.Done()
-			if err := BatchInsertProx(tx, d); err != nil {
-				errChan <- err
-			}
-		}(proxData)
-	}
-
-	wg.Wait()
-	close(errChan)
-
-	var insertErrors []error
-	for err := range errChan {
-		insertErrors = append(insertErrors, err)
-	}
-
-	if len(insertErrors) > 0 {
-		tx.Rollback()
-		log.Printf("Error during batch insert, transaction rolled back: %v", insertErrors)
-		// Re-add data to buffer after rollback
-		AddToBuffer(tempData, rhData, proxData)
+	if len(batches) == 0 {
 		return
 	}
 
-	if err := tx.Commit(); err != nil {
-		log.Printf("Error committing transaction for batch insert: %v", err)
-		// Re-add data to buffer if commit fails
-		AddToBuffer(tempData, rhData, proxData)
-	} else {
-		log.Printf("📦 Batch insert successful for %d temp, %d rh, and %d prox records.", len(tempData), len(rhData), len(proxData))
+	logger.Lg("🔄 RetryWorker: ditemukan %d batch gagal, mencoba re-publish...", len(batches))
+
+	for _, b := range batches {
+		client, ok := retryPipelineClients[b.PipelineID]
+		if !ok || client == nil {
+			logger.Lg("⚠️ RetryWorker: tidak ada client untuk pipeline %d, skip.", b.PipelineID)
+			IncrementRetryCount(b.ID)
+			continue
+		}
+
+		if !client.IsConnected() {
+			logger.Lg("⚠️ RetryWorker: client pipeline %d tidak terhubung, skip.", b.PipelineID)
+			IncrementRetryCount(b.ID)
+			continue
+		}
+
+		token := client.Publish(b.DestTopic, 1, false, b.Payload)
+		if token.WaitTimeout(10*time.Second) && token.Error() != nil {
+			logger.HndlErr(fmt.Sprintf("RetryWorker.Publish pipeline %d", b.PipelineID), token.Error())
+			IncrementRetryCount(b.ID)
+		} else {
+			logger.Lg("✅ RetryWorker: batch %d (pipeline %d) berhasil di-re-publish. Menghapus dari DB.", b.ID, b.PipelineID)
+			DeleteFailedBatch(b.ID)
+		}
 	}
 }

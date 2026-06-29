@@ -59,6 +59,18 @@ MDCW_LINES = [
         "weight_range": (14940, 15660),
         "weight_ok":    15300,
     },
+    {
+        "prefix":       "MDCW5 (ACIN)",
+        "pack_count":   random.randint(100, 500),
+        "weight_range": (10100, 10270),
+        "weight_ok":    10185,
+    },
+    {
+        "prefix":       "MDCW6 (Lumpia)",
+        "pack_count":   random.randint(100, 500),
+        "weight_range": (3080, 3340),
+        "weight_ok":    3210,
+    },
 ]
 
 # Status code dan probabilitasnya (OK paling sering)

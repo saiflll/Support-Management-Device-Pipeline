@@ -10,6 +10,7 @@ import (
 	"IoTT/internal/mqtt"
 	internalrouter "IoTT/internal/router"
 	"IoTT/internal/telegram"
+	"IoTT/internal/worker"
 	"os"
 	_ "time/tzdata" // Import untuk menyematkan database zona waktu
 
@@ -45,6 +46,9 @@ func main() {
 
 	// memulai worker untuk arsip data lama
 	go archiver.Start()
+
+	// memulai RetryWorker: re-publish batch yang gagal dikirim ke cloud
+	worker.StartRetryWorker()
 
 	// memulai worker untuk forwarder ke EMQX Publik
 	go forwarder.Start()

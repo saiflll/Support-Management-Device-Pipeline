@@ -4,23 +4,23 @@ import (
 	"IoTT/internal/config"
 	"IoTT/internal/database"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
-	"strconv"
 	"strings"
+	"time"
 )
 
-func InsertTemp(db *sql.DB, areaID int, no int, value float64, ts string) error {
-
-	_, err := db.Exec("INSERT INTO temp (value, area_id, no, ts) VALUES ($1, $2, $3, $4)",
-		value, areaID, no, ts)
-	if err != nil {
-		log.Printf("Error inserting temp data: %v", err)
-		return err
-	}
-	return nil
+// EnvSensorBatchData menampung data gabungan temp + rh untuk satu sensor
+type EnvSensorBatchData struct {
+	AreaID int
+	No     int
+	Temp   *float64
+	RH     *float64
+	TS     string
 }
 
+// TempBatchData digunakan oleh processor saat hanya ada data suhu
 type TempBatchData struct {
 	Value  float64
 	AreaID int
@@ -28,39 +28,7 @@ type TempBatchData struct {
 	TS     string
 }
 
-func BatchInsertTemp(tx *sql.Tx, data []TempBatchData) error {
-	if len(data) == 0 {
-		return nil
-	}
-
-	valueStrings := make([]string, 0, len(data))
-	valueArgs := make([]interface{}, 0, len(data)*4)
-	i := 1
-	for _, d := range data {
-		valueStrings = append(valueStrings, fmt.Sprintf("($%d, $%d, $%d, $%d)", i, i+1, i+2, i+3))
-		valueArgs = append(valueArgs, d.Value, d.AreaID, d.No, d.TS)
-		i += 4
-	}
-
-	stmt := fmt.Sprintf("INSERT INTO temp (value, area_id, no, ts) VALUES %s", strings.Join(valueStrings, ","))
-	_, err := tx.Exec(stmt, valueArgs...)
-	if err != nil {
-		return fmt.Errorf("error executing bulk insert for temp data: %w", err)
-	}
-
-	return nil
-}
-
-func InsertRh(db *sql.DB, areaID int, no int, value float64, ts string) error {
-	_, err := db.Exec("INSERT INTO rh (value, area_id, no, ts) VALUES ($1, $2, $3, $4)",
-		value, areaID, no, ts)
-	if err != nil {
-		log.Printf("Error inserting rh data: %v", err)
-		return err
-	}
-	return nil
-}
-
+// RhBatchData digunakan oleh processor saat ada data kelembaban
 type RhBatchData struct {
 	Value  float64
 	AreaID int
@@ -68,45 +36,38 @@ type RhBatchData struct {
 	TS     string
 }
 
-func BatchInsertRh(tx *sql.Tx, data []RhBatchData) error {
-	if len(data) == 0 {
-		return nil
-	}
-
-	valueStrings := make([]string, 0, len(data))
-	valueArgs := make([]interface{}, 0, len(data)*4)
-	i := 1
-	for _, d := range data {
-		valueStrings = append(valueStrings, fmt.Sprintf("($%d, $%d, $%d, $%d)", i, i+1, i+2, i+3))
-		valueArgs = append(valueArgs, d.Value, d.AreaID, d.No, d.TS)
-		i += 4
-	}
-
-	stmt := fmt.Sprintf("INSERT INTO rh (value, area_id, no, ts) VALUES %s", strings.Join(valueStrings, ","))
-	_, err := tx.Exec(stmt, valueArgs...)
-	if err != nil {
-		return fmt.Errorf("error executing bulk insert for rh data: %w", err)
-	}
-
-	return nil
-}
-
-func InsertProx(db *sql.DB, doorID int, value int, ts string) error {
-	_, err := db.Exec("INSERT INTO prox (value, door_id, ts) VALUES ($1, $2, $3)",
-		value, doorID, ts)
-	if err != nil {
-		log.Printf("Error inserting prox data: %v", err)
-		return err
-	}
-	return nil
-}
-
+// ProxBatchData untuk data proximity/pintu
 type ProxBatchData struct {
 	Value  int
 	DoorID int
 	TS     string
 }
 
+// BatchInsertEnvSensor melakukan bulk insert ke tabel env_sensor.
+// Menggabungkan data temp dan rh menjadi satu baris per sensor per timestamp.
+func BatchInsertEnvSensor(tx *sql.Tx, data []EnvSensorBatchData) error {
+	if len(data) == 0 {
+		return nil
+	}
+
+	valueStrings := make([]string, 0, len(data))
+	valueArgs := make([]interface{}, 0, len(data)*5)
+	i := 1
+	for _, d := range data {
+		valueStrings = append(valueStrings, fmt.Sprintf("($%d, $%d, $%d, $%d, $%d)", i, i+1, i+2, i+3, i+4))
+		valueArgs = append(valueArgs, d.AreaID, d.No, d.Temp, d.RH, d.TS)
+		i += 5
+	}
+
+	stmt := fmt.Sprintf("INSERT INTO env_sensor (area_id, no, temp, rh, ts) VALUES %s", strings.Join(valueStrings, ","))
+	_, err := tx.Exec(stmt, valueArgs...)
+	if err != nil {
+		return fmt.Errorf("error executing bulk insert for env_sensor: %w", err)
+	}
+	return nil
+}
+
+// BatchInsertProx melakukan bulk insert ke tabel prox.
 func BatchInsertProx(tx *sql.Tx, data []ProxBatchData) error {
 	if len(data) == 0 {
 		return nil
@@ -126,10 +87,88 @@ func BatchInsertProx(tx *sql.Tx, data []ProxBatchData) error {
 	if err != nil {
 		return fmt.Errorf("error executing bulk insert for prox data: %w", err)
 	}
-
 	return nil
 }
 
+// SaveFailedBatch menyimpan payload yang gagal dipublish ke MQTT ke tabel failed_batch.
+// Dipanggil oleh forwarder saat publish ke cloud gagal.
+func SaveFailedBatch(pipelineID int, destTopic, brokerURL string, payload []byte) {
+	db := database.GetDB()
+	if db == nil {
+		log.Printf("⚠️ SaveFailedBatch: DB tidak tersedia, payload pipeline %d hilang.", pipelineID)
+		return
+	}
+	_, err := db.Exec(
+		`INSERT INTO failed_batch (pipeline_id, payload_json, dest_topic, broker_url) VALUES ($1, $2, $3, $4)`,
+		pipelineID, string(payload), destTopic, brokerURL,
+	)
+	if err != nil {
+		log.Printf("❌ SaveFailedBatch: gagal simpan payload pipeline %d ke DB: %v", pipelineID, err)
+	} else {
+		log.Printf("💾 SaveFailedBatch: payload pipeline %d tersimpan sebagai fallback.", pipelineID)
+	}
+}
+
+// FailedBatchRow merepresentasikan satu baris dari tabel failed_batch.
+type FailedBatchRow struct {
+	ID         int
+	PipelineID int
+	Payload    []byte
+	DestTopic  string
+	BrokerURL  string
+	RetryCount int
+}
+
+// LoadFailedBatches mengambil semua batch yang belum berhasil dikirim (max 50).
+func LoadFailedBatches() ([]FailedBatchRow, error) {
+	db := database.GetDB()
+	if db == nil {
+		return nil, fmt.Errorf("DB tidak tersedia")
+	}
+
+	rows, err := db.Query(
+		`SELECT id, pipeline_id, payload_json, dest_topic, broker_url, retry_count
+		 FROM failed_batch
+		 ORDER BY failed_at ASC
+		 LIMIT 50`,
+	)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var batches []FailedBatchRow
+	for rows.Next() {
+		var b FailedBatchRow
+		var payloadStr string
+		if err := rows.Scan(&b.ID, &b.PipelineID, &payloadStr, &b.DestTopic, &b.BrokerURL, &b.RetryCount); err != nil {
+			continue
+		}
+		b.Payload = []byte(payloadStr)
+		batches = append(batches, b)
+	}
+	return batches, rows.Err()
+}
+
+// DeleteFailedBatch menghapus satu baris failed_batch setelah retry berhasil.
+func DeleteFailedBatch(id int) {
+	db := database.GetDB()
+	if db == nil {
+		return
+	}
+	db.Exec(`DELETE FROM failed_batch WHERE id = $1`, id)
+}
+
+// IncrementRetryCount menambah counter retry untuk batch yang gagal di-retry.
+func IncrementRetryCount(id int) {
+	db := database.GetDB()
+	if db == nil {
+		return
+	}
+	db.Exec(`UPDATE failed_batch SET retry_count = retry_count + 1 WHERE id = $1`, id)
+}
+
+// SafetyStatus hasil evaluasi ambang batas sensor
 type SafetyStatus struct {
 	IsAlert   bool
 	Message   string
@@ -155,6 +194,7 @@ func getMessageConfig(areaID int, sensorType string) (*config.MessageConfig, boo
 	return nil, false
 }
 
+// EvaluateTemp mengevaluasi nilai suhu terhadap threshold yang dikonfigurasi.
 func EvaluateTemp(areaID int, sensorNo int, currentValue float64) SafetyStatus {
 	status := SafetyStatus{IsAlert: false, Severity: "NORMAL"}
 	sensorCfg, ok := getThresholdConfig(config.TempThresholds, areaID, sensorNo)
@@ -205,7 +245,7 @@ func EvaluateTemp(areaID int, sensorNo int, currentValue float64) SafetyStatus {
 	return status
 }
 
-// status set
+// EvaluateRh mengevaluasi nilai kelembaban terhadap threshold yang dikonfigurasi.
 func EvaluateRh(areaID int, sensorNo int, currentValue float64) SafetyStatus {
 	status := SafetyStatus{IsAlert: false, Severity: "NORMAL"}
 	sensorCfg, ok := getThresholdConfig(config.RhThresholds, areaID, sensorNo)
@@ -253,49 +293,10 @@ func EvaluateRh(areaID int, sensorNo int, currentValue float64) SafetyStatus {
 	return status
 }
 
-func GetFloat(v interface{}) (float64, error) {
-	switch i := v.(type) {
-	case float64:
-		return i, nil
-	case float32:
-		return float64(i), nil
-	case int:
-		return float64(i), nil
-	case int32:
-		return float64(i), nil
-	case int64:
-		return float64(i), nil
-	case string:
-		return strconv.ParseFloat(i, 64)
-	default:
-		return 0, fmt.Errorf("cannot convert type %T to float64", v)
-	}
+// marshalPayload helper untuk serialize payload ke JSON bytes (dipakai oleh forwarder)
+func MarshalPayload(v interface{}) ([]byte, error) {
+	return json.Marshal(v)
 }
 
-func GetInt(v interface{}) (int, error) {
-	switch i := v.(type) {
-	case float64:
-		return int(i), nil
-	case int:
-		return i, nil
-	case string:
-		return strconv.Atoi(i)
-	default:
-		return 0, fmt.Errorf("cannot convert type %T to int", v)
-	}
-}
-
-func ParseSensorNo(key, prefix string) (int, error) {
-	if key == prefix {
-		return 1, nil
-	}
-	if strings.HasPrefix(key, prefix) {
-		noStr := strings.TrimPrefix(key, prefix)
-		no, err := strconv.Atoi(noStr)
-		if err != nil {
-			return 0, fmt.Errorf("invalid sensor number in key '%s': %w", key, err)
-		}
-		return no, nil
-	}
-	return 0, fmt.Errorf("key '%s' does not have prefix '%s'", key, prefix)
-}
+// Referensi timestamp untuk penggunaan internal
+var _ = time.Now
