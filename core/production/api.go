@@ -1,8 +1,8 @@
 package main
 
 import (
-	"preproduction/modul/mdcw"
-	"preproduction/modul/sp"
+	"production/modul/mdcw"
+	"production/modul/sp"
 	"strings"
 	"time"
 

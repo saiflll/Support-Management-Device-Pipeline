@@ -1,9 +1,9 @@
 package main
 
 import (
-	"preproduction/lib"
-	"preproduction/modul/mdcw"
-	"preproduction/modul/sp"
+	"production/lib"
+	"production/modul/mdcw"
+	"production/modul/sp"
 
 	"github.com/gofiber/fiber/v2"
 )

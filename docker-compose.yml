@@ -121,13 +121,13 @@ services:
     networks:
       - iot-net
 
-  # === Preproduction Monitoring Service (MDCCW & Scraper) ===
-  preproduction:
-    image: rennnagge/preproduction-app:latest
-    container_name: preproduction-app
+  # === Production Monitoring Service (MDCW & Scraper) ===
+  production:
+    image: rennnagge/production-app:latest
+    container_name: production-app
     build:
       context: .
-      dockerfile: core/preproduction/Dockerfile
+      dockerfile: core/production/Dockerfile
     ports:
       - "3000:3000"
     environment:

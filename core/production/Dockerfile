@@ -1,7 +1,7 @@
 # ============================================
-# Preproduction Service Dockerfile
-# Build context: servfor/ root (not preproduction/)
-# Usage: docker build -f core/preproduction/Dockerfile .
+# Production Service Dockerfile
+# Build context: servfor/ root (not production/)
+# Usage: docker build -f core/production/Dockerfile .
 # ============================================
 
 # ============================================
@@ -10,10 +10,10 @@
 FROM node:22-alpine AS svelte-builder
 WORKDIR /ui
 
-COPY core/preproduction/ui/package*.json ./
+COPY core/production/ui/package*.json ./
 RUN npm ci
 
-COPY core/preproduction/ui/ .
+COPY core/production/ui/ .
 
 RUN npm run build
 
@@ -29,15 +29,15 @@ RUN apk add --no-cache git ca-certificates tzdata || \
     (sleep 5 && apk add --no-cache git ca-certificates tzdata) || \
     (sleep 10 && apk add --no-cache git ca-certificates tzdata)
 
-COPY core/preproduction/go.mod core/preproduction/go.sum ./
-COPY core/preproduction/vendor ./vendor
+COPY core/production/go.mod core/production/go.sum ./
+COPY core/production/vendor ./vendor
 
-COPY core/preproduction/ .
+COPY core/production/ .
 
 RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -mod=vendor \
     -ldflags='-w -s -extldflags "-static"' \
     -a -installsuffix cgo \
-    -o preproduction-server .
+    -o production-server .
 
 # ============================================
 # Stage 3: Runtime
@@ -53,7 +53,7 @@ ENV TZ=Asia/Jakarta
 
 WORKDIR /app
 
-COPY --from=go-builder /build/preproduction-server .
+COPY --from=go-builder /build/production-server .
 # Vite outDir is 'dist' (vite.config.js: build.outDir = '../web' relative to /ui → /web)
 COPY --from=svelte-builder /web ./web
 
@@ -68,4 +68,4 @@ RUN addgroup -g 1000 appuser && \
 
 USER appuser
 
-CMD ["/app/preproduction-server"]
+CMD ["/app/production-server"]

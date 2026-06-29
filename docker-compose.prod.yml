@@ -103,7 +103,7 @@ services:
   production:
     build:
       context: .
-      dockerfile: core/preproduction/Dockerfile
+      dockerfile: core/production/Dockerfile
     image: iot-production:latest
     container_name: production
     ports:
