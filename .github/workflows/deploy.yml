@@ -20,12 +20,12 @@ jobs:
 
       - name: Stop & remove old app containers (tidak menyentuh postgres & emqx)
         run: |
-          docker stop forwarder ota-app forming-app || true
-          docker rm forwarder ota-app forming-app || true
+          docker stop iot-support production || true
+          docker rm iot-support production || true
 
       - name: Build images from source
         run: |
-          docker compose -f docker-compose.prod.yml build --no-cache backend ota forming
+          docker compose -f docker-compose.prod.yml build --no-cache iot-support production
 
       - name: Start all services
         run: |

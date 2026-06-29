@@ -44,16 +44,18 @@ services:
     networks:
       - iot-net
 
-  # === Backend Forwarder Service ===
-  backend:
+  # === IoT Support: Forwarder + OTA Server (satu container) ===
+  iot-support:
     build:
       context: .
-      dockerfile: core/forward/Dockerfile
-    image: iot-forwarder:latest
-    container_name: forwarder
+      dockerfile: core/iot-support/Dockerfile
+    image: iot-support:latest
+    container_name: iot-support
     ports:
-      - "8888:8888"
+      - "8888:8888"   # Forwarder
+      - "9999:9999"   # OTA Server
     environment:
+      # Forwarder env
       - DB_HOST=postgres_db
       - MQTT_BROKER_URI=tcp://emqx:1883
       - MQTT_USERNAME=${MQTT_USERNAME}
@@ -63,7 +65,18 @@ services:
       - MQTT_USERNAME_FOR=${MQTT_USERNAME_FOR}
       - MQTT_PASSWORD_FOR=${MQTT_PASSWORD_FOR}
       - TELE_BOT_ALRT=${TELE_BOT_ALRT}
+      # OTA env
+      - MQTT_BROKER=tcp://emqx:1883
+      - MQTT_USER=${MQTT_USER}
+      - MQTT_PASS=${MQTT_PASS}
+      - TELE_BOT_OTA=${TELE_BOT_OTA}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - SERVER_NAME=${SERVER_NAME:-ren_itdt_west}
+      - WEBHOOK_TOKEN=${WEBHOOK_TOKEN:-}
+      - FORWARDER_URL=http://localhost:8888/forwarder/status
+      - FORWARDER_API_URL=http://localhost:8888/api
+      - MONITOR_URL=http://localhost:8888/monitor/status
+      # Shared
       - TZ=Asia/Jakarta
       - HOST_PROC=/host/proc
       - HOST_SYS=/host/sys
@@ -75,6 +88,8 @@ services:
       - /sys:/host/sys:ro
       - /etc:/host/etc:ro
       - /:/host/root:ro
+      # File upload OTA disimpan di folder ./upload/
+      - ./upload:/app/static/uploads
     restart: unless-stopped
     depends_on:
       postgres:
@@ -84,43 +99,13 @@ services:
     networks:
       - iot-net
 
-  # === OTA Update Service ===
-  ota:
-    build:
-      context: .
-      dockerfile: core/ota/Dockerfile
-    image: iot-ota:latest
-    container_name: ota-app
-    ports:
-      - "9999:9999"
-    volumes:
-      # File upload disimpan di folder 'upload/' relatif terhadap lokasi docker-compose
-      - ./upload:/app/static/uploads
-    environment:
-      - MQTT_BROKER=tcp://emqx:1883
-      - MQTT_USER=${MQTT_USER}
-      - MQTT_PASS=${MQTT_PASS}
-      - TELE_BOT_OTA=${TELE_BOT_OTA}
-      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
-      - SERVER_NAME=${SERVER_NAME:-ren_itdt_west}
-      - WEBHOOK_TOKEN=${WEBHOOK_TOKEN:-}
-      - FORWARDER_URL=http://forwarder:8888/forwarder/status
-      - FORWARDER_API_URL=http://forwarder:8888/api
-      - MONITOR_URL=http://forwarder:8888/monitor/status
-    restart: unless-stopped
-    depends_on:
-      emqx:
-        condition: service_healthy
-    networks:
-      - iot-net
-
-  # === Forming/Production Monitoring Service ===
-  forming:
+  # === Production Monitoring Service ===
+  production:
     build:
       context: .
       dockerfile: core/preproduction/Dockerfile
-    image: iot-forming:latest
-    container_name: forming-app
+    image: iot-production:latest
+    container_name: production
     ports:
       - "3000:3000"
     environment:
