@@ -5,7 +5,10 @@ import (
 	"encoding/csv"
 	"fmt"
 	"log"
+	"os"
 	"strings"
+	"sync"
+	"time"
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/gofiber/fiber/v2"
@@ -14,7 +17,15 @@ import (
 var (
 	db         *sql.DB
 	mqttClient mqtt.Client
+	cldFwd     *spCloudForwarder
 )
+
+type spCloudForwarder struct {
+	client  mqtt.Client
+	topic   string
+	enabled bool
+	mu      sync.Mutex
+}
 
 func Init(database *sql.DB, mqttCli mqtt.Client) {
 	db = database
@@ -25,6 +36,63 @@ func Init(database *sql.DB, mqttCli mqtt.Client) {
 	if mqttClient != nil {
 		subscribe(mqttClient)
 	}
+
+	InitSpCloudForwarder()
+}
+
+func InitSpCloudForwarder() {
+	uri := os.Getenv("CLOUD_MQTT_BROKER_URI")
+	if uri == "" {
+		log.Println("[SP-CloudFwd] CLOUD_MQTT_BROKER_URI not set. Cloud forwarding INACTIVE.")
+		cldFwd = &spCloudForwarder{enabled: false}
+		return
+	}
+
+	tpc := os.Getenv("CLOUD_MQTT_TOPIC_SP")
+	if tpc == "" {
+		tpc = os.Getenv("CLOUD_MQTT_TOPIC_FORMING")
+		if tpc == "" {
+			tpc = "prod/mdcw"
+		}
+	}
+
+	usr := os.Getenv("CLOUD_MQTT_USERNAME")
+	pwd := os.Getenv("CLOUD_MQTT_PASSWORD")
+
+	opt := mqtt.NewClientOptions()
+	opt.AddBroker(uri)
+	opt.SetClientID(fmt.Sprintf("sp-cloud-fwd-%d", time.Now().UnixNano()))
+	opt.SetAutoReconnect(true)
+	opt.SetKeepAlive(60 * time.Second)
+	opt.SetConnectTimeout(10 * time.Second)
+	opt.SetProtocolVersion(4)
+
+	if usr != "" {
+		opt.SetUsername(usr)
+		opt.SetPassword(pwd)
+		log.Printf("[SP-CloudFwd] Using cloud MQTT credentials: %s", usr)
+	}
+
+	opt.OnConnect = func(cln mqtt.Client) {
+		log.Printf("[SP-CloudFwd] Connected to Cloud MQTT Broker: %s", uri)
+	}
+	opt.OnConnectionLost = func(cln mqtt.Client, err error) {
+		log.Printf("[SP-CloudFwd] Connection lost: %v", err)
+	}
+
+	cln := mqtt.NewClient(opt)
+	if tkn := cln.Connect(); tkn.Wait() && tkn.Error() != nil {
+		log.Printf("[SP-CloudFwd] Connect error: %v", tkn.Error())
+		log.Println("[SP-CloudFwd] Cloud forwarding active — will retry on publish.")
+	}
+
+	cldFwd = &spCloudForwarder{
+		client:  cln,
+		topic:   tpc,
+		enabled: true,
+	}
+
+	log.Printf("[SP-CloudFwd] Cloud forwarder active -> broker: %s, topic: %s", uri, tpc)
 }
 
 func createTable() {
@@ -66,6 +134,90 @@ func messageHandler(cln mqtt.Client, psn mqtt.Message) {
 	ts := parts[2]
 
 	insertData(sessionID, data, ts)
+
+	go ForwardSpToCloud(sessionID, data, ts)
+}
+
+var sessionToMachineID = map[string]int{
+	"SP1": 31,
+	"SP2": 32,
+	"SP3": 33,
+}
+
+func currentShift() int {
+	hr := time.Now().Hour()
+	switch {
+	case hr >= 7 && hr < 15:
+		return 1
+	case hr >= 15 && hr < 23:
+		return 2
+	default:
+		return 3
+	}
+}
+
+func ForwardSpToCloud(sessionID, productCode, tsRaw string) {
+	if cldFwd == nil || !cldFwd.enabled {
+		return
+	}
+
+	macId, ok := sessionToMachineID[sessionID]
+	if !ok {
+		log.Printf("[SP-CloudFwd] Session '%s' not found in machine_id mapping. Data not forwarded.", sessionID)
+		return
+	}
+
+	// Ambil qty_pack dari database
+	qtyPack := 1
+	if db != nil {
+		err := db.QueryRow("SELECT qty_pack FROM master_produk WHERE kode = $1", productCode).Scan(&qtyPack)
+		if err != nil {
+			log.Printf("[SP-CloudFwd] Gagal ambil qty_pack untuk produk %s: %v. Menggunakan default qty_pack=1", productCode, err)
+		}
+	}
+
+	sft := currentShift()
+
+	wkt := time.Now().Format(time.RFC3339)
+	if tsRaw != "" {
+		wkt = tsRaw
+	}
+
+	// Format: CSV,machine_id,shift,output,nice,reject,rjMtl,rjOvr,rjUnd,rjOth,pwr,eff,ts,product_code
+	csv := fmt.Sprintf(
+		"CSV,%d,%d,%d,%d,%d,%d,%d,%d,%d,%.3f,%.2f,%s,%s",
+		macId,
+		sft,
+		qtyPack, // output = jumlah pack per karton
+		qtyPack, // nice = jumlah pack per karton
+		0,       // reject
+		0,       // reject_metal
+		0,       // reject_overweight
+		0,       // reject_underweight
+		0,       // reject_other
+		0.0,     // power
+		100.0,   // efficiency
+		wkt,
+		productCode,
+	)
+
+	cldFwd.mu.Lock()
+	defer cldFwd.mu.Unlock()
+
+	if !cldFwd.client.IsConnected() {
+		log.Println("[SP-CloudFwd] Client not connected, reconnecting before publish...")
+		tkn := cldFwd.client.Connect()
+		tkn.Wait()
+	}
+
+	tkn := cldFwd.client.Publish(cldFwd.topic, 1, false, csv)
+	tkn.Wait()
+	if err := tkn.Error(); err != nil {
+		log.Printf("[SP-CloudFwd] Publish error: %v", err)
+	} else {
+		log.Printf("[SP-CloudFwd] Forwarded to cloud [%s] machine=%d shift=%d session=%s",
+			cldFwd.topic, macId, sft, sessionID)
+	}
 }
 
 func insertData(sessionID, data, ts string) {
