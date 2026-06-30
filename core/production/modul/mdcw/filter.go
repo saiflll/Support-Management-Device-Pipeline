@@ -189,6 +189,50 @@ func NormalizeRecord(prf string, reg5 int, reg114 int) (string, int, int) {
 				reg5 = 41
 			}
 		}
+	} else if strings.Contains(prfNorm, "MDCW7") || strings.Contains(prfNorm, "KULIT") || strings.Contains(prfNorm, "KERUPUK") {
+		prf = "MDCW7 (Kulit/Kerupuk)"
+		if reg5 != 8201 {
+			if reg114 < 9830 {
+				reg5 = 25
+			} else if reg114 > 10870 {
+				reg5 = 73
+			} else {
+				reg5 = 41
+			}
+		}
+	} else if strings.Contains(prfNorm, "MDCW8") {
+		prf = "MDCW8 (Mie)"
+		if reg5 != 8201 {
+			if reg114 < 9690 {
+				reg5 = 25
+			} else if reg114 > 10710 {
+				reg5 = 73
+			} else {
+				reg5 = 41
+			}
+		}
+	} else if strings.Contains(prfNorm, "MDCW9") {
+		prf = "MDCW9 (Mie)"
+		if reg5 != 8201 {
+			if reg114 < 9690 {
+				reg5 = 25
+			} else if reg114 > 10710 {
+				reg5 = 73
+			} else {
+				reg5 = 41
+			}
+		}
+	} else if strings.Contains(prfNorm, "MIE") {
+		prf = "MDCW8 (Mie)"
+		if reg5 != 8201 {
+			if reg114 < 9690 {
+				reg5 = 25
+			} else if reg114 > 10710 {
+				reg5 = 73
+			} else {
+				reg5 = 41
+			}
+		}
 	} else if strings.Contains(prfNorm, "MDCW") {
 		prf = prfNorm
 		if reg5 != 8201 && (reg5 == 9 || reg5 == 90 || reg5 == 8 || reg5 == 0) && reg114 > 0 {
