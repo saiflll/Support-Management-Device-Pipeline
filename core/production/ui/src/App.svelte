@@ -297,6 +297,9 @@
   const prefixToProductCode: Record<string, string> = {
     "MDCW1 (UK)":"100294","MDCW2 (Siomay)":"100256","MDCW3 (Pentol)":"100286",
     "MDCW4 (AP)":"100209","MDCW5 (ACIN)":"100211","MDCW6 (Lumpia)":"100244",
+    "MDCW7 (Kulit/Kerupuk)":"100239",
+    "MDCW8 (Mie)":"100245",
+    "MDCW9 (Mie)":"100245",
   };
   const productCodeToName: Record<string, string> = {
     "100294":"UDANG KEJU","100256":"SIOMAY DIMSUM","100286":"UDANG RAMBUTAN (PEN)",
@@ -407,7 +410,7 @@
     }
     const passRate = output>0?(ok/output)*100:0;
     const bbKritis = conveyorRecords.filter(c=>{const d=getDaysRemaining(c.tanggal_best_before);return d!==null&&d<=30;}).length;
-    const PREFIXES = ["MDCW1 (UK)","MDCW2 (Siomay)","MDCW3 (Pentol)","MDCW4 (AP)","MDCW5 (ACIN)","MDCW6 (Lumpia)"];
+    const PREFIXES = ["MDCW1 (UK)","MDCW2 (Siomay)","MDCW3 (Pentol)","MDCW4 (AP)","MDCW5 (ACIN)","MDCW6 (Lumpia)","MDCW7 (Kulit/Kerupuk)","MDCW8 (Mie)","MDCW9 (Mie)"];
     let oeeSum=0,activeCount=0;
     for (const p of PREFIXES) {
       if (records.some(r=>r.prefix===p)) { oeeSum+=getOeeForPrefix(p).oee; activeCount++; }
@@ -493,7 +496,7 @@
   const sparklineMetalPoints  = $derived(mdcwDailyStats.map(d=>d.metal_count||0));
   const sparklineOeePoints    = $derived(mdcwDailyStats.map(d=>d.ok_count?Math.round((d.ok_count/(d.total_count||1))*100):0));
 
-  const MDCW_PREFIXES = ["MDCW1 (UK)","MDCW2 (Siomay)","MDCW3 (Pentol)","MDCW4 (AP)","MDCW5 (ACIN)","MDCW6 (Lumpia)"];
+  const MDCW_PREFIXES = ["MDCW1 (UK)","MDCW2 (Siomay)","MDCW3 (Pentol)","MDCW4 (AP)","MDCW5 (ACIN)","MDCW6 (Lumpia)","MDCW7 (Kulit/Kerupuk)","MDCW8 (Mie)","MDCW9 (Mie)"];
 </script>
 
 <svelte:head><title>Production Monitor</title></svelte:head>
@@ -912,7 +915,7 @@
             <div class="topic-list-title"><Activity size={10}/> Audit Penyimpangan Gramasi</div>
             {#if gramasiDriftStats.length}
               <div class="topic-list">
-                {#each gramasiDriftStats.slice(0,6) as d}
+                {#each gramasiDriftStats.slice(0,9) as d}
                   {@const driftPct = Math.min(100,Math.max(0,100-Math.round((Math.abs(d.drift)/d.std)*100*20)))}
                   {@const barColor = d.status.includes("Drift")?"var(--red)":d.status.includes("Warning")?"var(--yellow)":"var(--green)"}
                   <div class="topic-item">

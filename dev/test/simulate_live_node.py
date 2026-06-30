@@ -71,6 +71,24 @@ MDCW_LINES = [
         "weight_range": (3080, 3340),
         "weight_ok":    3210,
     },
+    {
+        "prefix":       "MDCW7 (Kulit/Kerupuk)",
+        "pack_count":   random.randint(100, 500),
+        "weight_range": (9830, 10870),
+        "weight_ok":    10350,
+    },
+    {
+        "prefix":       "MDCW8 (Mie)",
+        "pack_count":   random.randint(100, 500),
+        "weight_range": (9690, 10710),
+        "weight_ok":    10200,
+    },
+    {
+        "prefix":       "MDCW9 (Mie)",
+        "pack_count":   random.randint(100, 500),
+        "weight_range": (9690, 10710),
+        "weight_ok":    10200,
+    },
 ]
 
 # Status code dan probabilitasnya (OK paling sering)

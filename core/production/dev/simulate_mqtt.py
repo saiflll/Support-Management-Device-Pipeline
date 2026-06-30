@@ -19,8 +19,9 @@ PREFIXES = {
     "MDCW4 (AP)":     {"base": 15300, "var": 500},
     "MDCW5 (ACIN)":   {"base": 10200, "var": 150},
     "MDCW6 (LUMPIA)": {"base": 3200,  "var": 200},
-    "MDCW8":          {"base": 8000,  "var": 2000},
-    "MDCW9":          {"base": 4000,  "var": 3000},
+    "MDCW7":          {"base": 10350, "var": 520},
+    "MDCW8":          {"base": 10200, "var": 510},
+    "MDCW9":          {"base": 10200, "var": 510},
 }
 
 # Inisialisasi reg2 (Pack Count) dengan angka acak awal

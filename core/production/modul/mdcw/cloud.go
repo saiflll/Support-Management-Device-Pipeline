@@ -72,18 +72,24 @@ func InitCloudForwarder() {
 }
 
 var prefixToMachineID = map[string]int{
-	"MDCW1 (UK)":     1,
-	"MDCW2 (Siomay)": 2,
-	"MDCW3 (Pentol)": 3,
-	"MDCW4 (AP)":     4,
-	"MDCW5 (ACIN)":   5,
-	"MDCW6 (Lumpia)": 6,
-	"MDCW1":          1,
-	"MDCW2":          2,
-	"MDCW3":          3,
-	"MDCW4":          4,
-	"MDCW5":          5,
-	"MDCW6":          6,
+	"MDCW1 (UK)":          1,
+	"MDCW2 (Siomay)":      2,
+	"MDCW3 (Pentol)":      3,
+	"MDCW4 (AP)":          4,
+	"MDCW5 (ACIN)":        5,
+	"MDCW6 (Lumpia)":      6,
+	"MDCW7 (Kulit/Kerupuk)": 7,
+	"MDCW8 (Mie)":         8,
+	"MDCW9 (Mie)":         9,
+	"MDCW1":               1,
+	"MDCW2":               2,
+	"MDCW3":               3,
+	"MDCW4":               4,
+	"MDCW5":               5,
+	"MDCW6":               6,
+	"MDCW7":               7,
+	"MDCW8":               8,
+	"MDCW9":               9,
 }
 
 func currentShift() int {
