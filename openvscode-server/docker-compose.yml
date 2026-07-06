@@ -1,0 +1,67 @@
+services:
+  # === VS Code Server ===
+  vscode:
+    image: gitpod/openvscode-server:1.93.0
+    container_name: openvscode_server
+    restart: unless-stopped
+    command: --host 0.0.0.0 --connection-token=170845Hutri
+    ports:
+      - "18080:3000"
+    environment:
+      - DOCKER_HOST=tcp://dind:2375
+    user: "1000:1000"
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp
+    volumes:
+      - ./workspace:/home/workspace:rw
+      - vscode_data:/home/openvscode-server/.openvscode-server
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 2G
+        reservations:
+          memory: 256M
+    networks:
+      - vscode-net
+    depends_on:
+      dind:
+        condition: service_healthy
+
+  # === Docker-in-Docker (DinD) Daemon ===
+  dind:
+    image: docker:26.1.4-dind
+    container_name: openvscode_dind
+    restart: unless-stopped
+    privileged: true
+    environment:
+      - DOCKER_TLS_CERTDIR=""
+    volumes:
+      - ./workspace:/home/workspace:rw
+      - dind_data:/var/lib/docker
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'
+          memory: 4G
+        reservations:
+          memory: 512M
+    networks:
+      - vscode-net
+    healthcheck:
+      test: ["CMD", "docker", "info"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  vscode_data:
+  dind_data:
+
+networks:
+  vscode-net:
+    driver: bridge

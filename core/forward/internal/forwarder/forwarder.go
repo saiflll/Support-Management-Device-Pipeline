@@ -369,6 +369,9 @@ func AddToBufferAndAggregate(data []models.AreaData) {
 // RegisterForwarderHandlers mendaftarkan rute HTTP untuk dashboard.
 func RegisterForwarderHandlers(app *fiber.App) {
 	// Public routes
+	app.Get("/health", func(c *fiber.Ctx) error {
+		return c.Status(http.StatusOK).JSON(fiber.Map{"status": "UP"})
+	})
 	app.Get("/login", handleShowLogin)
 	app.Post("/login", handleLogin)
 	app.Post("/request-code", handleRequestCode)
