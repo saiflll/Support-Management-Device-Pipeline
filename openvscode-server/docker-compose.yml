@@ -33,7 +33,7 @@ services:
       - developt-daemon
     environment:
       - DOCKER_HOST=tcp://developt-daemon:2375
-    user: "1000:1000"
+    user: "1001:1001"
     security_opt:
       - no-new-privileges:true
     cap_drop:
