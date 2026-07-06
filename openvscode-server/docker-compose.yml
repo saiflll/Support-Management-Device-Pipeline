@@ -1,14 +1,38 @@
 services:
-  # === VS Code Server ===
-  vscode:
-    image: gitpod/openvscode-server:1.93.0
-    container_name: openvscode_server
+  # === Development Proxy Service ===
+  sup-developt:
+    image: ghcr.io/vmorganp/lazytainer:master
+    container_name: sup-developt
     restart: unless-stopped
-    command: --host 0.0.0.0 --connection-token=170845Hutri
     ports:
-      - "18080:3000"
+      - "18080:18080"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    labels:
+      - "lazytainer.group.developt-group.pollRate=1"
+      - "lazytainer.group.developt-group.inactiveTimeout=600" # Sleep after 10 mins of inactivity
+      - "lazytainer.group.developt-group.ports=18080"
+      - "lazytainer.group.developt-group.sleepMethod=stop"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.2'
+          memory: 100M
+    networks:
+      - vscode-net
+
+  # === Main Development Workspace ===
+  developt:
+    image: gitpod/openvscode-server:1.93.0
+    container_name: developt
+    restart: unless-stopped
+    entrypoint: [ "/bin/sh", "-c", "touch /home/workspace/.last_access && exec $${OPENVSCODE_SERVER_ROOT}/bin/openvscode-server --host 0.0.0.0 --port 18080 --connection-token=170845Hutri" ]
+    network_mode: service:sup-developt
+    depends_on:
+      - sup-developt
+      - developt-daemon
     environment:
-      - DOCKER_HOST=tcp://dind:2375
+      - DOCKER_HOST=tcp://developt-daemon:2375
     user: "1000:1000"
     security_opt:
       - no-new-privileges:true
@@ -23,19 +47,16 @@ services:
       resources:
         limits:
           cpus: '1.0'
-          memory: 2G
+          memory: 3G
         reservations:
           memory: 256M
-    networks:
-      - vscode-net
-    depends_on:
-      dind:
-        condition: service_healthy
+    labels:
+      - "lazytainer.group=developt-group"
 
-  # === Docker-in-Docker (DinD) Daemon ===
-  dind:
+  # === Docker Daemon Helper ===
+  developt-daemon:
     image: docker:26.1.4-dind
-    container_name: openvscode_dind
+    container_name: developt-daemon
     restart: unless-stopped
     privileged: true
     environment:
@@ -47,7 +68,7 @@ services:
       resources:
         limits:
           cpus: '2.0'
-          memory: 4G
+          memory: 5G
         reservations:
           memory: 512M
     networks:
@@ -57,6 +78,27 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+    labels:
+      - "lazytainer.group=developt-group"
+
+  # === Dev Telemetry & Maintenance Service ===
+  developt-mon:
+    image: docker:26.1.4-cli
+    container_name: developt-mon
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./self-destroy.sh:/app/self-destroy.sh:ro
+      - .:/app:ro
+      - ./workspace:/workspace:rw
+    entrypoint: /bin/sh /app/self-destroy.sh
+    deploy:
+      resources:
+        limits:
+          cpus: '0.1'
+          memory: 50M
+    networks:
+      - vscode-net
 
 volumes:
   vscode_data:

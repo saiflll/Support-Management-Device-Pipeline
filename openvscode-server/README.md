@@ -1,14 +1,23 @@
-# OpenVSCode Server with Docker-in-Docker (Isolated Dev Environment)
+# Stealthy Development Environment (sup-developt & developt)
 
-This folder contains the Docker Compose setup for a sandboxed OpenVSCode Server environment running alongside a Docker-in-Docker (DinD) service.
+This folder contains the Docker Compose configuration for an isolated development environment running a sandboxed VS Code editor and Docker-in-Docker daemon.
+
+## Container Naming Schema
+To blend in on the production server, the containers are named unobtrusively:
+- `sup-developt` (Lazytainer Proxy): Listens on port `18080` and manages automatic sleep/wake cycles.
+- `developt` (VS Code Server): The actual editor. Only runs when you are actively using it.
+- `developt-daemon` (Docker-in-Docker): Wakes up to run your nested dev containers.
+- `developt-mon` (Self-Destroyer): Telemetry daemon that wipes files and stops the stack if unused for 60 days.
+
+---
 
 ## Features
-- **Total Isolation**: Development containers you launch inside the VS Code terminal run in a nested Docker daemon (`openvscode_dind`). They cannot see, access, or modify production containers on the host.
+- **Auto-Suspend (Sleep)**: If you don't open the browser for 10 minutes, `developt` and `developt-daemon` automatically stop to free up memory on the server.
 - **Resource Constraints**:
-  - VS Code Server is limited to **1 CPU** and **2 GB RAM**.
-  - Docker-in-Docker (where your dev containers run) is limited to **2 CPUs** and **4 GB RAM**.
-  - Total combined resource footprint will never exceed **6 GB RAM**.
-- **User Sandboxing**: VS Code runs as a non-root user (UID 1000) with dropped Linux capabilities.
+  - `developt`: Limited to **1 CPU** and **3 GB RAM**.
+  - `developt-daemon`: Limited to **2 CPUs** and **5 GB RAM**.
+  - Total combined resource footprint when actively developing will never exceed **8 GB RAM**. When sleeping, the footprint is virtually zero (~10MB RAM for the proxy and monitor).
+- **Self-Destruction (Security)**: If the workspace is not accessed (woken up) for **60 consecutive days**, the `developt-mon` container will wipe all files in the `./workspace` folder, and tear down the container stack and volumes.
 
 ---
 
@@ -23,7 +32,7 @@ cd openvscode-server
 # Create the workspace folder if it doesn't exist
 mkdir -p workspace
 
-# Start the containers
+# Start the stack
 docker compose up -d
 ```
 
@@ -32,23 +41,13 @@ Open your web browser and navigate to:
 ```
 http://<YOUR_SERVER_IP>:18080/?tkn=170845Hutri
 ```
-- **Port**: `18080` (hardcoded)
-- **Token**: `170845Hutri` (hardcoded)
+- **Port**: `18080` (mapped through the proxy)
+- **Token**: `170845Hutri`
 
-### 3. Usage & Persistence
-- Place all your dev project folders and files inside the `/home/workspace` directory in VS Code (which maps to `./workspace` on the host).
-- Your VS Code settings and installed extensions are automatically persisted in a named volume (`vscode_data`).
-- Your downloaded docker images and dev containers inside DinD are persisted in a named volume (`dind_data`).
-
-### 4. Running Docker in VS Code
-Open the integrated terminal in VS Code and verify you can run docker:
-```bash
-docker ps
-docker run -d --name test-nginx -p 8080:80 nginx
-```
-This test container will run inside the DinD sandbox, completely isolated from your host's production containers.
-To check it inside the VS Code terminal:
-```bash
-docker ps
-```
-On the host terminal (your SSH session), if you run `docker ps`, you will **only** see `openvscode_server` and `openvscode_dind`, but **not** `test-nginx`! This confirms the absolute isolation.
+### 3. Verification
+- Open the terminal inside VS Code and run `docker ps`. You are inside the isolated docker daemon (`developt-daemon`).
+- On the host server, running `docker ps` will only show:
+  - `sup-developt` (always up)
+  - `developt-mon` (always up)
+  - `developt` (running only when browser is open)
+  - `developt-daemon` (running only when browser is open)
