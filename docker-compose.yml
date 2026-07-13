@@ -241,6 +241,8 @@ services:
       - DATA_DIR=/app/data
       - JWT_SECRET=${JWT_SECRET:-change-me-to-random-64-char-string}
       - INITIAL_PASSWORD=${INITIAL_PASSWORD:-123456}
+    healthcheck:
+      disable: true
     restart: unless-stopped
     networks:
       - iot-net
