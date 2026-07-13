@@ -35,7 +35,7 @@ jobs:
 
       - name: Start all services
         run: |
-          docker compose -f docker-compose.prod.yml up -d --no-recreate
+          docker compose -f docker-compose.prod.yml up -d --force-recreate
 
       - name: Initialize EMQX Data Bridge (cloud forwarding)
         run: |
