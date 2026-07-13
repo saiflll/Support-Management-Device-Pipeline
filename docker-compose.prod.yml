@@ -206,7 +206,17 @@ services:
     ports:
       - "9997:20128"
     volumes:
-      - router_data:/data
+      - router_data:/app/data
+    environment:
+      - DATA_DIR=/app/data
+      - JWT_SECRET=${JWT_SECRET:-change-me-to-random-64-char-string}
+      - INITIAL_PASSWORD=${INITIAL_PASSWORD:-123456}
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:20128/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
     restart: unless-stopped
     networks:
       - iot-net
