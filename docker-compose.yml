@@ -247,6 +247,16 @@ services:
     networks:
       - iot-net
 
+  router-tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: IOT-router-tunnel
+    profiles: [ai]
+    command: tunnel --no-autoupdate run --token ${CF_TUNNEL_TOKEN}
+    environment:
+      - TUNNEL_TOKEN=${CF_TUNNEL_TOKEN}
+    network_mode: "service:router"
+    restart: unless-stopped
+
 
 volumes:
   postgres_data:
