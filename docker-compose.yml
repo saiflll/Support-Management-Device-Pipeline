@@ -221,11 +221,12 @@ services:
   tunnel:
     image: cloudflare/cloudflared:latest
     container_name: IOT-tunnel
-    profiles: [dev]
+    profiles: [dev, ai]
     command: tunnel --no-autoupdate run --token ${CF_TUNNEL_TOKEN}
     environment:
       - TUNNEL_TOKEN=${CF_TUNNEL_TOKEN}
-    network_mode: "service:console"
+    networks:
+      - iot-net
     restart: unless-stopped
 
   # === AI Gateway (profile: ai) ===
@@ -246,16 +247,6 @@ services:
     restart: unless-stopped
     networks:
       - iot-net
-
-  router-tunnel:
-    image: cloudflare/cloudflared:latest
-    container_name: IOT-router-tunnel
-    profiles: [ai]
-    command: tunnel --no-autoupdate run --token ${CF_TUNNEL_TOKEN}
-    environment:
-      - TUNNEL_TOKEN=${CF_TUNNEL_TOKEN}
-    network_mode: "service:router"
-    restart: unless-stopped
 
 
 volumes:
