@@ -26,8 +26,8 @@ jobs:
 
       - name: Stop & remove old/conflicting containers
         run: |
-          docker stop forwarder ota production emqx postgres_db iot-support dev-console cf-tunnel ai-router || true
-          docker rm forwarder ota production emqx postgres_db iot-support dev-console cf-tunnel ai-router || true
+          docker stop IOT-forwarder IOT-ota IOT-production IOT-emqx IOT-postgres IOT-console IOT-tunnel IOT-router || true
+          docker rm IOT-forwarder IOT-ota IOT-production IOT-emqx IOT-postgres IOT-console IOT-tunnel IOT-router || true
 
       - name: Build images from source
         run: |

@@ -2,7 +2,7 @@ services:
   # === Database Service ===
   postgres:
     image: rennnagge/postgres-db:latest
-    container_name: postgres_db
+    container_name: IOT-postgres
     environment:
       POSTGRES_USER: ${DB_USER}
       POSTGRES_PASSWORD: ${DB_PASSWORD}
@@ -23,7 +23,7 @@ services:
   # === MQTT Broker ===
   emqx:
     image: emqx:5.5
-    container_name: emqx
+    container_name: IOT-emqx
     ports:
       - "1883:1883"
       - "8083:8083"
@@ -47,7 +47,7 @@ services:
   # === Redis Cache & Pub/Sub ===
   redis:
     image: redis:7-alpine
-    container_name: redis
+    container_name: IOT-redis
     ports:
       - "6379:6379"
     volumes:
@@ -67,7 +67,7 @@ services:
       context: ./core/forward
       dockerfile: Dockerfile
     image: rennn/forwarder-app:latest
-    container_name: forwarder
+    container_name: IOT-forwarder
     environment:
       - DB_HOST=postgres_db
       - MQTT_BROKER_URI=tcp://emqx:1883
@@ -102,7 +102,7 @@ services:
       context: ./core/bridge
       dockerfile: Dockerfile
     image: rennn/bridge-app:latest
-    container_name: bridge
+    container_name: IOT-bridge
     environment:
       - MQTT_BROKER_URI=tcp://emqx:1883
       - MQTT_USERNAME=${MQTT_USERNAME}
@@ -122,7 +122,7 @@ services:
       context: .
       dockerfile: core/ota/Dockerfile
     image: rennnagge/ota-app:latest
-    container_name: ota-app
+    container_name: IOT-ota
     ports:
       - "9999:9999"
     volumes:
@@ -151,7 +151,7 @@ services:
       context: .
       dockerfile: core/production/Dockerfile
     image: iot-production:latest
-    container_name: production
+    container_name: IOT-production
     ports:
       - "3000:3000"
     environment:
@@ -179,7 +179,7 @@ services:
     build:
       context: ./core/sandbox
       dockerfile: Dockerfile
-    container_name: dev-console
+    container_name: IOT-console
     ports:
       - "9998:9998"
     volumes:
@@ -192,7 +192,7 @@ services:
 
   tunnel:
     image: cloudflare/cloudflared:latest
-    container_name: cf-tunnel
+    container_name: IOT-tunnel
     command: tunnel --no-autoupdate run --token ${CF_TUNNEL_TOKEN}
     environment:
       - TUNNEL_TOKEN=${CF_TUNNEL_TOKEN}
@@ -202,7 +202,7 @@ services:
   # === AI Gateway ===
   router:
     image: decolua/9router:latest
-    container_name: ai-router
+    container_name: IOT-router
     ports:
       - "9997:20128"
     volumes:
@@ -211,12 +211,6 @@ services:
       - DATA_DIR=/app/data
       - JWT_SECRET=${JWT_SECRET:-change-me-to-random-64-char-string}
       - INITIAL_PASSWORD=${INITIAL_PASSWORD:-123456}
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:20128/api/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 60s
     restart: unless-stopped
     networks:
       - iot-net
