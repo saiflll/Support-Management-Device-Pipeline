@@ -199,6 +199,48 @@ services:
     networks:
       - iot-net
 
+  # === Dev Tools (profile: dev) ===
+  console:
+    build:
+      context: ./core/sandbox
+      dockerfile: Dockerfile
+    container_name: dev-console
+    profiles: [dev]
+    ports:
+      - "9998:9998"
+    volumes:
+      - sandbox_home:/home/dev
+      # - .:/workspace:rw
+      # - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - DEV_PASS=${DEV_PASS:-devpass}
+    restart: unless-stopped
+    networks:
+      - iot-net
+
+  tunnel:
+    image: cloudflare/cloudflared:latest
+    container_name: cf-tunnel
+    profiles: [dev]
+    command: tunnel --no-autoupdate run --token ${CF_TUNNEL_TOKEN}
+    environment:
+      - TUNNEL_TOKEN=${CF_TUNNEL_TOKEN}
+    network_mode: "service:console"
+    restart: unless-stopped
+
+  # === AI Gateway (profile: ai) ===
+  router:
+    image: decolua/9router:latest
+    container_name: ai-router
+    profiles: [ai]
+    ports:
+      - "9997:20128"
+    volumes:
+      - router_data:/data
+    restart: unless-stopped
+    networks:
+      - iot-net
+
 
 volumes:
   postgres_data:
@@ -206,6 +248,8 @@ volumes:
   emqx_log:
   ota_uploads:
   redis_data:
+  sandbox_home:
+  router_data:
 
 networks:
   iot-net:

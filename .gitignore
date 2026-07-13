@@ -38,6 +38,7 @@ build/
 *.env
 *.envi
 envi.txt
+env.txt
 
 # Editor / IDE
 .vscode/

@@ -20,12 +20,12 @@ jobs:
 
       - name: Stop & remove old/conflicting containers
         run: |
-          docker stop forwarder ota production emqx postgres_db iot-support || true
-          docker rm forwarder ota production emqx postgres_db iot-support || true
+          docker stop forwarder ota production emqx postgres_db iot-support dev-console cf-tunnel ai-router || true
+          docker rm forwarder ota production emqx postgres_db iot-support dev-console cf-tunnel ai-router || true
 
       - name: Build images from source
         run: |
-          docker compose -f docker-compose.prod.yml build --no-cache forwarder ota production
+          docker compose -f docker-compose.prod.yml build --no-cache forwarder ota production console
 
       - name: Start all services
         run: |
