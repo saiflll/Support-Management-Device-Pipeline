@@ -381,7 +381,7 @@ func HandleGetLogs(c *fiber.Ctx) error {
 }
 
 func HandleGetForwarderStatus(c *fiber.Ctx) error {
-	urlStr := GetEnv("FORWARDER_URL", "http://forwarder:8888/forwarder/status")
+	urlStr := GetEnv("FORWARDER_URL", "http://forwarder:8888/health")
 	res, err := http.Get(urlStr)
 	if err != nil {
 		return c.Status(http.StatusServiceUnavailable).JSON(fiber.Map{"error": "Forwarder service tidak tersedia"})
@@ -393,7 +393,7 @@ func HandleGetForwarderStatus(c *fiber.Ctx) error {
 }
 
 func HandleGetMonitorStatus(c *fiber.Ctx) error {
-	urlStr := GetEnv("MONITOR_URL", "http://monitor:9090/status")
+	urlStr := GetEnv("MONITOR_URL", "http://forwarder:8888/monitor/status")
 	res, err := http.Get(urlStr)
 	if err != nil {
 		return c.Status(http.StatusServiceUnavailable).JSON(fiber.Map{"error": "Monitor service tidak tersedia"})
@@ -402,40 +402,4 @@ func HandleGetMonitorStatus(c *fiber.Ctx) error {
 	dt, _ := io.ReadAll(res.Body)
 	c.Set("Content-Type", "application/json")
 	return c.Send(dt)
-}
-
-func HandleGetPipelines(c *fiber.Ctx) error {
-	urlStr := GetEnv("FORWARDER_API_URL", "http://forwarder:8888/api")
-	res, err := http.Get(urlStr + "/pipelines")
-	if err != nil {
-		return c.Status(http.StatusServiceUnavailable).JSON(fiber.Map{"error": "Forwarder service tidak tersedia"})
-	}
-	defer res.Body.Close()
-	dt, _ := io.ReadAll(res.Body)
-	c.Set("Content-Type", "application/json")
-	return c.Send(dt)
-}
-
-func HandlePostPipelines(c *fiber.Ctx) error {
-	urlStr := GetEnv("FORWARDER_API_URL", "http://forwarder:8888/api")
-	res, err := http.Post(urlStr+"/pipelines", "application/json", strings.NewReader(string(c.Body())))
-	if err != nil {
-		return c.Status(http.StatusServiceUnavailable).JSON(fiber.Map{"error": "Forwarder service tidak tersedia"})
-	}
-	defer res.Body.Close()
-	dt, _ := io.ReadAll(res.Body)
-	c.Status(res.StatusCode).Set("Content-Type", "application/json")
-	return c.Send(dt)
-}
-
-func HandleDeletePipeline(c *fiber.Ctx) error {
-	id := c.Params("id")
-	urlStr := GetEnv("FORWARDER_API_URL", "http://forwarder:8888/api")
-	req, _ := http.NewRequest("DELETE", urlStr+"/pipelines/"+id, nil)
-	res, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return c.Status(http.StatusServiceUnavailable).JSON(fiber.Map{"error": "Forwarder service tidak tersedia"})
-	}
-	defer res.Body.Close()
-	return c.SendStatus(res.StatusCode)
 }

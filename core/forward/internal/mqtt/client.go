@@ -61,8 +61,8 @@ var messageHandler mqtt.MessageHandler = func(cln mqtt.Client, psn mqtt.Message)
 		return
 	}
 
-	// Kirim data ke forwarder untuk agregasi
-	forwarder.AddToBufferAndAggregate(dt)
+	// Kirim data ke forwarder untuk deadband filter + publish ke EMQX bridge
+	forwarder.ProcessAndPublish(dt, client)
 
 	// Langsung panggil ProcessSensorData tanpa transaksi
 	_, err := processor.ProcessSensorData(dt)

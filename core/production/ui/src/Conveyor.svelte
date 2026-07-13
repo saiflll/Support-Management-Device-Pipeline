@@ -221,13 +221,13 @@
   const sparklineShift3Points = $derived(
     timelineData.filter(t => t.shift === "3" || t.shift === 3).length > 0
       ? timelineData.filter(t => t.shift === "3" || t.shift === 3).map(d => d.count || 0)
-      : [5, 12, 8, 15, 10, 18, 14]
+      : []
   );
 
   const sparklineHourlyPoints = $derived(
     timelineData.length > 0
       ? timelineData.map(d => d.count || 0)
-      : [15, 22, 18, 28, 20, 32, 26]
+      : []
   );
 
   const avgHourly = $derived(
@@ -249,6 +249,8 @@
       : 1
   );
 </script>
+
+{#if isLoading}<div class="loading-bar"></div>{/if}
 
 <div class="dash">
   <!-- Data Origin Info Badge -->
@@ -293,6 +295,7 @@
         </div>
         <div class="kpi-value" style="color:var(--red)">{summaryToday.per_shift?.['3']?.toLocaleString('id-ID') || 0}</div>
         <span class="kpi-subtext">22:00 - 06:00</span>
+        {#if sparklineShift3Points.length >= 2}
         <div class="sparkline-container">
           <svg viewBox="0 0 100 30" width="100%" height="30" preserveAspectRatio="none">
             <defs>
@@ -305,6 +308,7 @@
             <path d="{getSparklinePath(sparklineShift3Points)} L 100 30 L 0 30 Z" fill="url(#shift3-grad)" />
           </svg>
         </div>
+        {/if}
       </div>
 
       <div class="kpi-card" style="border-top: 3px solid var(--purple);">
@@ -313,6 +317,7 @@
         </div>
         <div class="kpi-value" style="color:var(--purple)">{avgHourly} <span style="font-size:10px; font-weight:normal; color:var(--text-muted);">scans</span></div>
         <span class="kpi-subtext">average hourly output</span>
+        {#if sparklineHourlyPoints.length >= 2}
         <div class="sparkline-container">
           <svg viewBox="0 0 100 30" width="100%" height="30" preserveAspectRatio="none">
             <defs>
@@ -325,6 +330,7 @@
             <path d="{getSparklinePath(sparklineHourlyPoints)} L 100 30 L 0 30 Z" fill="url(#hourly-grad)" />
           </svg>
         </div>
+        {/if}
       </div>
 
       <div class="kpi-card" style="border-top: 3px solid var(--orange);">

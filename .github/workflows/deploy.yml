@@ -18,18 +18,26 @@ jobs:
         run: |
           echo "${{ secrets.ENV_FILE }}" > .env
 
-      - name: Stop & remove old/conflicting containers (tidak menghapus volume data)
+      - name: Stop & remove old/conflicting containers
         run: |
-          docker stop iot-support production emqx postgres_db || true
-          docker rm iot-support production emqx postgres_db || true
+          docker stop forwarder ota production emqx postgres_db iot-support || true
+          docker rm forwarder ota production emqx postgres_db iot-support || true
 
       - name: Build images from source
         run: |
-          docker compose -f docker-compose.prod.yml build --no-cache iot-support production
+          docker compose -f docker-compose.prod.yml build --no-cache forwarder ota production
 
       - name: Start all services
         run: |
           docker compose -f docker-compose.prod.yml up -d --no-recreate
+
+      - name: Initialize EMQX Data Bridge (cloud forwarding)
+        run: |
+          chmod +x emqx-config/init-bridges.sh || true
+          # Install deps if needed
+          which curl jq 2>/dev/null || (apt-get update -qq && apt-get install -y -qq curl jq)
+          bash emqx-config/init-bridges.sh http://localhost:18083 || \
+            echo "⚠️ EMQX bridge init skipped — configure manually via Dashboard :18083"
 
       - name: Prune unused Docker images
         run: |

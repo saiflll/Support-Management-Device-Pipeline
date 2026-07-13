@@ -45,8 +45,8 @@ call :BuildAndPush "Forwarder Service" "util\forward" "forwarder-app"
 if errorlevel 1 exit /b 1
 echo.
 
-REM 3. Preproduction Service
-call :BuildAndPushRoot "Preproduction Service" "." "core/preproduction/Dockerfile" "preproduction-app"
+REM 3. Production Service
+call :BuildAndPushRoot "Production Service" "." "core/production/Dockerfile" "production-app"
 if errorlevel 1 exit /b 1
 echo.
 
@@ -63,7 +63,7 @@ echo.
 echo %INFO%Images pushed:%RESET%
 echo   - %DOCKER_USERNAME%/ota-app:%VERSION%
 echo   - %DOCKER_USERNAME%/forwarder-app:%VERSION%
-echo   - %DOCKER_USERNAME%/preproduction-app:%VERSION%
+echo   - %DOCKER_USERNAME%/production-app:%VERSION%
 echo   - %DOCKER_USERNAME%/postgres-db:%VERSION%
 echo.
 echo %INFO%To use these images, update docker-compose.yml:%RESET%

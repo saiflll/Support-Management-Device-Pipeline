@@ -126,6 +126,7 @@
       return;
     }
     await fetchRecords(); await fetchSummary(); await fetchFilters();
+    if (activeModule === "sp") await fetchSpDailyStats();
     clearInterval(pollInterval);
     pollInterval = setInterval(fetchRecords, 15000);
   }
@@ -172,6 +173,13 @@
 
   async function fetchDailyStats() {
     try { mdcwDailyStats = (await api("/api/mdcw/daily-stats")) || []; } catch {}
+  }
+
+  async function fetchSpDailyStats() {
+    try {
+      const data = await api("/api/sp/daily-stats?days=7");
+      spDailyStats = data || [];
+    } catch {}
   }
 
   // ── EXPORT CSV (backend) ──────────────────────────────────
@@ -292,6 +300,7 @@
   // ── MDCW STATE ────────────────────────────────────────────
   let activeMdcwSubTab = $state("ringkasan");
   let mdcwDailyStats = $state<any[]>([]);
+  let spDailyStats = $state<any[]>([]);
   let selectedShift = $state("all");
 
   const prefixToProductCode: Record<string, string> = {
@@ -309,8 +318,10 @@
 
   let chartTrend: Chart | null = null;
   let chartReject: Chart | null = null;
+  let chartSpDaily: Chart | null = null;
   let canvasTrend = $state<HTMLCanvasElement | null>(null);
   let canvasReject = $state<HTMLCanvasElement | null>(null);
+  let canvasSpDaily = $state<HTMLCanvasElement | null>(null);
 
   const getChartColors = (th: string) => ({
     text: th === "dark" ? "#a1a1aa" : "#4b5563",
@@ -324,9 +335,11 @@
       setTimeout(initTrendChart, 50);
     if (activeModule === "mdcw" && activeMdcwSubTab === "qc_mesin" && canvasReject && summaries.length > 0)
       setTimeout(initRejectChart, 50);
+    if (activeModule === "sp" && canvasSpDaily && spDailyStats.length > 0)
+      setTimeout(initSpDailyChart, 50);
   });
 
-  onDestroy(() => { chartTrend?.destroy(); chartReject?.destroy(); });
+  onDestroy(() => { chartTrend?.destroy(); chartReject?.destroy(); chartSpDaily?.destroy(); });
 
   function initTrendChart() {
     chartTrend?.destroy();
@@ -369,6 +382,34 @@
         responsive:true, maintainAspectRatio:false,
         plugins:{legend:{position:"top",labels:{color:c.text,boxWidth:8,padding:8,font:{size:8,family:"JetBrains Mono"}}}},
         scales:{x:{grid:{display:false},ticks:{color:c.tick,font:{size:8}}},y:{beginAtZero:true,grid:{color:c.grid},ticks:{color:c.tick,font:{size:8}}}}
+      }
+    });
+  }
+
+  function initSpDailyChart() {
+    chartSpDaily?.destroy();
+    if (!canvasSpDaily || !spDailyStats.length) return;
+    const c = getChartColors(theme);
+    chartSpDaily = new Chart(canvasSpDaily, {
+      type: "bar",
+      data: {
+        labels: spDailyStats.map((d: any) => d.date?.slice(5) || ""),
+        datasets: [{
+          label: "Scans",
+          data: spDailyStats.map((d: any) => d.total_count || 0),
+          backgroundColor: "rgba(99,102,241,0.5)",
+          borderColor: "#6366f1",
+          borderWidth: 1,
+          borderRadius: 2,
+        }]
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { grid: { display: false }, ticks: { color: c.tick, font: { size: 8 } } },
+          y: { beginAtZero: true, grid: { color: c.grid }, ticks: { color: c.tick, font: { size: 8 } } }
+        }
       }
     });
   }
@@ -496,6 +537,19 @@
   const sparklineMetalPoints  = $derived(mdcwDailyStats.map(d=>d.metal_count||0));
   const sparklineOeePoints    = $derived(mdcwDailyStats.map(d=>d.ok_count?Math.round((d.ok_count/(d.total_count||1))*100):0));
 
+  // ── SP DERIVED KPIs ───────────────────────────────────
+  const spTotalScans = $derived(summaries.reduce((a: number, s: any) => a + (s.total_count || 0), 0));
+  const spActiveSessions = $derived(summaries.length);
+  const spLatestScan = $derived.by(() => {
+    if (!records.length) return "-";
+    // records typically sorted newest-first by API
+    for (const r of records) {
+      if (r.ts || r.created_at) return r.ts || r.created_at;
+    }
+    return "-";
+  });
+  const spSparklinePoints = $derived(spDailyStats.map((d: any) => d.total_count || 0));
+
   const MDCW_PREFIXES = ["MDCW1 (UK)","MDCW2 (Siomay)","MDCW3 (Pentol)","MDCW4 (AP)","MDCW5 (ACIN)","MDCW6 (Lumpia)","MDCW7 (Kulit/Kerupuk)","MDCW8 (Mie)","MDCW9 (Mie)"];
 </script>
 
@@ -536,6 +590,7 @@
 </div>
 
 {:else}
+{#if isLoading}<div class="loading-bar"></div>{/if}
 <!-- ── APP SHELL ─────────────────────────────────── -->
 <div class="app-shell">
 
@@ -583,6 +638,46 @@
       <div class="data-info">
         <span><Wifi size={10}/> <strong>SOURCE</strong> BARCODE SCANNERS → MQTT <code>emqx:1883</code> → <code>SP_data</code> → POSTGRES</span>
         <span><Clock size={10}/> Real-time events</span>
+      </div>
+
+      <!-- SP KPI Cards -->
+      <div class="kpi-grid" style="margin-bottom:0">
+        <div class="kpi-card" style="border-top:2px solid var(--accent-2)">
+          <div class="kpi-card-header"><span class="kpi-title">Total Scans</span><ScanBarcode size={12} style="color:var(--text-dim)"/></div>
+          <div class="kpi-value">{summaries.length ? spTotalScans : '—'}</div>
+          <span class="kpi-subtext">scan hari ini</span>
+          {#if spSparklinePoints.length >= 2}
+            <div class="sparkline-container">
+              <svg viewBox="0 0 100 30" width="100%" height="30" preserveAspectRatio="none">
+                <defs><linearGradient id="sp-scan-grad" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stop-color="var(--accent-2)" stop-opacity="0.15"/><stop offset="100%" stop-color="var(--accent-2)" stop-opacity="0"/>
+                </linearGradient></defs>
+                <path d={getSparklinePath(spSparklinePoints)} fill="none" stroke="var(--accent-2)" stroke-width="1.2"/>
+                <path d="{getSparklinePath(spSparklinePoints)} L 100 30 L 0 30 Z" fill="url(#sp-scan-grad)"/>
+              </svg>
+            </div>
+          {/if}
+        </div>
+        <div class="kpi-card" style="border-top:2px solid var(--green)">
+          <div class="kpi-card-header"><span class="kpi-title">Active Sessions</span><BarChart3 size={12} style="color:var(--text-dim)"/></div>
+          <div class="kpi-value" style="color:var(--green)">{summaries.length ? spActiveSessions : '—'}</div>
+          <span class="kpi-subtext">sesi aktif hari ini</span>
+        </div>
+        <div class="kpi-card" style="border-top:2px solid var(--purple)">
+          <div class="kpi-card-header"><span class="kpi-title">Latest Scan</span><Clock size={12} style="color:var(--text-dim)"/></div>
+          <div class="kpi-value" style="font-size:13px;line-height:1.3;color:var(--purple)">{records.length ? spLatestScan : '—'}</div>
+          <span class="kpi-subtext">waktu scan terakhir</span>
+        </div>
+      </div>
+
+      <!-- SP Daily Trend Chart -->
+      <div class="trend-card" style="margin-bottom:0">
+        <div class="card-label row-flex gap-1"><TrendingUp size={10}/> Scan Volume — 7 Hari Terakhir</div>
+        {#if spDailyStats.length}
+          <div class="trend-canvas-wrap" style="min-height:120px"><canvas bind:this={canvasSpDaily}></canvas></div>
+        {:else}
+          <div class="chart-empty" style="padding:24px"><BarChart3 size={24}/><span>Belum ada data tren</span></div>
+        {/if}
       </div>
 
       <div class="sp-grid">
@@ -650,13 +745,14 @@
                     <td class="td-mono td-accent td-lg">{r.data}</td>
                     <td class="td-mono td-nowrap td-muted">{r.ts||r.created_at}</td>
                   </tr>
-                {:else}
+                {/each}
+                {#if !isLoading && records.length === 0}
                   <tr><td colspan="4" class="empty-cell">
                     <span class="empty-icon"><ScanBarcode size={20}/></span>
                     <span>Tidak ada data scan</span>
                     {#if !startDate && !endDate}<span class="empty-hint">Pilih rentang tanggal atau tunggu data masuk</span>{/if}
                   </td></tr>
-                {/each}
+                {/if}
               </tbody>
             </table>
           </div>
@@ -682,14 +778,15 @@
                 <span>To: {s.last_scan?s.last_scan.slice(0,10):"-"}</span>
               </div>
             </div>
-          {:else}
+          {/each}
+          {#if !isLoading && summaries.length === 0}
             <div class="card" style="grid-column:1/-1">
               <div class="empty-cell">
                 <span class="empty-icon"><BarChart3 size={20}/></span>
                 <span>Belum ada data hari ini</span>
               </div>
             </div>
-          {/each}
+          {/if}
         </div>
       </div>
 
@@ -1118,7 +1215,13 @@
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th>ID</th><th>TIMESTAMP</th><th>PREFIX</th><th>BERAT</th><th>PACK</th><th>STATUS</th><th>DATA TYPE</th>
+                    <th onclick={()=>toggleMdcwSort('id')}><span class="sort-btn" class:active={mdcwSortCol==='id'}>ID{#if mdcwSortCol==='id'}{#if mdcwSortDir==='desc'}<ArrowDown size={9}/>{:else}<ArrowUp size={9}/>{/if}{/if}</span></th>
+                    <th onclick={()=>toggleMdcwSort('ts')}><span class="sort-btn" class:active={mdcwSortCol==='ts'}>TIMESTAMP{#if mdcwSortCol==='ts'}{#if mdcwSortDir==='desc'}<ArrowDown size={9}/>{:else}<ArrowUp size={9}/>{/if}{/if}</span></th>
+                    <th onclick={()=>toggleMdcwSort('prefix')}><span class="sort-btn" class:active={mdcwSortCol==='prefix'}>PREFIX{#if mdcwSortCol==='prefix'}{#if mdcwSortDir==='desc'}<ArrowDown size={9}/>{:else}<ArrowUp size={9}/>{/if}{/if}</span></th>
+                    <th onclick={()=>toggleMdcwSort('weight_formatted')}><span class="sort-btn" class:active={mdcwSortCol==='weight_formatted'}>BERAT{#if mdcwSortCol==='weight_formatted'}{#if mdcwSortDir==='desc'}<ArrowDown size={9}/>{:else}<ArrowUp size={9}/>{/if}{/if}</span></th>
+                    <th onclick={()=>toggleMdcwSort('reg2')}><span class="sort-btn" class:active={mdcwSortCol==='reg2'}>PACK{#if mdcwSortCol==='reg2'}{#if mdcwSortDir==='desc'}<ArrowDown size={9}/>{:else}<ArrowUp size={9}/>{/if}{/if}</span></th>
+                    <th onclick={()=>toggleMdcwSort('reg5')}><span class="sort-btn" class:active={mdcwSortCol==='reg5'}>STATUS{#if mdcwSortCol==='reg5'}{#if mdcwSortDir==='desc'}<ArrowDown size={9}/>{:else}<ArrowUp size={9}/>{/if}{/if}</span></th>
+                    <th onclick={()=>toggleMdcwSort('data_type')}><span class="sort-btn" class:active={mdcwSortCol==='data_type'}>DATA TYPE{#if mdcwSortCol==='data_type'}{#if mdcwSortDir==='desc'}<ArrowDown size={9}/>{:else}<ArrowUp size={9}/>{/if}{/if}</span></th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1171,7 +1274,16 @@
             <div class="table-scroll">
               <table class="data-table">
                 <thead>
-                  <tr><th>ID</th><th>TIMESTAMP</th><th>PRODUK</th><th>QTY</th><th>SHF</th><th>BATCH</th><th>BEST BEFORE</th><th>FC</th></tr>
+                  <tr>
+                    <th onclick={()=>toggleConvSort('id_record')}><span class="sort-btn" class:active={convSortCol==='id_record'}>ID{#if convSortCol==='id_record'}{#if convSortDir==='desc'}<ArrowDown size={9}/>{:else}<ArrowUp size={9}/>{/if}{/if}</span></th>
+                    <th onclick={()=>toggleConvSort('tanggal_record')}><span class="sort-btn" class:active={convSortCol==='tanggal_record'}>TIMESTAMP{#if convSortCol==='tanggal_record'}{#if convSortDir==='desc'}<ArrowDown size={9}/>{:else}<ArrowUp size={9}/>{/if}{/if}</span></th>
+                    <th onclick={()=>toggleConvSort('kode_produk')}><span class="sort-btn" class:active={convSortCol==='kode_produk'}>PRODUK{#if convSortCol==='kode_produk'}{#if convSortDir==='desc'}<ArrowDown size={9}/>{:else}<ArrowUp size={9}/>{/if}{/if}</span></th>
+                    <th onclick={()=>toggleConvSort('qty_per_pack')}><span class="sort-btn" class:active={convSortCol==='qty_per_pack'}>QTY{#if convSortCol==='qty_per_pack'}{#if convSortDir==='desc'}<ArrowDown size={9}/>{:else}<ArrowUp size={9}/>{/if}{/if}</span></th>
+                    <th onclick={()=>toggleConvSort('shift')}><span class="sort-btn" class:active={convSortCol==='shift'}>SHF{#if convSortCol==='shift'}{#if convSortDir==='desc'}<ArrowDown size={9}/>{:else}<ArrowUp size={9}/>{/if}{/if}</span></th>
+                    <th onclick={()=>toggleConvSort('kode_batch')}><span class="sort-btn" class:active={convSortCol==='kode_batch'}>BATCH{#if convSortCol==='kode_batch'}{#if convSortDir==='desc'}<ArrowDown size={9}/>{:else}<ArrowUp size={9}/>{/if}{/if}</span></th>
+                    <th onclick={()=>toggleConvSort('tanggal_best_before')}><span class="sort-btn" class:active={convSortCol==='tanggal_best_before'}>BEST BEFORE{#if convSortCol==='tanggal_best_before'}{#if convSortDir==='desc'}<ArrowDown size={9}/>{:else}<ArrowUp size={9}/>{/if}{/if}</span></th>
+                    <th onclick={()=>toggleConvSort('factory')}><span class="sort-btn" class:active={convSortCol==='factory'}>FC{#if convSortCol==='factory'}{#if convSortDir==='desc'}<ArrowDown size={9}/>{:else}<ArrowUp size={9}/>{/if}{/if}</span></th>
+                  </tr>
                 </thead>
                 <tbody>
                   {#each sortedConveyorRecords() as c}
@@ -1212,5 +1324,3 @@
   </main>
 </div>
 {/if}
-
-{#if isLoading}<div class="loading-bar"></div>{/if}

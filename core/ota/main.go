@@ -79,9 +79,6 @@ func main() {
 	api.Get("/logs/:id", core.HandleGetLogs)
 	api.Get("/forwarder/status", core.HandleGetForwarderStatus)
 	api.Get("/monitor/status", core.HandleGetMonitorStatus)
-	api.Get("/pipelines", core.HandleGetPipelines)
-	api.Post("/pipelines", core.HandlePostPipelines)
-	api.Delete("/pipelines/:id", core.HandleDeletePipeline)
 
 	go core.InitMQTT()
 

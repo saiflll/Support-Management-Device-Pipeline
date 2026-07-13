@@ -65,3 +65,9 @@ analysis.json
 
 # References
 dev/reff/
+
+# Removed: moved to its own repository
+Bottom/
+
+# Removed: openvscode-server development environment
+openvscode-server/

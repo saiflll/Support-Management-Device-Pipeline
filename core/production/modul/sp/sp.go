@@ -3,6 +3,7 @@ package sp
 import (
 	"database/sql"
 	"encoding/csv"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -12,6 +13,7 @@ import (
 
 	mqtt "github.com/eclipse/paho.mqtt.golang"
 	"github.com/gofiber/fiber/v2"
+	"production/redis"
 )
 
 var (
@@ -167,12 +169,24 @@ func ForwardSpToCloud(sessionID, productCode, tsRaw string) {
 		return
 	}
 
-	// Ambil qty_pack dari database
+	// Ambil qty_pack dari Redis cache (fallback ke database)
 	qtyPack := 1
-	if db != nil {
+	if cacheVal, ok := redis.GetCache(redis.MasterProductKey + ":" + productCode); ok {
+		var mp struct{ QtyPack int }
+		if err := json.Unmarshal([]byte(cacheVal), &mp); err == nil {
+			qtyPack = mp.QtyPack
+			log.Printf("[SP-CloudFwd] Cache hit untuk produk %s: qty_pack=%d", productCode, qtyPack)
+		}
+	} else if db != nil {
 		err := db.QueryRow("SELECT qty_pack FROM master_produk WHERE kode = $1", productCode).Scan(&qtyPack)
 		if err != nil {
 			log.Printf("[SP-CloudFwd] Gagal ambil qty_pack untuk produk %s: %v. Menggunakan default qty_pack=1", productCode, err)
+		} else {
+			// Cache hasil query untuk 30 menit
+			mp := struct{ QtyPack int }{qtyPack}
+			if b, err := json.Marshal(mp); err == nil {
+				redis.SetCache(redis.MasterProductKey+":"+productCode, string(b), redis.CacheTTL)
+			}
 		}
 	}
 

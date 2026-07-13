@@ -50,6 +50,23 @@ services:
     networks:
       - iot-net
 
+  # === Redis Cache & Pub/Sub ===
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - iot-net
+
   # === Backend Forwarder Service ===
   backend:
     image: rennn/forwarder-app:latest
@@ -66,10 +83,7 @@ services:
       - MQTT_BROKER_URI=tcp://emqx:1883
       - MQTT_USERNAME=${MQTT_USERNAME}
       - MQTT_PASSWORD=${MQTT_PASSWORD}
-      - MQTT_BROKER_PUB=${MQTT_BROKER_PUB}
-      - MQTT_TOPIC_PUB=${MQTT_TOPIC_PUB}
-      - MQTT_USERNAME_FOR=${MQTT_USERNAME_FOR}
-      - MQTT_PASSWORD_FOR=${MQTT_PASSWORD_FOR}
+      - REDIS_URL=redis://redis:6379/0
       - TELE_BOT_ALRT=${TELE_BOT_ALRT}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
       - TZ=Asia/Jakarta
@@ -87,6 +101,26 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+      emqx:
+        condition: service_healthy
+    networks:
+      - iot-net
+
+  # === Binary Bridge Service (HW binary → JSON for backend) ===
+  bridge:
+    build:
+      context: ./core/bridge
+      dockerfile: Dockerfile
+    image: rennn/bridge-app:latest
+    container_name: bridge
+    environment:
+      - MQTT_BROKER_URI=tcp://emqx:1883
+      - MQTT_USERNAME=${MQTT_USERNAME}
+      - MQTT_PASSWORD=${MQTT_PASSWORD}
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=info
+    restart: unless-stopped
+    depends_on:
       emqx:
         condition: service_healthy
     networks:
@@ -111,8 +145,7 @@ services:
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
       - SERVER_NAME=${SERVER_NAME:-ren_itdt_west}
       - WEBHOOK_TOKEN=${WEBHOOK_TOKEN:-}
-      - FORWARDER_URL=http://forwarder:8888/forwarder/status
-      - FORWARDER_API_URL=http://forwarder:8888/api
+      - FORWARDER_URL=http://forwarder:8888/health
       - MONITOR_URL=http://forwarder:8888/monitor/status
     restart: unless-stopped
     depends_on:
@@ -155,6 +188,7 @@ services:
       - PROD_DB_USER=ppa
       - PROD_DB_PASSWORD=PestaPora123
       - PROD_DB_NAME=db_konveyor
+      - REDIS_URL=redis://redis:6379/0
       - DEBUG_MODE=1
     restart: unless-stopped
     depends_on:
@@ -171,6 +205,7 @@ volumes:
   emqx_data:
   emqx_log:
   ota_uploads:
+  redis_data:
 
 networks:
   iot-net:

@@ -4,11 +4,8 @@ import (
 	"IoTT/internal/config"
 	"IoTT/internal/database"
 	"database/sql"
-	"encoding/json"
 	"fmt"
-	"log"
 	"strings"
-	"time"
 )
 
 // EnvSensorBatchData menampung data gabungan temp + rh untuk satu sensor
@@ -88,84 +85,6 @@ func BatchInsertProx(tx *sql.Tx, data []ProxBatchData) error {
 		return fmt.Errorf("error executing bulk insert for prox data: %w", err)
 	}
 	return nil
-}
-
-// SaveFailedBatch menyimpan payload yang gagal dipublish ke MQTT ke tabel failed_batch.
-// Dipanggil oleh forwarder saat publish ke cloud gagal.
-func SaveFailedBatch(pipelineID int, destTopic, brokerURL string, payload []byte) {
-	db := database.GetDB()
-	if db == nil {
-		log.Printf("⚠️ SaveFailedBatch: DB tidak tersedia, payload pipeline %d hilang.", pipelineID)
-		return
-	}
-	_, err := db.Exec(
-		`INSERT INTO failed_batch (pipeline_id, payload_json, dest_topic, broker_url) VALUES ($1, $2, $3, $4)`,
-		pipelineID, string(payload), destTopic, brokerURL,
-	)
-	if err != nil {
-		log.Printf("❌ SaveFailedBatch: gagal simpan payload pipeline %d ke DB: %v", pipelineID, err)
-	} else {
-		log.Printf("💾 SaveFailedBatch: payload pipeline %d tersimpan sebagai fallback.", pipelineID)
-	}
-}
-
-// FailedBatchRow merepresentasikan satu baris dari tabel failed_batch.
-type FailedBatchRow struct {
-	ID         int
-	PipelineID int
-	Payload    []byte
-	DestTopic  string
-	BrokerURL  string
-	RetryCount int
-}
-
-// LoadFailedBatches mengambil semua batch yang belum berhasil dikirim (max 50).
-func LoadFailedBatches() ([]FailedBatchRow, error) {
-	db := database.GetDB()
-	if db == nil {
-		return nil, fmt.Errorf("DB tidak tersedia")
-	}
-
-	rows, err := db.Query(
-		`SELECT id, pipeline_id, payload_json, dest_topic, broker_url, retry_count
-		 FROM failed_batch
-		 ORDER BY failed_at ASC
-		 LIMIT 50`,
-	)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var batches []FailedBatchRow
-	for rows.Next() {
-		var b FailedBatchRow
-		var payloadStr string
-		if err := rows.Scan(&b.ID, &b.PipelineID, &payloadStr, &b.DestTopic, &b.BrokerURL, &b.RetryCount); err != nil {
-			continue
-		}
-		b.Payload = []byte(payloadStr)
-		batches = append(batches, b)
-	}
-	return batches, rows.Err()
-}
-
-// DeleteFailedBatch menghapus satu baris failed_batch setelah retry berhasil.
-func DeleteFailedBatch(id int) {
-	db := database.GetDB()
-	if db == nil {
-		return
-	}
-	db.Exec(`DELETE FROM failed_batch WHERE id = $1`, id)
-}
-
-// IncrementRetryCount menambah counter retry untuk batch yang gagal di-retry.
-func IncrementRetryCount(id int) {
-	db := database.GetDB()
-	if db == nil {
-		return
-	}
-	db.Exec(`UPDATE failed_batch SET retry_count = retry_count + 1 WHERE id = $1`, id)
 }
 
 // SafetyStatus hasil evaluasi ambang batas sensor
@@ -293,10 +212,3 @@ func EvaluateRh(areaID int, sensorNo int, currentValue float64) SafetyStatus {
 	return status
 }
 
-// marshalPayload helper untuk serialize payload ke JSON bytes (dipakai oleh forwarder)
-func MarshalPayload(v interface{}) ([]byte, error) {
-	return json.Marshal(v)
-}
-
-// Referensi timestamp untuk penggunaan internal
-var _ = time.Now

@@ -44,40 +44,39 @@ services:
     networks:
       - iot-net
 
-  # === IoT Support: Forwarder + OTA Server (satu container) ===
-  iot-support:
-    build:
-      context: .
-      dockerfile: core/iot-support/Dockerfile
-    image: iot-support:latest
-    container_name: iot-support
+  # === Redis Cache & Pub/Sub ===
+  redis:
+    image: redis:7-alpine
+    container_name: redis
     ports:
-      - "8888:8888"   # Forwarder
-      - "9999:9999"   # OTA Server
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - iot-net
+
+  # === Forwarder Service (CSV→JSON, DB, Alert, Deadband) ===
+  forwarder:
+    build:
+      context: ./core/forward
+      dockerfile: Dockerfile
+    image: rennn/forwarder-app:latest
+    container_name: forwarder
     environment:
-      # Forwarder env
       - DB_HOST=postgres_db
       - MQTT_BROKER_URI=tcp://emqx:1883
       - MQTT_USERNAME=${MQTT_USERNAME}
       - MQTT_PASSWORD=${MQTT_PASSWORD}
-      - MQTT_BROKER_PUB=${MQTT_BROKER_PUB}
-      - MQTT_TOPIC_PUB=${MQTT_TOPIC_PUB}
-      - MQTT_USERNAME_FOR=${MQTT_USERNAME_FOR}
-      - MQTT_PASSWORD_FOR=${MQTT_PASSWORD_FOR}
       - TELE_BOT_ALRT=${TELE_BOT_ALRT}
-      # OTA env
-      - MQTT_BROKER=tcp://emqx:1883
-      - MQTT_USER=${MQTT_USER}
-      - MQTT_PASS=${MQTT_PASS}
-      - TELE_BOT_OTA=${TELE_BOT_OTA}
       - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
-      - SERVER_NAME=${SERVER_NAME:-ren_itdt_west}
-      - WEBHOOK_TOKEN=${WEBHOOK_TOKEN:-}
-      - FORWARDER_URL=http://localhost:8888/forwarder/status
-      - FORWARDER_API_URL=http://localhost:8888/api
-      - MONITOR_URL=http://localhost:8888/monitor/status
-      # Shared
       - TZ=Asia/Jakarta
+      - REDIS_URL=redis://redis:6379/0
       - HOST_PROC=/host/proc
       - HOST_SYS=/host/sys
       - HOST_ETC=/host/etc
@@ -88,12 +87,59 @@ services:
       - /sys:/host/sys:ro
       - /etc:/host/etc:ro
       - /:/host/root:ro
-      # File upload OTA disimpan di folder ./upload/
-      - ./upload:/app/static/uploads
     restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
+      emqx:
+        condition: service_healthy
+    networks:
+      - iot-net
+
+  # === Binary Bridge (HW binary → JSON) ===
+  bridge:
+    build:
+      context: ./core/bridge
+      dockerfile: Dockerfile
+    image: rennn/bridge-app:latest
+    container_name: bridge
+    environment:
+      - MQTT_BROKER_URI=tcp://emqx:1883
+      - MQTT_USERNAME=${MQTT_USERNAME}
+      - MQTT_PASSWORD=${MQTT_PASSWORD}
+      - REDIS_URL=redis://redis:6379/0
+      - LOG_LEVEL=info
+    restart: unless-stopped
+    depends_on:
+      emqx:
+        condition: service_healthy
+    networks:
+      - iot-net
+
+  # === OTA Server (Firmware Management) ===
+  ota:
+    build:
+      context: .
+      dockerfile: core/ota/Dockerfile
+    image: rennnagge/ota-app:latest
+    container_name: ota-app
+    ports:
+      - "9999:9999"
+    volumes:
+      - ota_uploads:/app/static/uploads
+    environment:
+      - MQTT_BROKER=tcp://emqx:1883
+      - MQTT_USER=${MQTT_USER}
+      - MQTT_PASS=${MQTT_PASS}
+      - TELE_BOT_OTA=${TELE_BOT_OTA}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - SERVER_NAME=${SERVER_NAME:-ren_itdt_west}
+      - WEBHOOK_TOKEN=${WEBHOOK_TOKEN:-}
+      - FORWARDER_URL=http://forwarder:8888/health
+      - MONITOR_URL=http://forwarder:8888/monitor/status
+      - TZ=Asia/Jakarta
+    restart: unless-stopped
+    depends_on:
       emqx:
         condition: service_healthy
     networks:
@@ -117,7 +163,7 @@ services:
       - MQTT_HOST=emqx
       - MQTT_PORT=${MQTT_PORT}
       - MQTT_USER=${MQTT_USER}
-      - MQTT_PASSWORD=${MQTT_PASSWORD}
+      - REDIS_URL=redis://redis:6379/0
       - TZ=Asia/Jakarta
     restart: unless-stopped
     depends_on:
@@ -131,6 +177,8 @@ services:
 volumes:
   emqx_data:
   emqx_log:
+  ota_uploads:
+  redis_data:
 
 networks:
   iot-net:

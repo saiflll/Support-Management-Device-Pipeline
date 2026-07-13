@@ -54,18 +54,6 @@ export async function uploadFiles(fls: File[]) {
 }
 
 export function getForwarderStatus() { return apiFetch('/forwarder/status'); }
-export function getPipelines() { return apiFetch('/api/pipelines'); }
-export function createPipeline(dt: unknown) {
-    return apiFetch('/api/pipelines', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dt)
-    });
-}
-export function deletePipeline(id: number) {
-    return apiFetch(`/api/pipelines/${id}`, { method: 'DELETE' });
-}
-
 export function getMonitorStatus() { return apiFetch('/monitor/status'); }
 
 export function formatBytes(b: number, dec = 2): string {

@@ -4,7 +4,6 @@
 
   const tabs = [
     { label: "[ /OTA ]", href: "/" },
-    { label: "[ /PIPELINE ]", href: "/pipeline" },
   ];
 
   let currentPath = $derived($page.url.pathname);
