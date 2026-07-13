@@ -17,6 +17,8 @@ jobs:
 
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          clean: false
 
       - name: Create .env file from Secret
         run: |
