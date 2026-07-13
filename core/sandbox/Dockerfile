@@ -6,8 +6,8 @@ RUN apk add --no-cache \
     tmux htop openssh-client docker-cli \
     openssl ca-certificates tzdata
 
-# ttyd web terminal v1.7.10
-RUN wget -qO /usr/local/bin/ttyd https://github.com/tsl0922/ttyd/releases/download/1.7.10/ttyd.x86_64 && \
+# ttyd web terminal v1.7.7
+RUN wget -qO /usr/local/bin/ttyd https://github.com/tsl0922/ttyd/releases/download/1.7.7/ttyd.x86_64 && \
     chmod +x /usr/local/bin/ttyd
 
 RUN adduser -D -h /home/dev dev && \
