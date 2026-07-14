@@ -1,14 +1,41 @@
 package handler
 
 import (
+	"IoTT/internal/config"
+	"IoTT/internal/headroom"
 	"IoTT/internal/models"
 	"IoTT/internal/processor"
 	"fmt"
 	"log"
 
 	"github.com/gofiber/fiber/v2"
-
 )
+
+func HandleCompress(c *fiber.Ctx) error {
+	if config.HeadroomClient == nil {
+		return c.Status(fiber.StatusServiceUnavailable).JSON(fiber.Map{
+			"error": "Headroom service is not configured",
+		})
+	}
+
+	var req headroom.CompressRequest
+	if err := c.BodyParser(&req); err != nil {
+		return c.Status(fiber.StatusBadRequest).JSON(fiber.Map{
+			"error": "Invalid JSON payload",
+		})
+	}
+
+	resp, err := config.HeadroomClient.Compress(req)
+	if err != nil {
+		log.Printf("Headroom compression failed: %v", err)
+		return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
+			"error": fmt.Sprintf("Compression failed: %v", err),
+		})
+	}
+
+	return c.JSON(resp)
+}
+
 
 func HandleSensorData(c *fiber.Ctx) error {
 	var dt []models.AreaData

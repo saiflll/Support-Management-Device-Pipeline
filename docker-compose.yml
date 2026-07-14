@@ -90,6 +90,9 @@ services:
       - HOST_PROC=/host/proc
       - HOST_SYS=/host/sys
       - HOST_ETC=/host/etc
+      - HEADROOM_API_URL=${HEADROOM_API_URL}
+      - HEADROOM_API_KEY=${HEADROOM_API_KEY}
+
     env_file:
       - .env
     volumes:
@@ -113,6 +116,8 @@ services:
       dockerfile: Dockerfile
     image: rennn/bridge-app:latest
     container_name: IOT-bridge
+    ports:
+      - "8787:8787"
     environment:
       - MQTT_BROKER_URI=tcp://emqx:1883
       - MQTT_USERNAME=${MQTT_USERNAME}

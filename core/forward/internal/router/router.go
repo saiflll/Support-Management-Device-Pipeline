@@ -12,6 +12,8 @@ func SetupInternalRouter(app *fiber.App) {
 	{
 
 		dataRoutes.Post("", handler.HandleSensorData)
+		dataRoutes.Post("/compress", handler.HandleCompress)
+
 	}
 
 	telegramRoutes := app.Group("/telegram")

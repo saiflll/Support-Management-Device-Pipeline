@@ -1,12 +1,16 @@
 package config
 
 import (
+	"IoTT/internal/headroom"
 	"log"
 	"os"
 	"time"
 )
 
-var Timezone *time.Location
+var (
+	Timezone       *time.Location
+	HeadroomClient *headroom.Client
+)
 
 func InitTimezone() {
 	var err error
@@ -78,6 +82,16 @@ func init() {
 		ContactWA = "6282221294931" // Fallback to default if not set
 		log.Println("Peringatan: TELEGRAM_CONTACT_WA tidak diatur. Menggunakan nomor default.")
 	}
+
+	// Inisialisasi Headroom Client jika API key disediakan
+	headroomKey := os.Getenv("HEADROOM_API_KEY")
+	if headroomKey != "" {
+		HeadroomClient = headroom.NewClient(headroomKey)
+		log.Println("Headroom client berhasil diinisialisasi")
+	} else {
+		log.Println("Peringatan: HEADROOM_API_KEY tidak diatur. Layanan kompresi tidak aktif.")
+	}
+
 
 	MessageConfigs = []MessageConfig{
 
