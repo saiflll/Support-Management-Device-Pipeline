@@ -4,8 +4,9 @@ USER root
 
 # NumPy di image base dikompilasi untuk x86-64-v2. Server KVM lawas
 # (Common KVM processor) gak support SSE4.2/AVX → crash.
-# Rebuild numpy dari source dengan CFALGS generik biar aman.
-RUN apt-get update && apt-get install -y --no-install-recommends nginx && \
+# Rebuild numpy dari source (gcc gak ada di base image, pake build-essential).
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        nginx build-essential && \
     rm -rf /var/lib/apt/lists/* && \
     rm -f /etc/nginx/sites-enabled/default && \
     CFLAGS="-O2 -march=x86-64" pip install --force-reinstall --no-binary numpy numpy
