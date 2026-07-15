@@ -1,5 +1,8 @@
 #!/bin/sh
 
+# Rust _core.so gak kompatibel sama KVM lawas → pake Python-only mode.
+export HEADROOM_REQUIRE_RUST_CORE=false
+
 # Start nginx in background
 nginx
 

@@ -2,13 +2,19 @@ FROM ghcr.io/chopratejas/headroom:latest
 
 USER root
 
-# models.py udah punya try/except untuk import numpy (jadi np=None).
-# Tapi numpy TERINSTAL dengan binary X86_V2 → crash RuntimeError.
-# Cukup uninstall numpy, biar ImportError ke-trigger → np=None → OK.
+# Masalah: Rust _core.so dikompilasi untuk CPU modern (SIGILL di KVM lawas)
+# dan numpy juga pake binary X86_V2 (RuntimeError).
+#
+# Solusi:
+# - Hapus _core.so → ImportError di-catch try/except → proxy jalan pure-Python.
+# - Hapus numpy → models.py punya try/except ImportError → np=None.
+# Proxy jalan di Python-only degraded mode, kompresi tetap jalan via fallback.
 RUN apt-get update && apt-get install -y --no-install-recommends nginx && \
     rm -rf /var/lib/apt/lists/* && \
     rm -f /etc/nginx/sites-enabled/default && \
-    pip uninstall -y numpy 2>&1 | tail -1
+    pip uninstall -y numpy 2>&1 | tail -1 && \
+    rm -f /usr/local/lib/python3.13/site-packages/headroom/_core*.so && \
+    echo "OK: _core.so removed (Python-only mode)"
 
 COPY nginx.conf /etc/nginx/nginx.conf
 
