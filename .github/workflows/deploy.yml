@@ -1,0 +1,52 @@
+name: Deploy IoT Server to Server
+
+on:
+  push:
+    branches:
+      - main
+      - master
+
+jobs:
+  deploy:
+    runs-on: self-hosted
+
+    steps:
+      - name: Clean stale workspace files
+        run: |
+          sudo rm -rf "$GITHUB_WORKSPACE" 2>/dev/null || true
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          clean: false
+
+      - name: Create .env file from Secret
+        run: |
+          echo "${{ secrets.ENV_FILE }}" > .env
+
+      - name: Stop & remove old/conflicting containers
+        run: |
+          docker stop IOT-forwarder IOT-ota IOT-production IOT-emqx IOT-postgres IOT-console IOT-tunnel IOT-router IOT-bridge headroom headroom-loopback headroom-nginx || true
+          docker rm IOT-forwarder IOT-ota IOT-production IOT-emqx IOT-postgres IOT-console IOT-tunnel IOT-router IOT-bridge headroom headroom-loopback headroom-nginx || true
+
+      - name: Build images from source
+        run: |
+          docker compose -f docker-compose.prod.yml build --no-cache forwarder ota production console bridge headroom-nginx
+
+      - name: Start all services
+        run: |
+          docker compose -f docker-compose.prod.yml up -d --force-recreate
+
+      - name: Initialize EMQX Data Bridge (cloud forwarding)
+        run: |
+          chmod +x emqx-config/init-bridges.sh || true
+          if command -v curl >/dev/null && command -v jq >/dev/null; then
+            bash emqx-config/init-bridges.sh http://localhost:18083 || \
+              echo "⚠️ EMQX bridge init skipped — configure manually via Dashboard :18083"
+          else
+            echo "⚠️ curl/jq not found on runner — install them: sudo apt install curl jq"
+          fi
+
+      - name: Prune unused Docker images
+        run: |
+          docker image prune -f
