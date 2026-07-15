@@ -1,8 +1,8 @@
 #!/bin/sh
 
 # Jalankan headroom proxy di background
-# --host 0.0.0.0 agar bisa diakses dari luar container (oleh service forwarder)
-headroom proxy --port 8787 --host 0.0.0.0 &
+# --no-auth digunakan agar kita tidak perlu API Key untuk penggunaan lokal/internal
+headroom proxy --port 8787 --host 0.0.0.0 --no-auth &
 
 # Jalankan aplikasi bridge utama
 /bridge
