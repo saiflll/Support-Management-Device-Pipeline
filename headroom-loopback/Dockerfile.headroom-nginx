@@ -16,12 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends nginx && \
 
 COPY core_shim.py /tmp/core_shim.py
 RUN pip uninstall -y numpy 2>&1 | tail -1 && \
-    HEADROOM=$(python -c "
-import importlib.util
-spec = importlib.util.find_spec('headroom')
-if spec and spec.submodule_search_locations:
-    print(spec.submodule_search_locations[0])
-") && \
+    HEADROOM=$(python -c "import importlib.util; s=importlib.util.find_spec('headroom'); p=(s.submodule_search_locations or [''])[0]; print(p)") && \
     rm -f "$HEADROOM"/_core*.so && \
     rm -rf "$HEADROOM"/_core && \
     mkdir -p "$HEADROOM"/_core && \
