@@ -26,12 +26,12 @@ jobs:
 
       - name: Stop & remove old/conflicting containers
         run: |
-          docker stop IOT-forwarder IOT-ota IOT-production IOT-emqx IOT-postgres IOT-console IOT-tunnel IOT-router IOT-bridge || true
-          docker rm IOT-forwarder IOT-ota IOT-production IOT-emqx IOT-postgres IOT-console IOT-tunnel IOT-router IOT-bridge || true
+          docker stop IOT-forwarder IOT-ota IOT-production IOT-emqx IOT-postgres IOT-console IOT-tunnel IOT-router IOT-bridge headroom headroom-loopback headroom-nginx || true
+          docker rm IOT-forwarder IOT-ota IOT-production IOT-emqx IOT-postgres IOT-console IOT-tunnel IOT-router IOT-bridge headroom headroom-loopback headroom-nginx || true
 
       - name: Build images from source
         run: |
-          docker compose -f docker-compose.prod.yml build --no-cache forwarder ota production console bridge
+          docker compose -f docker-compose.prod.yml build --no-cache forwarder ota production console bridge headroom-nginx
 
       - name: Start all services
         run: |

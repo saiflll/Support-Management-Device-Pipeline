@@ -105,8 +105,6 @@ services:
       dockerfile: Dockerfile
     image: rennn/bridge-app:latest
     container_name: IOT-bridge
-    ports:
-      - "8787:8787"
     environment:
       - MQTT_BROKER_URI=tcp://emqx:1883
       - MQTT_USERNAME=${MQTT_USERNAME}
@@ -117,6 +115,19 @@ services:
     depends_on:
       emqx:
         condition: service_healthy
+    networks:
+      - iot-net
+
+  # === Headroom + Nginx (combined: loopback proxy in same container) ===
+  headroom-nginx:
+    build:
+      context: ./headroom-loopback
+      dockerfile: Dockerfile.headroom-nginx
+    image: rennn/headroom-nginx:latest
+    container_name: headroom-nginx
+    restart: unless-stopped
+    depends_on:
+      - bridge
     networks:
       - iot-net
 
