@@ -8,13 +8,9 @@ RUN go build -o /bridge .
 FROM alpine:3.19
 
 # Install python and pip to run headroom-ai
-# py3-venv dibutuhkan untuk python3 -m venv
-RUN apk add --no-cache python3 py3-pip py3-venv curl && \
-    python3 -m venv /opt/venv && \
-    /opt/venv/bin/pip install --no-cache-dir "headroom-ai[proxy]"
-
-# Add virtualenv to PATH
-ENV PATH="/opt/venv/bin:$PATH"
+# Install global (tanpa virtualenv) — simpel untuk container
+RUN apk add --no-cache python3 py3-pip curl && \
+    pip3 install --no-cache-dir "headroom-ai[proxy]"
 
 COPY --from=builder /bridge /bridge
 COPY entrypoint.sh /app/entrypoint.sh
