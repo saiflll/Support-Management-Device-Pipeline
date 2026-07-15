@@ -2,9 +2,13 @@ FROM ghcr.io/chopratejas/headroom:latest
 
 USER root
 
+# NumPy di image ini dikompilasi untuk x86-64-v2, tapi server CPU
+# mungkin lebih lawas. Rebuild dari source agar baseline CPU sesuai.
+# Build deps (gcc, python3-dev) sudah ada di image base headroom.
 RUN apt-get update && apt-get install -y --no-install-recommends nginx && \
     rm -rf /var/lib/apt/lists/* && \
-    rm -f /etc/nginx/sites-enabled/default
+    rm -f /etc/nginx/sites-enabled/default && \
+    pip install --force-reinstall --no-binary numpy numpy 2>&1 | tail -3
 
 COPY nginx.conf /etc/nginx/nginx.conf
 
