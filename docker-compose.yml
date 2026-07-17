@@ -24,7 +24,10 @@ services:
       - "5432:5432"
     restart: unless-stopped
     networks:
-      - iot-net
+      iot-net:
+        aliases:
+          - postgres_db
+
 
   # === MQTT Broker ===
   emqx:
