@@ -125,10 +125,18 @@
       }, 15000);
       return;
     }
-    await fetchRecords(); await fetchSummary(); await fetchFilters();
-    if (activeModule === "sp") await fetchSpDailyStats();
+    await Promise.all([fetchRecords(), fetchSummary(), fetchFilters()]);
+    if (activeModule === "sp") {
+      await Promise.all([fetchSpDailyStats(), fetchSpComparison()]);
+    }
     clearInterval(pollInterval);
-    pollInterval = setInterval(fetchRecords, 15000);
+    pollInterval = setInterval(async () => {
+      if (activeModule === "sp") {
+        await Promise.all([fetchRecords(), fetchSpComparison()]);
+      } else {
+        await fetchRecords();
+      }
+    }, 15000);
   }
 
   async function fetchRecords() {
@@ -179,6 +187,12 @@
     try {
       const data = await api("/api/sp/daily-stats?days=7");
       spDailyStats = data || [];
+    } catch {}
+  }
+
+  async function fetchSpComparison() {
+    try {
+      spComparisons = (await api("/api/sp/comparison")) || [];
     } catch {}
   }
 
@@ -299,8 +313,10 @@
 
   // ── MDCW STATE ────────────────────────────────────────────
   let activeMdcwSubTab = $state("ringkasan");
+  let activeSpSubTab = $state("scans");
   let mdcwDailyStats = $state<any[]>([]);
   let spDailyStats = $state<any[]>([]);
+  let spComparisons = $state<any[]>([]);
   let selectedShift = $state("all");
 
   const prefixToProductCode: Record<string, string> = {
@@ -640,6 +656,23 @@
         <span><Clock size={10}/> Real-time events</span>
       </div>
 
+      <!-- Sub-tab Nav SP -->
+      <div class="card subtab-nav">
+        <div class="subtab-group">
+          <button class="subtab-btn" class:active={activeSpSubTab==="scans"} onclick={()=>activeSpSubTab="scans"}>
+            <ScanBarcode size={11}/> LOGS SCAN
+          </button>
+          <button class="subtab-btn" class:active={activeSpSubTab==="discrepancy"} onclick={()=>activeSpSubTab="discrepancy"}>
+            <AlertTriangle size={11}/> DISCREPANCY (MDCW vs SP)
+          </button>
+        </div>
+        <div class="row-flex gap-2">
+          {#if activeSpSubTab==="scans" && records.length}<span class="subtab-tag">{records.length} records loaded</span>{/if}
+          {#if activeSpSubTab==="discrepancy" && spComparisons.length}<span class="subtab-tag">{spComparisons.length} lines loaded</span>{/if}
+          <span class="subtab-tag"><Settings size={9}/> SP ENGINE</span>
+        </div>
+      </div>
+
       <!-- SP KPI Cards -->
       <div class="kpi-grid" style="margin-bottom:0">
         <div class="kpi-card" style="border-top:2px solid var(--accent-2)">
@@ -680,6 +713,7 @@
         {/if}
       </div>
 
+      {#if activeSpSubTab === "scans"}
       <div class="sp-grid">
         <!-- Filters -->
         <div class="sp-sidebar">
@@ -789,6 +823,61 @@
           {/if}
         </div>
       </div>
+      {/if}
+
+      {#if activeSpSubTab === "discrepancy"}
+        <div class="card" style="overflow:hidden">
+          <div class="card-label mb-2">Perbandingan Output MDCW (Checkweigher) vs SP (Secondary Packing)</div>
+          <div class="table-scroll">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>TANGGAL</th>
+                  <th>LINE</th>
+                  <th>PRODUK</th>
+                  <th>MDCW (PACK OK)</th>
+                  <th>SP (CARTONS)</th>
+                  <th>SP (EST. PACKS)</th>
+                  <th>QTY/CARTON</th>
+                  <th>DISCREPANCY (PACKS)</th>
+                  <th>STATUS</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each spComparisons as c}
+                  {@const discVal = c.discrepancy}
+                  {@const discPct = c.discrepancy_pct}
+                  {@const statusText = Math.abs(discVal) === 0 ? "SEIMBANG" : Math.abs(discVal) <= c.qty_pack ? "ATTENTION" : "DISCREPANCY"}
+                  {@const statusCls = Math.abs(discVal) === 0 ? "badge-green" : Math.abs(discVal) <= c.qty_pack ? "badge-yellow" : "badge-red"}
+                  <tr>
+                    <td class="td-mono">{c.date}</td>
+                    <td><span class="badge badge-blue">{c.line}</span></td>
+                    <td>
+                      <div class="col-flex">
+                        <span class="fw-700">{c.product_name || '?'}</span>
+                        <span class="td-muted text-xs">{c.product_code}</span>
+                      </div>
+                    </td>
+                    <td class="td-mono td-lg fw-700">{c.mdcw_packs}</td>
+                    <td class="td-mono td-lg">{c.sp_cartons}</td>
+                    <td class="td-mono td-lg td-purple fw-700">{c.sp_packs}</td>
+                    <td class="td-mono">{c.qty_pack}</td>
+                    <td class="td-mono td-lg fw-700" style="color:{discVal > 0 ? 'var(--red)' : discVal < 0 ? 'var(--yellow)' : 'var(--green)'}">
+                      {discVal > 0 ? '+' : ''}{discVal} ({discPct.toFixed(1)}%)
+                    </td>
+                    <td><span class="badge {statusCls}">{statusText}</span></td>
+                  </tr>
+                {:else}
+                  <tr><td colspan="9" class="empty-cell">
+                    <span class="empty-icon"><AlertTriangle size={20}/></span>
+                    <span>Tidak ada data perbandingan</span>
+                  </td></tr>
+                {/each}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      {/if}
 
     {:else if activeModule === "mdcw"}
     <!-- ── MDCW MODULE ─────────────────────────────── -->

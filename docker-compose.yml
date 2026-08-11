@@ -1,6 +1,6 @@
 services:
-  # === Database Service ===
-  postgres:
+  # === 1. Database Service (PostgreSQL) ===
+  postgres_db:
     build:
       context: ./db
       dockerfile: Dockerfile
@@ -24,12 +24,9 @@ services:
       - "5432:5432"
     restart: unless-stopped
     networks:
-      iot-net:
-        aliases:
-          - postgres_db
+      - iot-net
 
-
-  # === MQTT Broker ===
+  # === 2. MQTT Broker (EMQX) ===
   emqx:
     image: emqx:5.5
     container_name: IOT-emqx
@@ -53,7 +50,7 @@ services:
     networks:
       - iot-net
 
-  # === Redis Cache & Pub/Sub ===
+  # === 3. Redis Cache & Pub/Sub ===
   redis:
     image: redis:7-alpine
     container_name: IOT-redis
@@ -70,110 +67,7 @@ services:
     networks:
       - iot-net
 
-  # === Backend Forwarder Service ===
-  backend:
-    image: rennn/forwarder-app:latest
-    container_name: IOT-forwarder
-    build:
-      context: ./core/forward
-      dockerfile: Dockerfile
-      args:
-        GOLANG_VERSION: 1.24-alpine
-    # ports:
-    #   - "8888:8000"
-    environment:
-      - DB_HOST=postgres_db
-      - MQTT_BROKER_URI=tcp://emqx:1883
-      - MQTT_USERNAME=${MQTT_USERNAME}
-      - MQTT_PASSWORD=${MQTT_PASSWORD}
-      - REDIS_URL=redis://redis:6379/0
-      - TELE_BOT_ALRT=${TELE_BOT_ALRT}
-      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
-      - TZ=Asia/Jakarta
-      - HOST_PROC=/host/proc
-      - HOST_SYS=/host/sys
-      - HOST_ETC=/host/etc
-      - HEADROOM_API_URL=${HEADROOM_API_URL}
-      - HEADROOM_API_KEY=${HEADROOM_API_KEY}
-
-    env_file:
-      - .env
-    volumes:
-      - /proc:/host/proc:ro
-      - /sys:/host/sys:ro
-      - /etc:/host/etc:ro
-      - /:/host/root:ro
-    restart: unless-stopped
-    depends_on:
-      postgres:
-        condition: service_healthy
-      emqx:
-        condition: service_healthy
-    networks:
-      - iot-net
-
-  # === Binary Bridge Service (HW binary → JSON for backend) ===
-  bridge:
-    build:
-      context: ./core/bridge
-      dockerfile: Dockerfile
-    image: rennn/bridge-app:latest
-    container_name: IOT-bridge
-    environment:
-      - MQTT_BROKER_URI=tcp://emqx:1883
-      - MQTT_USERNAME=${MQTT_USERNAME}
-      - MQTT_PASSWORD=${MQTT_PASSWORD}
-      - REDIS_URL=redis://redis:6379/0
-      - LOG_LEVEL=info
-    restart: unless-stopped
-    depends_on:
-      emqx:
-        condition: service_healthy
-    networks:
-      - iot-net
-
-  # === Headroom + Nginx (combined: loopback proxy in same container) ===
-  headroom-nginx:
-    build:
-      context: ./headroom-loopback
-      dockerfile: Dockerfile.headroom-nginx
-    image: rennn/headroom-nginx:latest
-    container_name: headroom-nginx
-    restart: unless-stopped
-    depends_on:
-      - bridge
-    networks:
-      - iot-net
-
-  # === OTA Update Service ===
-  ota:
-    image: rennnagge/ota-app:latest
-    container_name: IOT-ota
-    build:
-      context: .
-      dockerfile: core/ota/Dockerfile
-    ports:
-      - "9999:9999"
-    volumes:
-      - ota_uploads:/app/static/uploads
-    environment:
-      - MQTT_BROKER=tcp://emqx:1883
-      - MQTT_USER=${MQTT_USER}
-      - MQTT_PASS=${MQTT_PASS}
-      - TELE_BOT_OTA=${TELE_BOT_OTA}
-      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
-      - SERVER_NAME=${SERVER_NAME:-ren_itdt_west}
-      - WEBHOOK_TOKEN=${WEBHOOK_TOKEN:-}
-      - FORWARDER_URL=http://forwarder:8888/health
-      - MONITOR_URL=http://forwarder:8888/monitor/status
-    restart: unless-stopped
-    depends_on:
-      emqx:
-        condition: service_healthy
-    networks:
-      - iot-net
-
-  # === Production Monitoring Service (MDCW & Scraper) ===
+  # === 4. Production Monitoring Service (MDCW & Scraper) ===
   production:
     image: rennnagge/production-app:latest
     container_name: IOT-production
@@ -202,81 +96,95 @@ services:
       - CLOUD_MQTT_USERNAME=${CLOUD_MQTT_USERNAME:-}
       - CLOUD_MQTT_PASSWORD=${CLOUD_MQTT_PASSWORD:-}
       # External Conveyor DB Credentials for Scraper
-      - PROD_DB_HOST=10.201.40.2
-      - PROD_DB_PORT=3306
-      - PROD_DB_USER=ppa
-      - PROD_DB_PASSWORD=PestaPora123
-      - PROD_DB_NAME=db_konveyor
+      - PROD_DB_HOST=${PROD_DB_HOST:-10.201.40.2}
+      - PROD_DB_PORT=${PROD_DB_PORT:-3306}
+      - PROD_DB_USER=${PROD_DB_USER:-ppa}
+      - PROD_DB_PASSWORD=${PROD_DB_PASSWORD:-PestaPora123}
+      - PROD_DB_NAME=${PROD_DB_NAME:-db_konveyor}
       - REDIS_URL=redis://redis:6379/0
       - DEBUG_MODE=1
     restart: unless-stopped
     depends_on:
-      postgres:
+      postgres_db:
         condition: service_healthy
       emqx:
         condition: service_healthy
     networks:
       - iot-net
 
-  # === Dev Tools (profile: dev) ===
-  console:
+  # === 5. IoT Core Service (Penerjemah Protocol, Forwarder & Notifier) ===
+  core:
+    image: rennn/forwarder-app:latest
+    container_name: IOT-core
     build:
-      context: ./core/sandbox
+      context: ./core/forward
       dockerfile: Dockerfile
-    container_name: IOT-console
-    profiles: [dev]
-    ports:
-      - "9998:9998"
+      args:
+        GOLANG_VERSION: 1.24-alpine
+    environment:
+      - DB_HOST=postgres_db
+      - MQTT_BROKER_URI=tcp://emqx:1883
+      - MQTT_USERNAME=${MQTT_USERNAME}
+      - MQTT_PASSWORD=${MQTT_PASSWORD}
+      - REDIS_URL=redis://redis:6379/0
+      - TELE_BOT_ALRT=${TELE_BOT_ALRT}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - TZ=Asia/Jakarta
+      - HOST_PROC=/host/proc
+      - HOST_SYS=/host/sys
+      - HOST_ETC=/host/etc
+    env_file:
+      - .env
     volumes:
-      - sandbox_home:/home/dev
-      # - .:/workspace:rw
-      # - /var/run/docker.sock:/var/run/docker.sock
-    environment:
-      - DEV_PASS=${DEV_PASS:-devpass}
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /etc:/host/etc:ro
+      - /:/host/root:ro
     restart: unless-stopped
+    depends_on:
+      postgres_db:
+        condition: service_healthy
+      emqx:
+        condition: service_healthy
     networks:
       - iot-net
 
-  tunnel:
-    image: cloudflare/cloudflared:latest
-    container_name: IOT-tunnel
-    profiles: [dev, ai]
-    command: tunnel --no-autoupdate run --token ${CF_TUNNEL_TOKEN}
-    environment:
-      - TUNNEL_TOKEN=${CF_TUNNEL_TOKEN}
-    networks:
-      - iot-net
-    restart: unless-stopped
-
-  # === AI Gateway (profile: ai) ===
-  router:
-    image: decolua/9router:latest
-    container_name: IOT-router
-    profiles: [ai]
+  # === 6. OTA Update Service (Mikrokontroler Firmware Update) ===
+  ota:
+    image: rennnagge/ota-app:latest
+    container_name: IOT-ota
+    build:
+      context: .
+      dockerfile: core/ota/Dockerfile
     ports:
-      - "9997:20128"
+      - "9999:9999"
     volumes:
-      - router_data:/app/data
+      - ota_uploads:/app/static/uploads
     environment:
-      - DATA_DIR=/app/data
-      - JWT_SECRET=${JWT_SECRET:-change-me-to-random-64-char-string}
-      - INITIAL_PASSWORD=${INITIAL_PASSWORD:-123456}
-    healthcheck:
-      disable: true
+      - MQTT_BROKER=tcp://emqx:1883
+      - MQTT_USER=${MQTT_USER}
+      - MQTT_PASS=${MQTT_PASS}
+      - TELE_BOT_OTA=${TELE_BOT_OTA}
+      - TELEGRAM_CHAT_ID=${TELEGRAM_CHAT_ID}
+      - SERVER_NAME=${SERVER_NAME:-ren_itdt_west}
+      - WEBHOOK_TOKEN=${WEBHOOK_TOKEN:-}
+      - FORWARDER_URL=http://IOT-core:8888/health
+      - MONITOR_URL=http://IOT-core:8888/monitor/status
     restart: unless-stopped
+    depends_on:
+      emqx:
+        condition: service_healthy
     networks:
       - iot-net
-
 
 volumes:
   postgres_data:
   emqx_data:
   emqx_log:
-  ota_uploads:
   redis_data:
-  sandbox_home:
-  router_data:
+  ota_uploads:
 
 networks:
   iot-net:
-    driver: bridge
+    name: iot-net
+    external: true

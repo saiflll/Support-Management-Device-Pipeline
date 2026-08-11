@@ -253,6 +253,7 @@ func SetupRoutes(api fiber.Router) {
 	api.Get("/sp/sessions", handleGetSessions)
 	api.Get("/sp/export-csv", handleExportCsv)
 	api.Get("/sp/daily-stats", handleGetDailyStats)
+	api.Get("/sp/comparison", handleGetComparison)
 }
 
 func handleGetData(c *fiber.Ctx) error {
@@ -509,4 +510,154 @@ func handleGetDailyStats(c *fiber.Ctx) error {
 		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
 	}
 	return c.JSON(stats)
+}
+
+func handleGetComparison(c *fiber.Ctx) error {
+	comparison, err := GetComparison()
+	if err != nil {
+		return c.Status(500).JSON(fiber.Map{"error": err.Error()})
+	}
+	return c.JSON(comparison)
+}
+
+func GetComparison() ([]ComparisonRow, error) {
+	if db == nil {
+		return []ComparisonRow{}, nil
+	}
+
+	type Product struct {
+		Name    string
+		QtyPack int
+	}
+	prods := make(map[string]Product)
+	rows, err := db.Query("SELECT kode, nama, qty_pack FROM master_produk")
+	if err == nil {
+		defer rows.Close()
+		for rows.Next() {
+			var k, n string
+			var q int
+			if err := rows.Scan(&k, &n, &q); err == nil {
+				prods[k] = Product{Name: n, QtyPack: q}
+			}
+		}
+	}
+
+	prefixToProduct := map[string]string{
+		"MDCW1 (UK)":            "100294",
+		"MDCW2 (Siomay)":        "100256",
+		"MDCW3 (Pentol)":        "100286",
+		"MDCW4 (AP)":            "100209",
+		"MDCW5 (ACIN)":          "100211",
+		"MDCW6 (Lumpia)":        "100244",
+		"MDCW7 (Kulit/Kerupuk)": "100239",
+		"MDCW8 (Mie)":           "100245",
+		"MDCW9 (Mie)":           "100245",
+	}
+
+	sessionToPrefix := map[string]string{
+		"SP1": "MDCW1 (UK)",
+		"SP2": "MDCW2 (Siomay)",
+		"SP3": "MDCW3 (Pentol)",
+	}
+
+	type Key struct {
+		Date        string
+		Prefix      string
+		ProductCode string
+	}
+
+	mdcwData := make(map[Key]int)
+	rowsMdcw, err := db.Query(`
+		SELECT TO_CHAR(created_at, 'YYYY-MM-DD') as dt, prefix, COUNT(*) as total_ok 
+		FROM production_mdcw 
+		WHERE is_skipped = FALSE AND reg5 IN (41, 521, 553) 
+		GROUP BY TO_CHAR(created_at, 'YYYY-MM-DD'), prefix
+	`)
+	if err == nil {
+		defer rowsMdcw.Close()
+		for rowsMdcw.Next() {
+			var dt, pfx string
+			var cnt int
+			if err := rowsMdcw.Scan(&dt, &pfx, &cnt); err == nil {
+				pcode := prefixToProduct[pfx]
+				mdcwData[Key{Date: dt, Prefix: pfx, ProductCode: pcode}] = cnt
+			}
+		}
+	}
+
+	spData := make(map[Key]int)
+	rowsSp, err := db.Query(`
+		SELECT TO_CHAR(created_at, 'YYYY-MM-DD') as dt, session_id, data, COUNT(*) as total_scans 
+		FROM production_sp 
+		GROUP BY TO_CHAR(created_at, 'YYYY-MM-DD'), session_id, data
+	`)
+	if err == nil {
+		defer rowsSp.Close()
+		for rowsSp.Next() {
+			var dt, sess, data string
+			var cnt int
+			if err := rowsSp.Scan(&dt, &sess, &data, &cnt); err == nil {
+				pfx := sessionToPrefix[sess]
+				if pfx == "" {
+					pfx = sess
+				}
+				spData[Key{Date: dt, Prefix: pfx, ProductCode: data}] = cnt
+			}
+		}
+	}
+
+	keysMap := make(map[Key]bool)
+	for k := range mdcwData {
+		keysMap[k] = true
+	}
+	for k := range spData {
+		keysMap[k] = true
+	}
+
+	var comparison []ComparisonRow
+	for k := range keysMap {
+		mCount := mdcwData[k]
+		sCount := spData[k]
+
+		prod := prods[k.ProductCode]
+		qtyPack := prod.QtyPack
+		if qtyPack <= 0 {
+			qtyPack = 1
+		}
+
+		spPacks := sCount * qtyPack
+		disc := mCount - spPacks
+		discPct := 0.0
+		if mCount > 0 {
+			discPct = (float64(disc) / float64(mCount)) * 100
+		} else if spPacks > 0 {
+			discPct = -100.0
+		}
+
+		line := ""
+		if strings.Contains(k.Prefix, "MDCW1") || strings.Contains(k.Prefix, "SP1") {
+			line = "Line 1"
+		} else if strings.Contains(k.Prefix, "MDCW2") || strings.Contains(k.Prefix, "SP2") {
+			line = "Line 2"
+		} else if strings.Contains(k.Prefix, "MDCW3") || strings.Contains(k.Prefix, "SP3") {
+			line = "Line 3"
+		} else {
+			line = k.Prefix
+		}
+
+		comparison = append(comparison, ComparisonRow{
+			Date:           k.Date,
+			Line:           line,
+			ProductCode:    k.ProductCode,
+			ProductName:    prod.Name,
+			MdcwPacks:      mCount,
+			SpCartons:      sCount,
+			SpPacks:        spPacks,
+			QtyPack:        qtyPack,
+			Discrepancy:    disc,
+			DiscrepancyPct: discPct,
+		})
+	}
+
+	return comparison, nil
 }

@@ -8,13 +8,13 @@ import (
 	"strings"
 )
 
-// EnvSensorBatchData menampung data gabungan temp + rh untuk satu sensor
+// EnvSensorBatchData menampung data gabungan temperature + humidity untuk satu sensor
 type EnvSensorBatchData struct {
-	AreaID int
-	No     int
-	Temp   *float64
-	RH     *float64
-	TS     string
+	AreaID      int
+	No          int
+	Temperature *float64
+	Humidity    *float64
+	TS          string
 }
 
 // TempBatchData digunakan oleh processor saat hanya ada data suhu
@@ -41,7 +41,7 @@ type ProxBatchData struct {
 }
 
 // BatchInsertEnvSensor melakukan bulk insert ke tabel env_sensor.
-// Menggabungkan data temp dan rh menjadi satu baris per sensor per timestamp.
+// Menggabungkan data temperature dan humidity menjadi satu baris per sensor per timestamp.
 func BatchInsertEnvSensor(tx *sql.Tx, data []EnvSensorBatchData) error {
 	if len(data) == 0 {
 		return nil
@@ -52,11 +52,11 @@ func BatchInsertEnvSensor(tx *sql.Tx, data []EnvSensorBatchData) error {
 	i := 1
 	for _, d := range data {
 		valueStrings = append(valueStrings, fmt.Sprintf("($%d, $%d, $%d, $%d, $%d)", i, i+1, i+2, i+3, i+4))
-		valueArgs = append(valueArgs, d.AreaID, d.No, d.Temp, d.RH, d.TS)
+		valueArgs = append(valueArgs, d.AreaID, d.No, d.Temperature, d.Humidity, d.TS)
 		i += 5
 	}
 
-	stmt := fmt.Sprintf("INSERT INTO env_sensor (area_id, no, temp, rh, ts) VALUES %s", strings.Join(valueStrings, ","))
+	stmt := fmt.Sprintf("INSERT INTO env_sensor (area_id, no, temperature, humidity, ts) VALUES %s", strings.Join(valueStrings, ","))
 	_, err := tx.Exec(stmt, valueArgs...)
 	if err != nil {
 		return fmt.Errorf("error executing bulk insert for env_sensor: %w", err)

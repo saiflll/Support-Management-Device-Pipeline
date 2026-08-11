@@ -71,7 +71,16 @@ func timeNow() string {
 
 // getLatestData retrieves the latest 100 logs ordered by newest first.
 func getLatestData() ([]map[string]interface{}, []string, error) {
-	query := fmt.Sprintf(`SELECT %s FROM conveyor_logs ORDER BY id_record DESC LIMIT 100`, selectCols)
+	query := `
+		SELECT c.id_record, c.factory, c.kode_produk, c.qty_per_pack, 
+		       COALESCE(m.qty_pack, 0) as pack_per_karton, 
+		       COALESCE(CAST(m.gram AS NUMERIC(10,2)) / NULLIF(m.qty_pack, 0), 0) as gramasi_pack, 
+		       COALESCE(m.gram, 0) as gramasi_karton, 
+		       c.tanggal_produksi, c.shift, 
+		       c.tanggal_best_before, c.kode_ketentuan, c.kode_batch, c.tanggal_record 
+		FROM conveyor_logs c
+		LEFT JOIN master_produk m ON c.kode_produk = m.kode
+		ORDER BY c.id_record DESC LIMIT 100`
 	data, err := queryPostgresToMap(query)
 	return data, dataCols, err
 }
@@ -80,10 +89,17 @@ func getLatestData() ([]map[string]interface{}, []string, error) {
 func getDataByRange(startDate, endDate string) ([]map[string]interface{}, []string, error) {
 	startStr := startDate + " 00:00:00"
 	endStr := endDate + " 23:59:59"
-	query := fmt.Sprintf(`
-		SELECT %s FROM conveyor_logs
-		WHERE tanggal_record BETWEEN $1 AND $2
-		ORDER BY id_record DESC LIMIT 1000`, selectCols)
+	query := `
+		SELECT c.id_record, c.factory, c.kode_produk, c.qty_per_pack, 
+		       COALESCE(m.qty_pack, 0) as pack_per_karton, 
+		       COALESCE(CAST(m.gram AS NUMERIC(10,2)) / NULLIF(m.qty_pack, 0), 0) as gramasi_pack, 
+		       COALESCE(m.gram, 0) as gramasi_karton, 
+		       c.tanggal_produksi, c.shift, 
+		       c.tanggal_best_before, c.kode_ketentuan, c.kode_batch, c.tanggal_record 
+		FROM conveyor_logs c
+		LEFT JOIN master_produk m ON c.kode_produk = m.kode
+		WHERE c.tanggal_record BETWEEN $1 AND $2
+		ORDER BY c.id_record DESC LIMIT 1000`
 	data, err := queryPostgresToMap(query, startStr, endStr)
 	return data, dataCols, err
 }

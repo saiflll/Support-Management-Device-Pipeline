@@ -16,3 +16,16 @@ type Summary struct {
 	LastScan   string `json:"last_scan"`
 	FirstScan  string `json:"first_scan"`
 }
+
+type ComparisonRow struct {
+	Date           string  `json:"date"`
+	Line           string  `json:"line"`
+	ProductCode    string  `json:"product_code"`
+	ProductName    string  `json:"product_name"`
+	MdcwPacks      int     `json:"mdcw_packs"`
+	SpCartons      int     `json:"sp_cartons"`
+	SpPacks        int     `json:"sp_packs"`
+	QtyPack        int     `json:"qty_pack"`
+	Discrepancy    int     `json:"discrepancy"`
+	DiscrepancyPct float64 `json:"discrepancy_pct"`
+}

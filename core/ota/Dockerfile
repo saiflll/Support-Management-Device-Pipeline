@@ -4,7 +4,7 @@ ARG GOLANG_VERSION=1.24-alpine
 # ============================================
 # Stage 1: Build Svelte Dashboard
 # ============================================
-FROM node:22-alpine AS svelte-builder
+FROM node:20-alpine AS svelte-builder
 WORKDIR /ui
 COPY view/package*.json ./
 RUN npm ci

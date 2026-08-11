@@ -1,6 +1,6 @@
 services:
   # === Database Service ===
-  postgres:
+  postgres_db:
     image: rennnagge/postgres-db:latest
     container_name: IOT-postgres
     environment:
@@ -18,9 +18,7 @@ services:
       retries: 5
     restart: unless-stopped
     networks:
-      iot-net:
-        aliases:
-          - postgres_db
+      - iot-net
 
 
   # === MQTT Broker ===
@@ -94,7 +92,7 @@ services:
       - /:/host/root:ro
     restart: unless-stopped
     depends_on:
-      postgres:
+      postgres_db:
         condition: service_healthy
       emqx:
         condition: service_healthy
@@ -183,9 +181,15 @@ services:
       - MQTT_USER=${MQTT_USER}
       - REDIS_URL=redis://redis:6379/0
       - TZ=Asia/Jakarta
+      # External Conveyor DB Credentials for Scraper
+      - PROD_DB_HOST=${PROD_DB_HOST:-10.201.40.2}
+      - PROD_DB_PORT=${PROD_DB_PORT:-3306}
+      - PROD_DB_USER=${PROD_DB_USER:-ppa}
+      - PROD_DB_PASSWORD=${PROD_DB_PASSWORD:-PestaPora123}
+      - PROD_DB_NAME=${PROD_DB_NAME:-db_konveyor}
     restart: unless-stopped
     depends_on:
-      postgres:
+      postgres_db:
         condition: service_healthy
       emqx:
         condition: service_healthy

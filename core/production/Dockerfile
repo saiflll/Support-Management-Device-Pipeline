@@ -7,7 +7,7 @@
 # ============================================
 # Stage 1: Build Svelte UI
 # ============================================
-FROM node:22-alpine AS svelte-builder
+FROM node:20-alpine AS svelte-builder
 WORKDIR /ui
 
 COPY core/production/ui/package*.json ./

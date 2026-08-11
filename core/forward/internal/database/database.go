@@ -77,11 +77,22 @@ func createTables() {
             id SERIAL PRIMARY KEY,
             area_id INTEGER NOT NULL,
             no INTEGER NOT NULL,
-            temp REAL,
-            rh REAL,
+            temperature REAL,
+            humidity REAL,
             ts TIMESTAMPTZ NOT NULL,
             FOREIGN KEY (area_id) REFERENCES area (area_id) ON DELETE CASCADE
         );`,
+		// Migration guard: rename legacy columns temp→temperature and rh→humidity jika masih ada
+		`DO $$ BEGIN
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='env_sensor' AND column_name='temp') THEN
+                ALTER TABLE env_sensor RENAME COLUMN temp TO temperature;
+            END IF;
+        END $$;`,
+		`DO $$ BEGIN
+            IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='env_sensor' AND column_name='rh') THEN
+                ALTER TABLE env_sensor RENAME COLUMN rh TO humidity;
+            END IF;
+        END $$;`,
 		`CREATE TABLE IF NOT EXISTS failed_batch (
             id SERIAL PRIMARY KEY,
             pipeline_id INTEGER NOT NULL,
